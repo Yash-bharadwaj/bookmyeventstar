@@ -46,6 +46,12 @@ interface AdminOverviewProps {
     artists_count: number;
     coordinators_count: number;
   };
+  pipelineCounts: {
+    new: number;
+    assigned: number;
+    proposal_sent: number;
+    confirmed: number;
+  };
   recentEnquiries: Enquiry[];
   coordinators: CoordinatorOption[];
 }
@@ -57,7 +63,7 @@ const PIPELINE_STAGES = [
   { key: "confirmed", label: "Confirmed", icon: CheckCircle, color: "text-green-500" },
 ];
 
-export function AdminOverview({ stats, recentEnquiries, coordinators }: AdminOverviewProps) {
+export function AdminOverview({ stats, pipelineCounts: globalCounts, recentEnquiries, coordinators }: AdminOverviewProps) {
   const router = useRouter();
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [selectedEnquiry, setSelectedEnquiry] = useState<Enquiry | null>(null);
@@ -66,7 +72,7 @@ export function AdminOverview({ stats, recentEnquiries, coordinators }: AdminOve
 
   const pipelineCounts = PIPELINE_STAGES.map((s) => ({
     ...s,
-    count: recentEnquiries.filter((e) => e.status === s.key).length,
+    count: globalCounts[s.key as keyof typeof globalCounts] ?? 0,
   }));
 
   const handleAssign = (enquiry: Enquiry) => {
@@ -110,7 +116,7 @@ export function AdminOverview({ stats, recentEnquiries, coordinators }: AdminOve
           title="Total Enquiries"
           value={stats.total_enquiries}
           icon={FileText}
-          color="gold"
+          color="indigo"
           trend={{ value: 12, label: "vs last month" }}
           index={0}
         />
@@ -153,7 +159,7 @@ export function AdminOverview({ stats, recentEnquiries, coordinators }: AdminOve
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.1 }}
-                  className="text-center p-4 rounded-xl border hover:border-gold-300 transition-colors"
+                  className="text-center p-4 rounded-xl border hover:border-indigo-300 hover:bg-indigo-50/50 transition-colors"
                 >
                   <Icon className={`w-6 h-6 mx-auto mb-2 ${stage.color}`} />
                   <p className="text-2xl font-display font-bold">{stage.count}</p>
@@ -178,7 +184,7 @@ export function AdminOverview({ stats, recentEnquiries, coordinators }: AdminOve
           <Button
             key={action.label}
             variant="outline"
-            className="h-auto flex-col gap-2 py-4 hover:border-gold-400 transition-colors"
+            className="h-auto flex-col gap-2 py-4 hover:border-indigo-400 hover:bg-indigo-50/30 transition-colors"
             onClick={() => router.push(action.href)}
           >
             <div className={`w-10 h-10 rounded-xl ${action.color} flex items-center justify-center`}>

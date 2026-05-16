@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Eye, Filter, Search } from "lucide-react";
+import { Eye, Filter, Search, Globe, MessageCircle, Mail, Camera, Handshake, PersonStanding } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Enquiry } from "@/types";
@@ -31,13 +31,13 @@ export function EnquiryTable({
       e.client?.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  const sourceIcons: Record<string, string> = {
-    website: "🌐",
-    whatsapp: "💬",
-    email: "📧",
-    instagram: "📸",
-    referral: "🤝",
-    walk_in: "🚶",
+  const sourceIcons: Record<string, { icon: React.ElementType; color: string; label: string }> = {
+    website:   { icon: Globe,           color: "text-blue-500",   label: "Website" },
+    whatsapp:  { icon: MessageCircle,   color: "text-green-500",  label: "WhatsApp" },
+    email:     { icon: Mail,            color: "text-violet-500", label: "Email" },
+    instagram: { icon: Camera,          color: "text-pink-500",   label: "Instagram" },
+    referral:  { icon: Handshake,       color: "text-amber-500",  label: "Referral" },
+    walk_in:   { icon: PersonStanding,  color: "text-teal-500",   label: "Walk-in" },
   };
 
   return (
@@ -118,7 +118,7 @@ export function EnquiryTable({
                         {enquiry.coordinator?.name ?? (
                           <button
                             onClick={() => onAssign?.(enquiry)}
-                            className="text-xs text-gold-600 hover:text-gold-700 font-medium border border-gold-300 rounded-lg px-2 py-0.5"
+                            className="text-xs text-indigo-600 hover:text-indigo-700 font-medium border border-indigo-300 rounded-lg px-2 py-0.5"
                           >
                             Assign
                           </button>
@@ -132,8 +132,18 @@ export function EnquiryTable({
                         {getStatusLabel(enquiry.status)}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-lg">
-                      {sourceIcons[enquiry.source] ?? "—"}
+                    <td className="px-4 py-3">
+                      {(() => {
+                        const src = sourceIcons[enquiry.source];
+                        if (!src) return <span className="text-muted-foreground text-xs">—</span>;
+                        const Icon = src.icon;
+                        return (
+                          <span title={src.label} className={`inline-flex items-center gap-1 text-xs font-medium ${src.color}`}>
+                            <Icon className="w-3.5 h-3.5" />
+                            {src.label}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-3">
                       <Link href={`${baseHref}/${enquiry.id}`}>

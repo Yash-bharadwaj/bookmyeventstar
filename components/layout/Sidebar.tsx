@@ -41,6 +41,7 @@ const navConfig: Record<UserRole, { label: string; href: string; icon: React.Ele
     { label: "Bookings", href: "/coordinator/bookings", icon: Star },
     { label: "Calendar", href: "/coordinator/calendar", icon: Calendar },
     { label: "Artists", href: "/coordinator/artists", icon: Music },
+    { label: "Messages", href: "/coordinator/messages", icon: MessageSquare },
   ],
   artist: [
     { label: "Dashboard", href: "/artist", icon: LayoutDashboard },
@@ -61,10 +62,24 @@ const navConfig: Record<UserRole, { label: string; href: string; icon: React.Ele
 };
 
 const roleColors: Record<UserRole, string> = {
-  admin: "from-purple-600 to-indigo-600",
+  admin: "from-indigo-500 to-violet-600",
   coordinator: "from-blue-600 to-cyan-600",
-  artist: "from-gold-500 to-amber-600",
+  artist: "from-amber-500 to-orange-500",
   client: "from-emerald-500 to-teal-600",
+};
+
+const roleActiveNav: Record<UserRole, string> = {
+  admin: "bg-gradient-to-r from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-500/25",
+  coordinator: "bg-gradient-to-r from-blue-500 to-cyan-600 text-white shadow-lg shadow-blue-500/25",
+  artist: "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/25",
+  client: "bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/25",
+};
+
+const roleAvatarBg: Record<UserRole, string> = {
+  admin: "bg-gradient-to-br from-indigo-500 to-violet-600",
+  coordinator: "bg-gradient-to-br from-blue-500 to-cyan-600",
+  artist: "bg-gradient-to-br from-amber-500 to-orange-500",
+  client: "bg-gradient-to-br from-emerald-500 to-teal-600",
 };
 
 const roleLabels: Record<UserRole, string> = {
@@ -77,7 +92,7 @@ const roleLabels: Record<UserRole, string> = {
 interface SidebarProps {
   role: UserRole;
   userName: string;
-  avatarUrl?: string;
+  avatarUrl?: string | null;
 }
 
 export function Sidebar({ role, userName }: SidebarProps) {
@@ -137,18 +152,20 @@ export function Sidebar({ role, userName }: SidebarProps) {
       <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto scrollbar-hide">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+          const segments = item.href.split("/").filter(Boolean);
+          const isRootDashboard = segments.length === 1;
+          const isActive = pathname === item.href || (!isRootDashboard && pathname.startsWith(item.href + "/"));
           return (
             <Link key={item.href} href={item.href}>
               <div
                 className={cn(
                   "flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all duration-200 group relative",
                   isActive
-                    ? "gold-gradient text-navy-900 shadow-lg shadow-gold-500/20"
+                    ? roleActiveNav[role]
                     : "text-white/60 hover:text-white hover:bg-white/10"
                 )}
               >
-                <Icon className={cn("w-5 h-5 flex-shrink-0", isActive ? "text-navy-900" : "")} />
+                <Icon className="w-5 h-5 flex-shrink-0" />
                 <AnimatePresence>
                   {!collapsed && (
                     <motion.span
@@ -175,7 +192,7 @@ export function Sidebar({ role, userName }: SidebarProps) {
       {/* User info */}
       <div className="border-t border-white/10 p-4">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full gold-gradient flex items-center justify-center flex-shrink-0 text-navy-900 font-bold text-xs">
+          <div className={cn("w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white font-bold text-xs", roleAvatarBg[role])}>
             {userName.charAt(0).toUpperCase()}
           </div>
           <AnimatePresence>

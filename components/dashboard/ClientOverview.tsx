@@ -87,7 +87,7 @@ export function ClientOverview({
         <div className="absolute top-0 right-0 w-40 h-40 rounded-full bg-gold-500/10 -translate-y-1/2 translate-x-1/4" />
         <div className="relative">
           <p className="text-white/70 text-sm">Good day,</p>
-          <h2 className="font-display text-2xl font-bold mt-0.5">{userName} 👋</h2>
+          <h2 className="font-display text-2xl font-bold mt-0.5">Welcome, {userName}</h2>
           <p className="text-white/60 text-sm mt-1">
             {activeEnquiries.length > 0
               ? `You have ${activeEnquiries.length} active enquir${activeEnquiries.length > 1 ? "ies" : "y"}`

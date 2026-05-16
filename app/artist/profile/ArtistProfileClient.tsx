@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { motion } from "framer-motion";
-import { Camera, Plus, X, Save, Star, CheckCircle2 } from "lucide-react";
+import { Camera, Plus, X, Save, Star, CheckCircle2, Upload, Loader2, Image as ImageIcon, Video } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,12 +32,16 @@ type ProfileFormData = z.infer<typeof profileSchema>;
 interface Props {
   user: User;
   artistProfile: ArtistProfile | null;
-  media: ArtistMedia[];
+  media?: ArtistMedia[];
 }
 
-export function ArtistProfileClient({ user, artistProfile, media }: Props) {
+export function ArtistProfileClient({ user, artistProfile, media: initialMedia = [] }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [mediaList, setMediaList] = useState<ArtistMedia[]>(initialMedia);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedCategories, setSelectedCategories] = useState<string[]>(
     artistProfile?.categories ?? []
   );
@@ -96,8 +100,69 @@ export function ArtistProfileClient({ user, artistProfile, media }: Props) {
     }
   };
 
-  const photos = media.filter((m) => m.type === "photo");
-  const videos = media.filter((m) => m.type === "video");
+  const uploadMedia = async (files: FileList) => {
+    if (!artistProfile?.id) {
+      toast.error("Complete your profile first");
+      return;
+    }
+    setUploading(true);
+    const supabase = createClient();
+    for (const file of Array.from(files)) {
+      const isVideo = file.type.startsWith("video/");
+      const ext = file.name.split(".").pop();
+      const path = `${artistProfile.id}/${Date.now()}.${ext}`;
+      const { data: upload, error: upErr } = await supabase.storage
+        .from("artist-media")
+        .upload(path, file, { cacheControl: "3600", upsert: false });
+      if (upErr) {
+        toast.error(`Failed to upload ${file.name}: ${upErr.message}`);
+        continue;
+      }
+      const { data: urlData } = supabase.storage.from("artist-media").getPublicUrl(path);
+      const { data: record, error: dbErr } = await supabase
+        .from("artist_media")
+        .insert({
+          artist_id: artistProfile.id,
+          type: isVideo ? "video" : "photo",
+          url: urlData.publicUrl,
+          title: file.name,
+          is_primary: mediaList.length === 0,
+        })
+        .select()
+        .single();
+      if (!dbErr && record) {
+        setMediaList((prev) => [...prev, record as ArtistMedia]);
+        toast.success(`${file.name} uploaded!`);
+      }
+    }
+    setUploading(false);
+  };
+
+  const deleteMedia = async (item: ArtistMedia) => {
+    setDeletingId(item.id);
+    const supabase = createClient();
+    // Extract storage path from URL
+    const urlParts = item.url.split("/artist-media/");
+    if (urlParts.length > 1) {
+      await supabase.storage.from("artist-media").remove([urlParts[1]]);
+    }
+    await supabase.from("artist_media").delete().eq("id", item.id);
+    setMediaList((prev) => prev.filter((m) => m.id !== item.id));
+    toast.success("Removed");
+    setDeletingId(null);
+  };
+
+  const setPrimary = async (id: string) => {
+    if (!artistProfile?.id) return;
+    const supabase = createClient();
+    await supabase.from("artist_media").update({ is_primary: false }).eq("artist_id", artistProfile.id);
+    await supabase.from("artist_media").update({ is_primary: true }).eq("id", id);
+    setMediaList((prev) => prev.map((m) => ({ ...m, is_primary: m.id === id })));
+    toast.success("Primary photo set!");
+  };
+
+  const photos = mediaList.filter((m) => m.type === "photo");
+  const videos = mediaList.filter((m) => m.type === "video");
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-4xl mx-auto">
@@ -247,40 +312,112 @@ export function ArtistProfileClient({ user, artistProfile, media }: Props) {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>Photos & Videos</CardTitle>
-              <Button type="button" size="sm" variant="outline">
-                <Plus className="w-4 h-4 mr-1" />
-                Upload
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {photos.length === 0 && videos.length === 0 ? (
-              <div className="border-2 border-dashed border-border rounded-xl p-12 text-center">
-                <Camera className="w-10 h-10 mx-auto text-muted-foreground/40 mb-3" />
-                <p className="text-sm text-muted-foreground">Upload photos and videos to showcase your talent</p>
-                <Button type="button" variant="outline" className="mt-4" size="sm">
-                  <Plus className="w-4 h-4 mr-1" />
-                  Add Media
+              <div className="flex gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,video/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => e.target.files && uploadMedia(e.target.files)}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={uploading}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {uploading ? (
+                    <><Loader2 className="w-4 h-4 mr-1 animate-spin" />Uploading...</>
+                  ) : (
+                    <><Upload className="w-4 h-4 mr-1" />Upload</>
+                  )}
                 </Button>
               </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {photos.length === 0 && videos.length === 0 ? (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full border-2 border-dashed border-border rounded-xl p-12 text-center hover:border-primary/40 hover:bg-accent/20 transition-all"
+              >
+                <Camera className="w-10 h-10 mx-auto text-muted-foreground/40 mb-3" />
+                <p className="text-sm text-muted-foreground">Click to upload photos and videos</p>
+                <p className="text-xs text-muted-foreground mt-1">JPG, PNG, MP4 up to 50MB each</p>
+              </button>
             ) : (
-              <div className="grid grid-cols-3 gap-3">
-                {photos.map((photo) => (
-                  <div key={photo.id} className="relative aspect-square rounded-xl overflow-hidden group">
-                    <img src={photo.url} alt={photo.title ?? ""} className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <button type="button" className="w-8 h-8 rounded-full bg-red-500 text-white flex items-center justify-center">
-                        <X className="w-4 h-4" />
+              <>
+                {photos.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase mb-2 flex items-center gap-1.5">
+                      <ImageIcon className="w-3.5 h-3.5" />Photos ({photos.length})
+                    </p>
+                    <div className="grid grid-cols-3 gap-3">
+                      {photos.map((photo) => (
+                        <div key={photo.id} className="relative aspect-square rounded-xl overflow-hidden group border">
+                          <img src={photo.url} alt={photo.title ?? ""} className="w-full h-full object-cover" />
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                            {!photo.is_primary && (
+                              <button
+                                type="button"
+                                onClick={() => setPrimary(photo.id)}
+                                className="text-[10px] px-2 py-1 bg-amber-500 text-white rounded font-medium"
+                              >
+                                Set Primary
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => deleteMedia(photo)}
+                              disabled={deletingId === photo.id}
+                              className="w-7 h-7 rounded-full bg-red-500 text-white flex items-center justify-center"
+                            >
+                              {deletingId === photo.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
+                            </button>
+                          </div>
+                          {photo.is_primary && (
+                            <div className="absolute top-1 left-1 px-1.5 py-0.5 bg-amber-500 text-white text-[10px] font-bold rounded">
+                              Primary
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="aspect-square rounded-xl border-2 border-dashed border-border hover:border-primary/40 flex items-center justify-center text-muted-foreground hover:text-primary transition-all"
+                      >
+                        <Plus className="w-6 h-6" />
                       </button>
                     </div>
-                    {photo.is_primary && (
-                      <div className="absolute top-1 left-1 px-1.5 py-0.5 bg-gold-500 text-navy-900 text-[10px] font-bold rounded">
-                        Primary
-                      </div>
-                    )}
                   </div>
-                ))}
-              </div>
+                )}
+                {videos.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase mb-2 flex items-center gap-1.5">
+                      <Video className="w-3.5 h-3.5" />Videos ({videos.length})
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {videos.map((v) => (
+                        <div key={v.id} className="relative rounded-xl overflow-hidden border group">
+                          <video src={v.url} className="w-full aspect-video object-cover" controls />
+                          <button
+                            type="button"
+                            onClick={() => deleteMedia(v)}
+                            disabled={deletingId === v.id}
+                            className="absolute top-2 right-2 w-7 h-7 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            {deletingId === v.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

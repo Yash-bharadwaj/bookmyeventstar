@@ -167,11 +167,12 @@ export default function LoginPage() {
             </Link>
           </p>
 
-          <div className="mt-8 p-4 rounded-xl bg-muted/50 text-xs text-muted-foreground">
-            <p className="font-medium mb-1">Demo accounts:</p>
-            <p>Admin: admin@demo.com | Coordinator: coord@demo.com</p>
-            <p>Artist: artist@demo.com | Client: client@demo.com</p>
-            <p className="mt-1">Password: <span className="font-mono">Demo@1234</span></p>
+          <div className="mt-8 p-4 rounded-xl bg-muted/50 text-xs text-muted-foreground space-y-1">
+            <p className="font-semibold text-foreground mb-2">Test Accounts:</p>
+            <p><span className="font-medium">Admin:</span> <span className="font-mono">admin@bmes.com</span> / <span className="font-mono">Admin@123</span></p>
+            <p><span className="font-medium">Coordinator:</span> <span className="font-mono">coordinator@bmes.com</span> / <span className="font-mono">Coord@123</span></p>
+            <p><span className="font-medium">Client:</span> <span className="font-mono">client@bmes.com</span> / <span className="font-mono">Client@123</span></p>
+            <p><span className="font-medium">Artist:</span> <span className="font-mono">artist@bmes.com</span> / <span className="font-mono">Artist@123</span></p>
           </div>
         </motion.div>
       </div>

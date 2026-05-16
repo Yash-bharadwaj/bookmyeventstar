@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { CheckCircle2, Clock, AlertCircle, Calendar, MapPin, User, IndianRupee, Mic2, Plane, Wrench, Receipt, UtensilsCrossed, type LucideIcon } from "lucide-react";
+import { CheckCircle2, Clock, AlertCircle, Calendar, MapPin, User, IndianRupee, Mic2, Plane, Wrench, Receipt, UtensilsCrossed, ExternalLink, type LucideIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,7 @@ import { formatDate, formatCurrency, getStatusColor, getStatusLabel, getInitials
 import { createClient } from "@/lib/supabase/client";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 interface BookingWithExtras extends Omit<Booking, "artist" | "enquiry"> {
   artist?: {
@@ -101,9 +102,14 @@ export function CoordinatorBookingsClient({ bookings }: { bookings: BookingWithE
               </span>
             </div>
           </div>
-          <div className="text-right">
+          <div className="text-right space-y-1">
             <p className="font-display font-bold text-lg">{formatCurrency(booking.total_amount)}</p>
             <p className="text-xs text-muted-foreground">Balance: {formatCurrency(booking.balance_amount)}</p>
+            <Link href={`/coordinator/bookings/${booking.id}`}>
+              <Button size="sm" variant="outline" className="text-xs mt-1">
+                <ExternalLink className="w-3 h-3 mr-1" />Details
+              </Button>
+            </Link>
           </div>
         </div>
 

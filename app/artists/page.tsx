@@ -18,7 +18,12 @@ export default async function ArtistsPage({
 
   let query = supabase
     .from("artist_profiles")
-    .select("*, user:users(name,avatar_url), media:artist_media(url,is_primary,type)")
+    .select(`
+      id, user_id, bio, categories, cities, base_price, rating,
+      total_bookings, is_verified, social_links, rider_notes,
+      user:users!artist_profiles_user_id_fkey(name, avatar_url),
+      media:artist_media(url, is_primary, type)
+    `)
     .eq("is_verified", true)
     .order("rating", { ascending: false });
 
@@ -29,7 +34,13 @@ export default async function ArtistsPage({
     query = query.contains("cities", [searchParams.city]);
   }
 
-  const { data: artists } = await query.limit(60);
+  const { data: rawArtists } = await query.limit(60);
+  const artists = (rawArtists ?? []).map((a: any) => ({
+    ...a,
+    pricing_details: a.pricing_details ?? {},
+    user: Array.isArray(a.user) ? a.user[0] ?? null : a.user,
+    media: a.media ?? [],
+  }));
 
   return (
     <div className="min-h-screen bg-white">
@@ -59,7 +70,7 @@ export default async function ArtistsPage({
       <div className="pt-16">
         <Suspense fallback={<div className="p-8 text-center">Loading artists...</div>}>
           <ArtistsPageClient
-            artists={artists ?? []}
+            artists={artists}
             initialCategory={searchParams.category}
             initialCity={searchParams.city}
           />

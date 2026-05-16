@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Search, Filter, Star, MapPin, IndianRupee, CheckCircle2 } from "lucide-react";
+import { Search, Filter, Star, MapPin, IndianRupee, CheckCircle2, Check, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -128,13 +128,13 @@ export function ArtistSearchClient({ artists }: Props) {
                   )}
                   <button
                     onClick={() => toggleShortlist(artist.id)}
-                    className={`absolute top-2 left-2 px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${
+                    className={`absolute top-2 left-2 px-2.5 py-1 rounded-full text-xs font-semibold transition-all flex items-center gap-1 ${
                       isShortlisted
-                        ? "bg-gold-500 text-navy-900"
-                        : "bg-black/40 text-white hover:bg-gold-500 hover:text-navy-900"
+                        ? "bg-indigo-600 text-white"
+                        : "bg-black/40 text-white hover:bg-indigo-600"
                     }`}
                   >
-                    {isShortlisted ? "✓ Shortlisted" : "+ Shortlist"}
+                    {isShortlisted ? <><Check className="w-3 h-3" /> Shortlisted</> : <><Plus className="w-3 h-3" /> Shortlist</>}
                   </button>
                 </div>
 

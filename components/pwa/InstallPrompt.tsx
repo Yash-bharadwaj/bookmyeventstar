@@ -145,7 +145,7 @@ export function InstallPrompt() {
               </div>
               <ol className="space-y-3">
                 {[
-                  { step: "1", text: "Tap the Share button (□↑) at the bottom of your browser" },
+                  { step: "1", text: "Tap the Share button at the bottom of your browser" },
                   { step: "2", text: 'Scroll down and tap "Add to Home Screen"' },
                   { step: "3", text: 'Tap "Add" to confirm installation' },
                 ].map(({ step, text }) => (

@@ -254,7 +254,7 @@ export default function EnquiryPage() {
                         <Label>Mobile Number *</Label>
                         <div className="flex gap-2">
                           <div className="flex items-center px-3 rounded-xl border bg-muted text-sm font-medium text-muted-foreground whitespace-nowrap">
-                            🇮🇳 +91
+                            +91
                           </div>
                           <Input
                             type="tel"

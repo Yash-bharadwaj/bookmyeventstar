@@ -12,6 +12,7 @@ import {
   IndianRupee,
   Calendar,
   MapPin,
+  Timer,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,26 +34,34 @@ export function ClientProposalsClient({ proposals, clientId }: Props) {
   const router = useRouter();
   const [expanded, setExpanded] = useState<string | null>(null);
   const [accepting, setAccepting] = useState<string | null>(null);
+  const [rejecting, setRejecting] = useState<string | null>(null);
 
   const acceptProposal = async (proposalId: string, enquiryId: string) => {
     setAccepting(proposalId);
     try {
       const supabase = createClient();
-      await supabase
-        .from("proposals")
-        .update({ status: "accepted" })
-        .eq("id", proposalId);
-      await supabase
-        .from("enquiries")
-        .update({ status: "confirmed" })
-        .eq("id", enquiryId);
-
+      await supabase.from("proposals").update({ status: "accepted" }).eq("id", proposalId);
+      await supabase.from("enquiries").update({ status: "confirmed" }).eq("id", enquiryId);
       toast.success("Proposal accepted! Our coordinator will be in touch shortly.");
       router.refresh();
     } catch {
       toast.error("Failed to accept proposal");
     } finally {
       setAccepting(null);
+    }
+  };
+
+  const rejectProposal = async (proposalId: string) => {
+    setRejecting(proposalId);
+    try {
+      const supabase = createClient();
+      await supabase.from("proposals").update({ status: "rejected" }).eq("id", proposalId);
+      toast.success("Proposal declined. We'll send a revised proposal shortly.");
+      router.refresh();
+    } catch {
+      toast.error("Failed to decline proposal");
+    } finally {
+      setRejecting(null);
     }
   };
 
@@ -131,14 +140,24 @@ export function ClientProposalsClient({ proposals, clientId }: Props) {
               {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </button>
             {proposal.status === "sent" && (
-              <Button
-                size="sm"
-                loading={accepting === proposal.id}
-                onClick={() => acceptProposal(proposal.id, proposal.enquiry_id)}
-              >
-                <CheckCircle2 className="w-4 h-4 mr-1.5" />
-                Accept Proposal
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-red-300 text-red-600 hover:bg-red-50"
+                  loading={rejecting === proposal.id}
+                  onClick={() => rejectProposal(proposal.id)}
+                >
+                  <XCircle className="w-4 h-4 mr-1.5" />Decline
+                </Button>
+                <Button
+                  size="sm"
+                  loading={accepting === proposal.id}
+                  onClick={() => acceptProposal(proposal.id, proposal.enquiry_id)}
+                >
+                  <CheckCircle2 className="w-4 h-4 mr-1.5" />Accept
+                </Button>
+              </div>
             )}
           </div>
 
@@ -186,7 +205,7 @@ export function ClientProposalsClient({ proposals, clientId }: Props) {
 
                   {proposal.validity_date && (
                     <p className="text-xs text-muted-foreground">
-                      ⏳ Proposal valid until {formatDate(proposal.validity_date)}
+                      <Timer className="w-3 h-3 inline mr-1" />Proposal valid until {formatDate(proposal.validity_date)}
                     </p>
                   )}
                 </div>

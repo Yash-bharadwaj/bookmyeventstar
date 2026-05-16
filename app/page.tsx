@@ -100,7 +100,7 @@ function FeaturedArtists() {
     const supabase = createClient();
     supabase
       .from("artist_profiles")
-      .select("id, bio, categories, cities, base_price, rating, total_bookings, is_verified, user:users(name, avatar_url)")
+      .select("id, bio, categories, cities, base_price, rating, total_bookings, is_verified, user:users!artist_profiles_user_id_fkey(name, avatar_url)")
       .eq("is_verified", true)
       .order("rating", { ascending: false })
       .limit(4)

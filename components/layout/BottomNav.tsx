@@ -13,6 +13,7 @@ import {
   BarChart3,
   Home,
   MessageSquare,
+  Star,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { UserRole } from "@/types";
@@ -29,8 +30,8 @@ const mobileNavConfig: Record<UserRole, { label: string; href: string; icon: Rea
     { label: "Home", href: "/coordinator", icon: LayoutDashboard },
     { label: "Enquiries", href: "/coordinator/enquiries", icon: FileText },
     { label: "Proposals", href: "/coordinator/proposals", icon: ClipboardList },
-    { label: "Calendar", href: "/coordinator/calendar", icon: Calendar },
-    { label: "Artists", href: "/coordinator/artists", icon: Music },
+    { label: "Bookings", href: "/coordinator/bookings", icon: Star },
+    { label: "Messages", href: "/coordinator/messages", icon: MessageSquare },
   ],
   artist: [
     { label: "Home", href: "/artist", icon: LayoutDashboard },
@@ -48,6 +49,13 @@ const mobileNavConfig: Record<UserRole, { label: string; href: string; icon: Rea
   ],
 };
 
+const roleActiveStyles: Record<UserRole, { pill: string; text: string }> = {
+  admin:       { pill: "bg-gradient-to-r from-indigo-500 to-violet-600 shadow-md shadow-indigo-500/30", text: "text-indigo-600" },
+  coordinator: { pill: "bg-gradient-to-r from-blue-500 to-cyan-600 shadow-md shadow-blue-500/30",      text: "text-blue-600" },
+  artist:      { pill: "bg-gradient-to-r from-amber-500 to-orange-500 shadow-md shadow-amber-500/30",  text: "text-amber-600" },
+  client:      { pill: "bg-gradient-to-r from-emerald-500 to-teal-600 shadow-md shadow-emerald-500/30", text: "text-emerald-600" },
+};
+
 interface BottomNavProps {
   role: UserRole;
 }
@@ -55,13 +63,16 @@ interface BottomNavProps {
 export function BottomNav({ role }: BottomNavProps) {
   const pathname = usePathname();
   const items = mobileNavConfig[role];
+  const activeStyles = roleActiveStyles[role];
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-navy-900/95 backdrop-blur-xl border-t border-border safe-area-bottom">
       <div className="flex items-center justify-around px-2 py-2">
         {items.map((item) => {
           const Icon = item.icon;
-          const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+          const segments = item.href.split("/").filter(Boolean);
+          const isRootDashboard = segments.length === 1;
+          const isActive = pathname === item.href || (!isRootDashboard && pathname.startsWith(item.href + "/"));
           return (
             <Link
               key={item.href}
@@ -71,20 +82,20 @@ export function BottomNav({ role }: BottomNavProps) {
               <div
                 className={cn(
                   "flex items-center justify-center w-10 h-7 rounded-xl transition-all",
-                  isActive ? "gold-gradient shadow-md shadow-gold-500/30" : ""
+                  isActive ? activeStyles.pill : ""
                 )}
               >
                 <Icon
                   className={cn(
                     "w-5 h-5 transition-colors",
-                    isActive ? "text-navy-900" : "text-muted-foreground"
+                    isActive ? "text-white" : "text-muted-foreground"
                   )}
                 />
               </div>
               <span
                 className={cn(
                   "text-[10px] font-medium transition-colors",
-                  isActive ? "text-gold-600" : "text-muted-foreground"
+                  isActive ? activeStyles.text : "text-muted-foreground"
                 )}
               >
                 {item.label}
