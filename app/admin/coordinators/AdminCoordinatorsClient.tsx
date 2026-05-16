@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { UserPlus, ToggleLeft, ToggleRight, X } from "lucide-react";
+import {
+  UserPlus, ToggleLeft, ToggleRight, X, Phone, Mail,
+  Briefcase, CheckCircle, AlertCircle, TrendingUp,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,16 +21,28 @@ interface Props {
   enquiries: { coordinator_id: string | null; status: string }[];
 }
 
+const MAX_RECOMMENDED = 8; // enquiries above this = overloaded
+
+function workloadColor(active: number): { bar: string; badge: string; label: string } {
+  if (active === 0) return { bar: "bg-gray-300", badge: "bg-gray-100 text-gray-500", label: "Available" };
+  if (active <= 3) return { bar: "bg-emerald-400", badge: "bg-emerald-100 text-emerald-700", label: "Light" };
+  if (active <= 6) return { bar: "bg-amber-400", badge: "bg-amber-100 text-amber-700", label: "Moderate" };
+  return { bar: "bg-red-500", badge: "bg-red-100 text-red-700", label: "Heavy" };
+}
+
 export function AdminCoordinatorsClient({ coordinators, enquiries }: Props) {
   const router = useRouter();
   const [showAdd, setShowAdd] = useState(false);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", phone: "", password: "" });
+  const [toggling, setToggling] = useState<string | null>(null);
 
   const toggleStatus = async (id: string, current: boolean) => {
+    setToggling(id);
     const supabase = createClient();
     await supabase.from("users").update({ is_active: !current }).eq("id", id);
     toast.success(current ? "Coordinator deactivated" : "Coordinator activated");
+    setToggling(null);
     router.refresh();
   };
 
@@ -39,31 +54,17 @@ export function AdminCoordinatorsClient({ coordinators, enquiries }: Props) {
       toast.error("All fields are required");
       return;
     }
-    if (form.password.length < 6) {
-      toast.error("Password must be at least 6 characters");
-      return;
-    }
+    if (form.password.length < 6) { toast.error("Password must be at least 6 characters"); return; }
     setCreating(true);
     try {
       const supabase = createClient();
-      const { data, error } = await supabase.auth.admin
-        ? // Use admin API via server action instead
-          { data: null, error: new Error("Use server signup") }
-        : { data: null, error: new Error("Use server signup") };
-
-      // Fallback: use signUp approach (creates account in auth.users)
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: form.email,
         password: form.password,
-        options: {
-          data: { name: form.name, role: "coordinator" },
-        },
+        options: { data: { name: form.name, role: "coordinator" } },
       });
-
       if (signUpError) throw signUpError;
       if (!signUpData.user) throw new Error("No user returned");
-
-      // Upsert into public.users
       await supabase.from("users").upsert({
         id: signUpData.user.id,
         name: form.name,
@@ -72,8 +73,7 @@ export function AdminCoordinatorsClient({ coordinators, enquiries }: Props) {
         role: "coordinator",
         is_active: true,
       });
-
-      toast.success(`Coordinator ${form.name} created! They can log in with the provided credentials.`);
+      toast.success(`${form.name} added as coordinator!`);
       setShowAdd(false);
       setForm({ name: "", email: "", phone: "", password: "" });
       router.refresh();
@@ -84,76 +84,152 @@ export function AdminCoordinatorsClient({ coordinators, enquiries }: Props) {
     }
   };
 
+  // Compute metrics per coordinator
+  const coordMetrics = coordinators.map((c) => {
+    const myEnquiries = enquiries.filter((e) => e.coordinator_id === c.id);
+    const active = myEnquiries.filter((e) => !["completed", "cancelled"].includes(e.status)).length;
+    const completed = myEnquiries.filter((e) => e.status === "completed").length;
+    const total = myEnquiries.length;
+    const conversion = total ? Math.round((completed / total) * 100) : 0;
+    const wl = workloadColor(active);
+    return { ...c, active, completed, total, conversion, wl };
+  }).sort((a, b) => b.active - a.active);
+
+  const totalActive = coordMetrics.reduce((s, c) => s + c.active, 0);
+  const overloaded = coordMetrics.filter((c) => c.active > MAX_RECOMMENDED).length;
+
   return (
-    <div className="p-4 md:p-6 space-y-4">
+    <div className="p-4 md:p-6 space-y-5">
+      {/* Summary banner */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="p-4 rounded-2xl border bg-indigo-50 border-indigo-100 text-center">
+          <p className="text-2xl font-display font-bold text-indigo-700">{coordinators.length}</p>
+          <p className="text-xs text-indigo-500 font-medium mt-0.5">Total Coordinators</p>
+        </div>
+        <div className="p-4 rounded-2xl border bg-amber-50 border-amber-100 text-center">
+          <p className="text-2xl font-display font-bold text-amber-700">{totalActive}</p>
+          <p className="text-xs text-amber-500 font-medium mt-0.5">Active Enquiries</p>
+        </div>
+        <div className={`p-4 rounded-2xl border text-center ${overloaded > 0 ? "bg-red-50 border-red-100" : "bg-emerald-50 border-emerald-100"}`}>
+          <p className={`text-2xl font-display font-bold ${overloaded > 0 ? "text-red-700" : "text-emerald-700"}`}>{overloaded}</p>
+          <p className={`text-xs font-medium mt-0.5 ${overloaded > 0 ? "text-red-500" : "text-emerald-500"}`}>
+            {overloaded > 0 ? "Overloaded" : "All Balanced"}
+          </p>
+        </div>
+      </div>
+
       <div className="flex justify-end">
         <Button onClick={() => setShowAdd(true)}>
           <UserPlus className="w-4 h-4 mr-2" />Add Coordinator
         </Button>
       </div>
 
-      <div className="rounded-2xl border overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b bg-muted/30">
-              {["Coordinator", "Contact", "Active Enquiries", "Total Enquiries", "Status", "Actions"].map((h) => (
-                <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {coordinators.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground text-sm">
-                  No coordinators yet. Add one to get started.
-                </td>
-              </tr>
-            ) : coordinators.map((c, i) => {
-              const myEnquiries = enquiries.filter((e) => e.coordinator_id === c.id);
-              const active = myEnquiries.filter((e) => !["completed", "cancelled"].includes(e.status)).length;
-              return (
-                <motion.tr
-                  key={c.id}
-                  initial={{ opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.05 }}
-                  className="border-b last:border-0 hover:bg-accent/30"
-                >
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm">
-                        {getInitials(c.name)}
-                      </div>
-                      <div>
-                        <p className="font-medium text-sm">{c.name}</p>
-                        <p className="text-xs text-muted-foreground">{formatDate(c.created_at)}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="text-sm">{c.email}</p>
-                    <p className="text-xs text-muted-foreground">{c.phone}</p>
-                  </td>
-                  <td className="px-4 py-3 text-sm font-semibold">{active}</td>
-                  <td className="px-4 py-3 text-sm">{myEnquiries.length}</td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${c.is_active ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
+      {/* Coordinator cards */}
+      {coordMetrics.length === 0 ? (
+        <div className="py-20 text-center text-muted-foreground text-sm">
+          <Briefcase className="w-12 h-12 mx-auto mb-3 opacity-20" />
+          <p>No coordinators yet. Add one to get started.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {coordMetrics.map((c, i) => (
+            <motion.div
+              key={c.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.06 }}
+              className={`rounded-2xl border p-5 hover:shadow-md transition-all ${
+                !c.is_active ? "opacity-60 bg-muted/30" : ""
+              } ${c.active > MAX_RECOMMENDED ? "border-red-200 bg-red-50/20" : ""}`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-base flex-shrink-0 ${
+                    c.is_active ? "bg-indigo-100 text-indigo-700" : "bg-muted text-muted-foreground"
+                  }`}>
+                    {getInitials(c.name)}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm">{c.name}</p>
+                    <p className="text-xs text-muted-foreground">{formatDate(c.created_at)}</p>
+                    <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full font-semibold mt-1 ${
+                      c.is_active ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"
+                    }`}>
                       {c.is_active ? "Active" : "Inactive"}
                     </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Button size="sm" variant="ghost" onClick={() => toggleStatus(c.id, c.is_active)}>
-                      {c.is_active
-                        ? <ToggleRight className="w-5 h-5 text-emerald-600" />
-                        : <ToggleLeft className="w-5 h-5 text-muted-foreground" />}
-                    </Button>
-                  </td>
-                </motion.tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="flex-shrink-0"
+                  disabled={toggling === c.id}
+                  onClick={() => toggleStatus(c.id, c.is_active)}
+                >
+                  {c.is_active
+                    ? <ToggleRight className="w-5 h-5 text-emerald-600" />
+                    : <ToggleLeft className="w-5 h-5 text-muted-foreground" />}
+                </Button>
+              </div>
+
+              {/* Contact */}
+              <div className="mt-3 space-y-1">
+                <a href={`mailto:${c.email}`} className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground">
+                  <Mail className="w-3.5 h-3.5" />{c.email}
+                </a>
+                <a href={`tel:${c.phone}`} className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground">
+                  <Phone className="w-3.5 h-3.5" />{c.phone}
+                </a>
+              </div>
+
+              {/* Workload bar */}
+              <div className="mt-4">
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-xs font-medium text-muted-foreground">Workload</p>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${c.wl.badge}`}>
+                      {c.wl.label}
+                    </span>
+                    {c.active > MAX_RECOMMENDED && (
+                      <AlertCircle className="w-3.5 h-3.5 text-red-500" />
+                    )}
+                  </div>
+                </div>
+                <div className="h-2 bg-muted rounded-full overflow-hidden">
+                  <motion.div
+                    className={`h-full rounded-full ${c.wl.bar}`}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${Math.min(100, (c.active / MAX_RECOMMENDED) * 100)}%` }}
+                    transition={{ duration: 0.6, delay: i * 0.06 + 0.2 }}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {c.active} active · max {MAX_RECOMMENDED} recommended
+                </p>
+              </div>
+
+              {/* Stats */}
+              <div className="mt-4 grid grid-cols-3 gap-3 pt-3 border-t">
+                <div className="text-center">
+                  <p className="text-lg font-display font-bold text-indigo-700">{c.total}</p>
+                  <p className="text-[10px] text-muted-foreground">Total</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-display font-bold text-amber-600">{c.active}</p>
+                  <p className="text-[10px] text-muted-foreground">Active</p>
+                </div>
+                <div className="text-center">
+                  <div className="flex items-center justify-center gap-1">
+                    <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+                    <p className="text-lg font-display font-bold text-emerald-600">{c.conversion}%</p>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">Conversion</p>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
 
       {/* Add Coordinator Dialog */}
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
@@ -177,7 +253,7 @@ export function AdminCoordinatorsClient({ coordinators, enquiries }: Props) {
             <div className="space-y-1.5">
               <Label>Temporary Password <span className="text-destructive">*</span></Label>
               <Input type="password" placeholder="Min. 6 characters" value={form.password} onChange={set("password")} />
-              <p className="text-xs text-muted-foreground">The coordinator can change this after first login.</p>
+              <p className="text-xs text-muted-foreground">Coordinator can change this after first login.</p>
             </div>
             <div className="flex gap-3 justify-end pt-2">
               <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
