@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Send, Trash2, Building2, Star, Phone,
   IndianRupee, Calendar, MapPin, Mic2, Info,
-  CheckCircle, Clock, ChevronDown,
+  CheckCircle, Clock, ChevronDown, Eye, Shield,
+  ThumbsUp, ChevronRight, X, AlertCircle, Timer,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,6 +68,7 @@ export function CoordinatorProposalsClient({
   const [sending, setSending] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showBooking, setShowBooking] = useState<ProposalWithExtras | null>(null);
+  const [previewProposal, setPreviewProposal] = useState<ProposalWithExtras | null>(null);
   const [creating, setCreating] = useState(false);
   const [creatingBooking, setCreatingBooking] = useState(false);
 
@@ -249,6 +251,10 @@ export function CoordinatorProposalsClient({
         animate={{ opacity: 1, y: 0 }}
         className="rounded-2xl border overflow-hidden hover:shadow-md transition-all"
       >
+        {p.status === "draft" && <div className="h-1 bg-gradient-to-r from-indigo-400 to-violet-500" />}
+        {p.status === "sent"  && <div className="h-1 bg-gradient-to-r from-amber-400 to-orange-400" />}
+        {p.status === "accepted" && <div className="h-1 bg-gradient-to-r from-emerald-400 to-teal-500" />}
+
         <div className="p-4 border-b bg-muted/20 flex items-start justify-between flex-wrap gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
@@ -271,8 +277,14 @@ export function CoordinatorProposalsClient({
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
             <p className="font-bold text-indigo-700">{formatCurrency(p.quoted_price)}</p>
+
+            {/* Preview button — always visible */}
+            <Button size="sm" variant="outline" onClick={() => setPreviewProposal(p)}>
+              <Eye className="w-3.5 h-3.5 mr-1.5" />Preview
+            </Button>
+
             {p.status === "draft" && (
               <Button size="sm" loading={sending === p.id} onClick={() => sendProposal(p.id, p.enquiry_id)}>
                 <Send className="w-3.5 h-3.5 mr-1.5" />Send to Client
@@ -303,6 +315,162 @@ export function CoordinatorProposalsClient({
           </div>
         )}
       </motion.div>
+    );
+  };
+
+  /* ── Client-view preview of a proposal ── */
+  const ProposalPreview = ({ p }: { p: ProposalWithExtras }) => {
+    const artists_list = (p.artists_proposed as any[]) ?? [];
+    const validityDays = p.validity_date
+      ? Math.round((new Date(p.validity_date).getTime() - Date.now()) / 86400000)
+      : null;
+
+    return (
+      <div className="space-y-5">
+        {/* "You are previewing as client" banner */}
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-700 font-medium">
+          <Eye className="w-3.5 h-3.5 flex-shrink-0" />
+          This is exactly what <span className="font-bold mx-1">{p.enquiry?.client?.name ?? "the client"}</span> will see when you send this proposal.
+        </div>
+
+        {/* Proposal card — mirrors ClientProposalsClient */}
+        <div className="rounded-2xl border border-amber-300 overflow-hidden shadow-lg shadow-amber-100/60">
+          <div className="h-1.5 gold-gradient" />
+          <div className="p-5">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <h3 className="font-display font-bold text-lg">{p.enquiry?.event_type ?? "Event"}</h3>
+                <div className="flex flex-wrap gap-3 mt-1.5 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{formatDate(p.enquiry?.event_date ?? "")}</span>
+                  <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{p.enquiry?.city}</span>
+                </div>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <p className="font-display font-bold text-2xl text-indigo-700">{formatCurrency(p.quoted_price)}</p>
+                <p className="text-[10px] text-muted-foreground font-medium">Total package</p>
+              </div>
+            </div>
+
+            {/* Validity warning */}
+            {validityDays !== null && (
+              <div className={`mt-4 flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium ${
+                validityDays <= 3
+                  ? "bg-red-50 text-red-700 border border-red-200"
+                  : "bg-amber-50 text-amber-700 border border-amber-100"
+              }`}>
+                <Timer className="w-4 h-4 flex-shrink-0" />
+                {validityDays <= 0
+                  ? "This proposal has expired."
+                  : validityDays === 1
+                  ? "Expires tomorrow! Accept to lock in this price."
+                  : `Offer valid for ${validityDays} more days`}
+              </div>
+            )}
+
+            {/* Artist stacks */}
+            {artists_list.length > 0 && (
+              <div className="mt-4 flex items-center gap-3">
+                <div className="flex -space-x-2">
+                  {artists_list.slice(0, 4).map((_: any, i: number) => (
+                    <div key={i} className="w-8 h-8 rounded-full gold-gradient border-2 border-background flex items-center justify-center text-navy-900 text-[11px] font-bold">
+                      {i + 1}
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold">{artists_list.length} artist option{artists_list.length !== 1 ? "s" : ""} curated for you</p>
+                  <p className="text-xs text-muted-foreground">Handpicked by your coordinator</p>
+                </div>
+              </div>
+            )}
+
+            {/* Expanded details (always shown in preview) */}
+            <div className="mt-5 pt-5 border-t space-y-5">
+              {/* Coordinator message */}
+              {p.content && (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Message from your Coordinator</p>
+                  <div className="relative p-4 rounded-2xl bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-100">
+                    <div className="absolute top-3 left-3 w-1 h-8 bg-indigo-300 rounded-full" />
+                    <p className="text-sm leading-relaxed pl-4 whitespace-pre-line">{p.content}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Artist options */}
+              {artists_list.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Artist Options</p>
+                  <div className="space-y-3">
+                    {artists_list.map((a: any, i: number) => (
+                      <div key={i} className="flex items-start justify-between gap-3 p-4 rounded-2xl bg-card border hover:border-indigo-200 transition-colors">
+                        <div className="flex items-start gap-3">
+                          <div className="w-11 h-11 rounded-xl gold-gradient flex items-center justify-center text-navy-900 font-bold flex-shrink-0">
+                            <Mic2 className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="font-semibold text-sm">{a.name ?? `Artist Option ${i + 1}`}</p>
+                            {a.notes && <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{a.notes}</p>}
+                          </div>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="font-bold text-base text-indigo-700">{formatCurrency(a.quoted_price)}</p>
+                          <p className="text-[10px] text-muted-foreground">quoted</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Trust signals */}
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { icon: Shield,       label: "Verified Artists", desc: "Background-verified performers" },
+                  { icon: Star,         label: "Quality Assured",  desc: "Rated 4.5+ by past clients" },
+                  { icon: Clock,        label: "On-time Guarantee",desc: "We handle all logistics" },
+                ].map(({ icon: Icon, label, desc }) => (
+                  <div key={label} className="text-center p-3 rounded-xl bg-muted/30">
+                    <Icon className="w-4 h-4 mx-auto mb-1.5 text-indigo-500" />
+                    <p className="text-[10px] font-semibold">{label}</p>
+                    <p className="text-[9px] text-muted-foreground mt-0.5 leading-tight">{desc}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Client CTA (read-only in preview) */}
+              <div className="space-y-2 opacity-60 pointer-events-none select-none">
+                <div className="w-full h-14 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 flex items-center justify-center text-white font-semibold gap-2 text-base">
+                  <ThumbsUp className="w-5 h-5" />Accept &amp; Confirm Booking
+                  <ChevronRight className="w-4 h-4" />
+                </div>
+                <p className="text-center text-xs text-muted-foreground flex items-center justify-center gap-1.5">
+                  <Shield className="w-3 h-3" />Secure · No payment charged until coordinator confirms
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Checklist */}
+        <div className="rounded-2xl border bg-muted/30 p-4 space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Before sending — checklist</p>
+          {[
+            { ok: artists_list.length > 0,       label: `${artists_list.length} artist option${artists_list.length !== 1 ? "s" : ""} added` },
+            { ok: !!p.content,                   label: "Message to client written" },
+            { ok: !!p.validity_date,             label: `Validity date set (${p.validity_date ? formatDate(p.validity_date) : "missing"})` },
+            { ok: artists_list.every((a: any) => a.quoted_price > 0), label: "All artist prices filled" },
+          ].map(({ ok, label }) => (
+            <div key={label} className={`flex items-center gap-2 text-sm ${ok ? "text-emerald-700" : "text-red-600"}`}>
+              {ok
+                ? <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                : <AlertCircle className="w-4 h-4 flex-shrink-0" />}
+              {label}
+            </div>
+          ))}
+        </div>
+      </div>
     );
   };
 
@@ -346,6 +514,46 @@ export function CoordinatorProposalsClient({
             : accepted.map((p) => <ProposalCard key={p.id} p={p} />)}
         </TabsContent>
       </Tabs>
+
+      {/* ══════════════════════════════════════════
+          PREVIEW DIALOG
+      ══════════════════════════════════════════ */}
+      <Dialog open={!!previewProposal} onOpenChange={(o) => !o && setPreviewProposal(null)}>
+        <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center justify-between">
+              <DialogTitle className="font-display text-lg flex items-center gap-2">
+                <Eye className="w-5 h-5 text-indigo-500" />Client View Preview
+              </DialogTitle>
+            </div>
+          </DialogHeader>
+
+          {previewProposal && (
+            <>
+              <ProposalPreview p={previewProposal} />
+
+              {/* Action footer */}
+              <div className="flex gap-3 pt-4 border-t mt-2">
+                <Button variant="outline" className="flex-1" onClick={() => setPreviewProposal(null)}>
+                  <X className="w-4 h-4 mr-2" />Close Preview
+                </Button>
+                {previewProposal.status === "draft" && (
+                  <Button
+                    className="flex-1 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white"
+                    loading={sending === previewProposal.id}
+                    onClick={() => {
+                      sendProposal(previewProposal.id, previewProposal.enquiry_id);
+                      setPreviewProposal(null);
+                    }}
+                  >
+                    <Send className="w-4 h-4 mr-2" />Send to Client Now
+                  </Button>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* ══════════════════════════════════════════
           CREATE PROPOSAL DIALOG
