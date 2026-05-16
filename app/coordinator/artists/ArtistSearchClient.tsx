@@ -1,200 +1,597 @@
 "use client";
 
-import { useState } from "react";
-import { motion } from "framer-motion";
-import { Search, Filter, Star, MapPin, IndianRupee, CheckCircle2, Check, Plus } from "lucide-react";
+import { useState, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Search, Star, MapPin, IndianRupee, CheckCircle2, Check, Plus, X,
+  SlidersHorizontal, ChevronDown, ChevronUp, ArrowUpDown, Phone,
+  Calendar, Filter, Sparkles, ArrowRight, Mic2, Send,
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { formatCurrency, getInitials, ARTIST_CATEGORIES, INDIA_CITIES } from "@/lib/utils";
-import { ArtistProfile } from "@/types";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { formatCurrency, getInitials, formatDate, ARTIST_CATEGORIES } from "@/lib/utils";
+import { useRouter } from "next/navigation";
 
-interface Props {
-  artists: (ArtistProfile & {
-    user: { name: string; email: string; phone: string; avatar_url?: string };
-    media: { url: string; is_primary: boolean; type: string }[];
-  })[];
+interface Artist {
+  id: string; categories: string[]; cities: string[]; base_price: number;
+  rating: number; total_bookings: number; bio?: string;
+  is_verified: boolean; experience_years?: number;
+  user: { name: string; email: string; phone: string; avatar_url?: string } | null;
+  media: { url: string; is_primary: boolean; type: string }[];
 }
 
-export function ArtistSearchClient({ artists }: Props) {
-  const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [cityFilter, setCityFilter] = useState("all");
-  const [shortlisted, setShortlisted] = useState<Set<string>>(new Set());
+interface EnquiryCtx {
+  id: string; event_type: string; event_date: string; city: string;
+  budget_min: number; budget_max: number;
+  client?: { name: string } | null;
+}
 
-  const filtered = artists.filter((a) => {
-    const matchSearch =
-      a.user.name.toLowerCase().includes(search.toLowerCase()) ||
-      a.categories.some((c) => c.toLowerCase().includes(search.toLowerCase()));
-    const matchCategory = categoryFilter === "all" || a.categories.includes(categoryFilter);
-    const matchCity = cityFilter === "all" || a.cities.includes(cityFilter);
-    return matchSearch && matchCategory && matchCity;
-  });
+interface Props { artists: Artist[]; enquiries: EnquiryCtx[]; }
 
-  const toggleShortlist = (id: string) => {
-    setShortlisted((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+type SortKey = "rating" | "price_asc" | "price_desc" | "bookings";
+
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: "rating",     label: "Top Rated" },
+  { value: "price_asc",  label: "Price: Low to High" },
+  { value: "price_desc", label: "Price: High to Low" },
+  { value: "bookings",   label: "Most Booked" },
+];
+
+// derive all unique cities from artist data
+function uniqueCities(artists: Artist[]) {
+  const s = new Set<string>();
+  artists.forEach((a) => a.cities.forEach((c) => s.add(c)));
+  return Array.from(s).sort();
+}
+
+export function ArtistSearchClient({ artists, enquiries }: Props) {
+  const router = useRouter();
+
+  // ── Enquiry context ──
+  const [enquiryId, setEnquiryId] = useState<string>(enquiries[0]?.id ?? "");
+  const enquiry = useMemo(() => enquiries.find((e) => e.id === enquiryId) ?? null, [enquiryId, enquiries]);
+
+  // ── Filter state ──
+  const [search, setSearch]               = useState("");
+  const [categories, setCategories]       = useState<string[]>([]);
+  const [cities, setCities]               = useState<string[]>([]);
+  const [minRating, setMinRating]         = useState(0);
+  const [maxPrice, setMaxPrice]           = useState<number | "">("");
+  const [minPrice, setMinPrice]           = useState<number | "">("");
+  const [sortBy, setSortBy]               = useState<SortKey>("rating");
+  const [verifiedOnly, setVerifiedOnly]   = useState(false);
+  const [showFilters, setShowFilters]     = useState(true);
+  const [shortlisted, setShortlisted]     = useState<Set<string>>(new Set());
+
+  const allCities = useMemo(() => uniqueCities(artists), [artists]);
+
+  // ── When enquiry changes, auto-apply its city + budget ──
+  const applyEnquiryContext = (id: string) => {
+    setEnquiryId(id);
+    const e = enquiries.find((x) => x.id === id);
+    if (e) {
+      setCities([e.city]);
+      setMaxPrice(e.budget_max);
+      setMinPrice(0);
+    }
   };
 
-  const primaryPhoto = (artist: Props["artists"][0]) =>
-    artist.media.find((m) => m.is_primary && m.type === "photo")?.url;
+  const toggleCategory = (c: string) =>
+    setCategories((prev) => prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]);
+
+  const toggleCity = (c: string) =>
+    setCities((prev) => prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]);
+
+  const toggleShortlist = (id: string) =>
+    setShortlisted((prev) => { const n = new Set(Array.from(prev)); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  const clearAllFilters = () => {
+    setSearch(""); setCategories([]); setCities([]);
+    setMinRating(0); setMinPrice(""); setMaxPrice(""); setVerifiedOnly(false);
+  };
+
+  const activeFilterCount = [
+    search, ...categories, ...cities,
+    minRating > 0, minPrice !== "" && minPrice > 0, maxPrice !== "",
+    verifiedOnly,
+  ].filter(Boolean).length;
+
+  // ── Filtering + sorting ──
+  const filtered = useMemo(() => {
+    let list = artists.filter((a) => {
+      const name = a.user?.name ?? "";
+      const matchSearch = !search ||
+        name.toLowerCase().includes(search.toLowerCase()) ||
+        a.categories.some((c) => c.toLowerCase().includes(search.toLowerCase())) ||
+        a.bio?.toLowerCase().includes(search.toLowerCase());
+
+      const matchCat = categories.length === 0 || categories.some((c) => a.categories.includes(c));
+      const matchCity = cities.length === 0 || cities.some((c) => a.cities.includes(c));
+      const matchRating = a.rating >= minRating;
+      const matchMinPrice = minPrice === "" || a.base_price >= Number(minPrice);
+      const matchMaxPrice = maxPrice === "" || a.base_price <= Number(maxPrice);
+      const matchVerified = !verifiedOnly || a.is_verified;
+
+      return matchSearch && matchCat && matchCity && matchRating && matchMinPrice && matchMaxPrice && matchVerified;
+    });
+
+    list = [...list].sort((a, b) => {
+      if (sortBy === "rating")     return b.rating - a.rating;
+      if (sortBy === "price_asc")  return a.base_price - b.base_price;
+      if (sortBy === "price_desc") return b.base_price - a.base_price;
+      if (sortBy === "bookings")   return b.total_bookings - a.total_bookings;
+      return 0;
+    });
+
+    return list;
+  }, [artists, search, categories, cities, minRating, minPrice, maxPrice, verifiedOnly, sortBy]);
+
+  const shortlistedArtists = artists.filter((a) => shortlisted.has(a.id));
+
+  const goToCreateProposal = () => {
+    if (!enquiryId) { alert("Please select an enquiry first"); return; }
+    // Store shortlisted IDs in sessionStorage so the proposals page can pre-fill
+    sessionStorage.setItem("shortlisted_artists", JSON.stringify(Array.from(shortlisted)));
+    sessionStorage.setItem("shortlisted_enquiry", enquiryId);
+    router.push("/coordinator/proposals");
+  };
+
+  const primaryPhoto = (a: Artist) => a.media.find((m) => m.is_primary && m.type === "photo")?.url;
 
   return (
-    <div className="p-4 md:p-6 space-y-5">
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
+    <div className="p-4 md:p-6 space-y-4">
+
+      {/* ── Enquiry context selector ── */}
+      {enquiries.length > 0 && (
+        <div className="rounded-2xl border bg-gradient-to-r from-indigo-50 to-violet-50 border-indigo-100 p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-indigo-500" />
+            <p className="text-sm font-semibold text-indigo-800">Shortlisting for which enquiry?</p>
+          </div>
+          <div className="flex gap-3 flex-wrap items-end">
+            <div className="flex-1 min-w-[220px]">
+              <Select value={enquiryId} onValueChange={applyEnquiryContext}>
+                <SelectTrigger className="bg-white border-indigo-200">
+                  <SelectValue placeholder="Select enquiry…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {enquiries.map((e) => (
+                    <SelectItem key={e.id} value={e.id}>
+                      <span className="font-medium">{e.event_type}</span>
+                      <span className="text-muted-foreground text-xs ml-2">· {e.client?.name} · {e.city} · {formatDate(e.event_date)}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {enquiry && (
+              <div className="flex gap-2 flex-wrap">
+                <span className="px-3 py-1.5 rounded-xl bg-white border border-indigo-200 text-xs font-medium text-indigo-700 flex items-center gap-1.5">
+                  <Calendar className="w-3 h-3" />{formatDate(enquiry.event_date)}
+                </span>
+                <span className="px-3 py-1.5 rounded-xl bg-white border border-indigo-200 text-xs font-medium text-indigo-700 flex items-center gap-1.5">
+                  <MapPin className="w-3 h-3" />{enquiry.city}
+                </span>
+                <span className="px-3 py-1.5 rounded-xl bg-white border border-amber-300 text-xs font-semibold text-amber-700 flex items-center gap-1.5">
+                  <IndianRupee className="w-3 h-3" />Budget: {formatCurrency(enquiry.budget_min)} – {formatCurrency(enquiry.budget_max)}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Search + sort + filter toggle ── */}
+      <div className="flex gap-3 flex-wrap items-center">
+        <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search artists by name or category..."
+            placeholder="Search by name, category, bio…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
           />
         </div>
-        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-          <SelectTrigger className="w-full sm:w-48">
-            <SelectValue placeholder="Category" />
+
+        <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
+          <SelectTrigger className="w-48">
+            <ArrowUpDown className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
+            <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Categories</SelectItem>
-            {ARTIST_CATEGORIES.map((c) => (
-              <SelectItem key={c} value={c}>{c}</SelectItem>
+            {SORT_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <Select value={cityFilter} onValueChange={setCityFilter}>
-          <SelectTrigger className="w-full sm:w-44">
-            <SelectValue placeholder="City" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Cities</SelectItem>
-            {INDIA_CITIES.map((c) => (
-              <SelectItem key={c.name} value={c.name}>{c.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+
+        <Button
+          variant={showFilters ? "default" : "outline"}
+          onClick={() => setShowFilters((v) => !v)}
+          className="flex-shrink-0"
+        >
+          <SlidersHorizontal className="w-4 h-4 mr-2" />
+          Filters
+          {activeFilterCount > 0 && (
+            <span className="ml-2 px-1.5 py-0.5 rounded-full bg-white text-indigo-700 text-[10px] font-bold">
+              {activeFilterCount}
+            </span>
+          )}
+        </Button>
+
+        {activeFilterCount > 0 && (
+          <Button variant="ghost" size="sm" onClick={clearAllFilters} className="text-muted-foreground">
+            <X className="w-3.5 h-3.5 mr-1" />Clear all
+          </Button>
+        )}
       </div>
 
-      {shortlisted.size > 0 && (
-        <div className="flex items-center justify-between p-3 rounded-xl bg-gold-50 border border-gold-200">
-          <span className="text-sm font-medium text-gold-800">
-            {shortlisted.size} artist{shortlisted.size > 1 ? "s" : ""} shortlisted
-          </span>
-          <Button size="sm">Create Proposal</Button>
-        </div>
-      )}
+      {/* ── Filter panel ── */}
+      <AnimatePresence>
+        {showFilters && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="rounded-2xl border bg-card p-5 space-y-5">
 
-      <div className="text-sm text-muted-foreground">{filtered.length} artists found</div>
+              {/* Categories — multi-select chips */}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2.5">Category</p>
+                <div className="flex flex-wrap gap-2">
+                  {ARTIST_CATEGORIES.map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => toggleCategory(c)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                        categories.includes(c)
+                          ? "bg-indigo-600 text-white border-indigo-600"
+                          : "bg-background border-border text-muted-foreground hover:border-indigo-400 hover:text-indigo-600"
+                      }`}
+                    >
+                      {categories.includes(c) && <Check className="w-3 h-3 inline mr-1" />}
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-      {/* Artist grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {filtered.map((artist, i) => {
-          const isShortlisted = shortlisted.has(artist.id);
-          const photo = primaryPhoto(artist);
-          return (
-            <motion.div
-              key={artist.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-            >
-              <Card hover className={`overflow-hidden ${isShortlisted ? "ring-2 ring-gold-500" : ""}`}>
-                {/* Photo */}
-                <div className="relative h-48 bg-gradient-to-br from-navy-900 to-navy-700 flex items-center justify-center">
-                  {photo ? (
-                    <img src={photo} alt={artist.user.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-20 h-20 rounded-full gold-gradient flex items-center justify-center text-navy-900 font-bold text-2xl">
-                      {getInitials(artist.user.name)}
-                    </div>
-                  )}
-                  {artist.is_verified && (
-                    <div className="absolute top-2 right-2 w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center">
-                      <CheckCircle2 className="w-4 h-4 text-white" />
-                    </div>
-                  )}
-                  <button
-                    onClick={() => toggleShortlist(artist.id)}
-                    className={`absolute top-2 left-2 px-2.5 py-1 rounded-full text-xs font-semibold transition-all flex items-center gap-1 ${
-                      isShortlisted
-                        ? "bg-indigo-600 text-white"
-                        : "bg-black/40 text-white hover:bg-indigo-600"
-                    }`}
-                  >
-                    {isShortlisted ? <><Check className="w-3 h-3" /> Shortlisted</> : <><Plus className="w-3 h-3" /> Shortlist</>}
-                  </button>
+              {/* Cities — multi-select chips */}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2.5">City / Location</p>
+                <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto pr-1">
+                  {allCities.map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => toggleCity(c)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all flex-shrink-0 ${
+                        cities.includes(c)
+                          ? "bg-violet-600 text-white border-violet-600"
+                          : "bg-background border-border text-muted-foreground hover:border-violet-400"
+                      }`}
+                    >
+                      {cities.includes(c) && <Check className="w-3 h-3 inline mr-1" />}
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Price range + Rating + Verified — in a row */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {/* Min price */}
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Min Price (₹)</p>
+                  <div className="relative">
+                    <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      className="pl-8"
+                      value={minPrice}
+                      onChange={(e) => setMinPrice(e.target.value === "" ? "" : Number(e.target.value))}
+                    />
+                  </div>
                 </div>
 
-                <CardContent className="p-4">
-                  <h3 className="font-display font-semibold text-base truncate">{artist.user.name}</h3>
-
-                  <div className="flex items-center gap-1 mt-1">
-                    <Star className="w-3.5 h-3.5 fill-gold-500 text-gold-500" />
-                    <span className="text-sm font-medium">{artist.rating.toFixed(1)}</span>
-                    <span className="text-xs text-muted-foreground">({artist.total_bookings} events)</span>
-                  </div>
-
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {artist.categories.slice(0, 2).map((c) => (
-                      <Badge key={c} variant="secondary" className="text-[10px]">{c}</Badge>
-                    ))}
-                    {artist.categories.length > 2 && (
-                      <Badge variant="outline" className="text-[10px]">+{artist.categories.length - 2}</Badge>
+                {/* Max price */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Max Price (₹)</p>
+                    {enquiry && (
+                      <button
+                        onClick={() => setMaxPrice(enquiry.budget_max)}
+                        className="text-[10px] text-indigo-600 hover:underline"
+                      >
+                        Use client budget
+                      </button>
                     )}
                   </div>
-
-                  <div className="mt-3 flex items-center justify-between">
-                    <div className="flex items-center gap-1 text-sm font-semibold text-gold-700">
-                      <IndianRupee className="w-3.5 h-3.5" />
-                      {formatCurrency(artist.base_price).replace("₹", "")}
-                      <span className="text-xs text-muted-foreground font-normal">onwards</span>
-                    </div>
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <MapPin className="w-3 h-3" />
-                      {artist.cities.slice(0, 1).join(", ")}
-                      {artist.cities.length > 1 && ` +${artist.cities.length - 1}`}
-                    </div>
+                  <div className="relative">
+                    <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                    <Input
+                      type="number"
+                      placeholder="No limit"
+                      className="pl-8"
+                      value={maxPrice}
+                      onChange={(e) => setMaxPrice(e.target.value === "" ? "" : Number(e.target.value))}
+                    />
                   </div>
+                </div>
 
-                  <div className="mt-3 flex gap-2">
-                    <Button size="sm" variant="outline" className="flex-1 text-xs">
-                      View Profile
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="flex-1 text-xs"
-                      onClick={() => toggleShortlist(artist.id)}
-                      variant={isShortlisted ? "secondary" : "default"}
-                    >
-                      {isShortlisted ? "Remove" : "Shortlist"}
-                    </Button>
+                {/* Min rating */}
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Min Rating</p>
+                  <div className="flex gap-1.5">
+                    {[0, 3, 3.5, 4, 4.5].map((r) => (
+                      <button
+                        key={r}
+                        onClick={() => setMinRating(r)}
+                        className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                          minRating === r
+                            ? "bg-amber-500 text-white border-amber-500"
+                            : "bg-background border-border text-muted-foreground hover:border-amber-400"
+                        }`}
+                      >
+                        {r === 0 ? "Any" : `${r}+`}
+                      </button>
+                    ))}
                   </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          );
-        })}
+                </div>
+              </div>
+
+              {/* Verified only toggle */}
+              <div className="flex items-center gap-3 pt-1">
+                <button
+                  onClick={() => setVerifiedOnly((v) => !v)}
+                  className={`w-10 h-6 rounded-full transition-all relative flex-shrink-0 ${
+                    verifiedOnly ? "bg-emerald-500" : "bg-muted"
+                  }`}
+                >
+                  <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${
+                    verifiedOnly ? "left-5" : "left-1"
+                  }`} />
+                </button>
+                <div>
+                  <p className="text-sm font-medium">Verified artists only</p>
+                  <p className="text-xs text-muted-foreground">Show only background-verified performers</p>
+                </div>
+              </div>
+
+              {/* Active filters summary */}
+              {(categories.length > 0 || cities.length > 0) && (
+                <div className="flex flex-wrap gap-2 pt-2 border-t">
+                  {categories.map((c) => (
+                    <span key={c} className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-700 text-xs font-medium">
+                      {c}
+                      <button onClick={() => toggleCategory(c)}><X className="w-3 h-3" /></button>
+                    </span>
+                  ))}
+                  {cities.map((c) => (
+                    <span key={c} className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-violet-100 text-violet-700 text-xs font-medium">
+                      <MapPin className="w-3 h-3" />{c}
+                      <button onClick={() => toggleCity(c)}><X className="w-3 h-3" /></button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Results summary ── */}
+      <div className="flex items-center justify-between text-sm text-muted-foreground">
+        <span>
+          Showing <span className="font-semibold text-foreground">{filtered.length}</span> of {artists.length} verified artists
+          {activeFilterCount > 0 && ` · ${activeFilterCount} filter${activeFilterCount !== 1 ? "s" : ""} active`}
+        </span>
       </div>
 
-      {filtered.length === 0 && (
-        <div className="py-20 text-center">
-          <p className="text-muted-foreground">No artists found matching your criteria</p>
-          <Button variant="outline" className="mt-4" onClick={() => { setSearch(""); setCategoryFilter("all"); setCityFilter("all"); }}>
-            Clear Filters
-          </Button>
+      {/* ── Shortlist sticky bar ── */}
+      <AnimatePresence>
+        {shortlisted.size > 0 && (
+          <motion.div
+            initial={{ y: 80, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 80, opacity: 0 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-4"
+          >
+            <div className="rounded-2xl bg-navy-900 text-white shadow-2xl shadow-navy-900/50 p-4 flex items-center gap-4">
+              {/* Shortlisted avatars */}
+              <div className="flex -space-x-2 flex-shrink-0">
+                {shortlistedArtists.slice(0, 5).map((a) => (
+                  <div key={a.id} className="w-9 h-9 rounded-full gold-gradient border-2 border-navy-900 flex items-center justify-center text-navy-900 text-xs font-bold flex-shrink-0">
+                    {getInitials(a.user?.name ?? "A")}
+                  </div>
+                ))}
+                {shortlisted.size > 5 && (
+                  <div className="w-9 h-9 rounded-full bg-white/20 border-2 border-navy-900 flex items-center justify-center text-white text-xs font-bold">
+                    +{shortlisted.size - 5}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm">
+                  {shortlisted.size} artist{shortlisted.size !== 1 ? "s" : ""} shortlisted
+                </p>
+                <p className="text-white/60 text-xs truncate">
+                  {shortlistedArtists.map((a) => a.user?.name).join(", ")}
+                </p>
+              </div>
+
+              <div className="flex gap-2 flex-shrink-0">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-white/60 hover:text-white hover:bg-white/10"
+                  onClick={() => setShortlisted(new Set())}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-gold-500 hover:bg-gold-400 text-navy-900 font-semibold"
+                  onClick={goToCreateProposal}
+                >
+                  <Send className="w-3.5 h-3.5 mr-1.5" />Create Proposal
+                  <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Artist grid ── */}
+      {filtered.length === 0 ? (
+        <div className="py-20 text-center rounded-2xl border-2 border-dashed border-muted">
+          <Search className="w-10 h-10 mx-auto mb-3 opacity-20" />
+          <p className="font-medium mb-1">No artists match your filters</p>
+          <p className="text-sm text-muted-foreground mb-4">Try adjusting or clearing some filters</p>
+          <Button variant="outline" onClick={clearAllFilters}>Clear All Filters</Button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-28">
+          {filtered.map((artist, i) => {
+            const isShortlisted = shortlisted.has(artist.id);
+            const photo = primaryPhoto(artist);
+            const withinBudget = enquiry && artist.base_price <= enquiry.budget_max;
+            const overBudget   = enquiry && artist.base_price > enquiry.budget_max;
+
+            return (
+              <motion.div
+                key={artist.id}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: Math.min(i * 0.04, 0.3) }}
+              >
+                <div className={`rounded-2xl border overflow-hidden hover:shadow-lg transition-all ${
+                  isShortlisted ? "ring-2 ring-indigo-500 ring-offset-1" : ""
+                } ${overBudget ? "border-red-200" : ""}`}>
+
+                  {/* Budget indicator bar */}
+                  {enquiry && (
+                    <div className={`h-1 ${withinBudget ? "bg-emerald-400" : "bg-red-400"}`} />
+                  )}
+
+                  {/* Photo / avatar */}
+                  <div className="relative h-44 bg-gradient-to-br from-navy-900 to-navy-700 flex items-center justify-center">
+                    {photo ? (
+                      <img src={photo} alt={artist.user?.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-20 h-20 rounded-full gold-gradient flex items-center justify-center text-navy-900 font-bold text-2xl">
+                        {getInitials(artist.user?.name ?? "A")}
+                      </div>
+                    )}
+
+                    {/* Verified badge */}
+                    {artist.is_verified && (
+                      <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/90 backdrop-blur-sm">
+                        <CheckCircle2 className="w-3 h-3 text-white" />
+                        <span className="text-[10px] text-white font-semibold">Verified</span>
+                      </div>
+                    )}
+
+                    {/* Budget fit badge */}
+                    {enquiry && (
+                      <div className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-semibold backdrop-blur-sm ${
+                        withinBudget
+                          ? "bg-emerald-500/90 text-white"
+                          : "bg-red-500/90 text-white"
+                      }`}>
+                        {withinBudget ? "Within budget" : "Over budget"}
+                      </div>
+                    )}
+
+                    {/* Shortlist overlay button */}
+                    <button
+                      onClick={() => toggleShortlist(artist.id)}
+                      className={`absolute bottom-2 right-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all flex items-center gap-1.5 shadow-md ${
+                        isShortlisted
+                          ? "bg-indigo-600 text-white"
+                          : "bg-black/50 text-white hover:bg-indigo-600 backdrop-blur-sm"
+                      }`}
+                    >
+                      {isShortlisted
+                        ? <><Check className="w-3 h-3" />Shortlisted</>
+                        : <><Plus className="w-3 h-3" />Shortlist</>}
+                    </button>
+                  </div>
+
+                  {/* Info */}
+                  <div className="p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="font-display font-semibold text-base truncate">{artist.user?.name}</h3>
+                      <div className="flex items-center gap-0.5 flex-shrink-0">
+                        <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                        <span className="text-sm font-semibold">{artist.rating.toFixed(1)}</span>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-muted-foreground mt-0.5">{artist.total_bookings} bookings completed</p>
+
+                    {/* Categories */}
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {artist.categories.slice(0, 2).map((c) => (
+                        <Badge key={c} variant="secondary" className={`text-[10px] ${categories.includes(c) ? "bg-indigo-100 text-indigo-700" : ""}`}>{c}</Badge>
+                      ))}
+                      {artist.categories.length > 2 && (
+                        <Badge variant="outline" className="text-[10px]">+{artist.categories.length - 2}</Badge>
+                      )}
+                    </div>
+
+                    {/* Cities */}
+                    <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
+                      <MapPin className="w-3 h-3 flex-shrink-0" />
+                      <span className="truncate">{artist.cities.slice(0, 3).join(", ")}{artist.cities.length > 3 ? ` +${artist.cities.length - 3}` : ""}</span>
+                    </div>
+
+                    {/* Price */}
+                    <div className="mt-3 flex items-center justify-between">
+                      <div className={`flex items-center gap-0.5 font-bold text-base ${
+                        overBudget ? "text-red-600" : withinBudget ? "text-emerald-700" : "text-indigo-700"
+                      }`}>
+                        <IndianRupee className="w-4 h-4" />
+                        {formatCurrency(artist.base_price).replace("₹", "")}
+                        <span className="text-xs text-muted-foreground font-normal ml-1">onwards</span>
+                      </div>
+                      {artist.user?.phone && (
+                        <a href={`tel:${artist.user.phone}`} className="text-muted-foreground hover:text-foreground">
+                          <Phone className="w-4 h-4" />
+                        </a>
+                      )}
+                    </div>
+
+                    {/* Bio snippet */}
+                    {artist.bio && (
+                      <p className="text-xs text-muted-foreground mt-2 line-clamp-2 leading-relaxed">{artist.bio}</p>
+                    )}
+
+                    {/* Action */}
+                    <Button
+                      size="sm"
+                      className={`w-full mt-3 ${
+                        isShortlisted
+                          ? "bg-indigo-100 text-indigo-700 hover:bg-red-50 hover:text-red-600 border border-indigo-200"
+                          : "bg-indigo-600 hover:bg-indigo-700 text-white"
+                      }`}
+                      onClick={() => toggleShortlist(artist.id)}
+                    >
+                      {isShortlisted
+                        ? <><X className="w-3.5 h-3.5 mr-1.5" />Remove from Shortlist</>
+                        : <><Plus className="w-3.5 h-3.5 mr-1.5" />Add to Shortlist</>}
+                    </Button>
+                  </div>
+                </div>
+              </motion.div>
+            );
+          })}
         </div>
       )}
     </div>
