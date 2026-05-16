@@ -1,0 +1,11 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='192' height='192' viewBox='0 0 192 192'>
+  <defs>
+    <linearGradient id='bg' x1='0%' y1='0%' x2='100%' y2='100%'>
+      <stop offset='0%' style='stop-color:#0F172A;stop-opacity:1' />
+      <stop offset='100%' style='stop-color:#1E293B;stop-opacity:1' />
+    </linearGradient>
+  </defs>
+  <rect width='192' height='192' fill='url(#bg)' rx='29'/>
+  <text x='96' y='119.03999999999999' text-anchor='middle' font-size='67' fill='#F59E0B' font-family='Arial,sans-serif' font-weight='bold'>★</text>
+  <text x='96' y='168.96' text-anchor='middle' font-size='17' fill='#F59E0B' font-family='Arial,sans-serif' font-weight='600' letter-spacing='1'>BMES</text>
+</svg>
