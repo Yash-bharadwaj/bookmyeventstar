@@ -3,22 +3,13 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  CheckCircle2,
-  Clock,
-  XCircle,
-  ChevronDown,
-  ChevronUp,
-  Star,
-  IndianRupee,
-  Calendar,
-  MapPin,
-  Timer,
+  CheckCircle2, XCircle, ChevronDown, ChevronUp, Star,
+  IndianRupee, Calendar, MapPin, Timer, Sparkles,
+  Mic2, Clock, Shield, ThumbsUp,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Proposal } from "@/types";
-import { formatDate, formatCurrency, getStatusColor, getStatusLabel } from "@/lib/utils";
+import { formatDate, formatCurrency } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
@@ -30,11 +21,18 @@ interface Props {
   clientId: string;
 }
 
-export function ClientProposalsClient({ proposals, clientId }: Props) {
+function daysUntilValidity(dateStr: string) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const target = new Date(dateStr); target.setHours(0, 0, 0, 0);
+  return Math.round((target.getTime() - today.getTime()) / 86400000);
+}
+
+export function ClientProposalsClient({ proposals }: Props) {
   const router = useRouter();
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(proposals.find((p) => p.status === "sent")?.id ?? null);
   const [accepting, setAccepting] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState<string | null>(null);
+  const [confirmDecline, setConfirmDecline] = useState<string | null>(null);
 
   const acceptProposal = async (proposalId: string, enquiryId: string) => {
     setAccepting(proposalId);
@@ -42,7 +40,7 @@ export function ClientProposalsClient({ proposals, clientId }: Props) {
       const supabase = createClient();
       await supabase.from("proposals").update({ status: "accepted" }).eq("id", proposalId);
       await supabase.from("enquiries").update({ status: "confirmed" }).eq("id", enquiryId);
-      toast.success("Proposal accepted! Our coordinator will be in touch shortly.");
+      toast.success("Booking confirmed! Our coordinator will be in touch shortly.", { duration: 5000 });
       router.refresh();
     } catch {
       toast.error("Failed to accept proposal");
@@ -56,7 +54,8 @@ export function ClientProposalsClient({ proposals, clientId }: Props) {
     try {
       const supabase = createClient();
       await supabase.from("proposals").update({ status: "rejected" }).eq("id", proposalId);
-      toast.success("Proposal declined. We'll send a revised proposal shortly.");
+      toast.success("Proposal declined. Your coordinator will send a revised proposal.");
+      setConfirmDecline(null);
       router.refresh();
     } catch {
       toast.error("Failed to decline proposal");
@@ -66,197 +65,290 @@ export function ClientProposalsClient({ proposals, clientId }: Props) {
   };
 
   const pendingProposals = proposals.filter((p) => p.status === "sent");
-  const otherProposals = proposals.filter((p) => p.status !== "sent");
+  const otherProposals   = proposals.filter((p) => p.status !== "sent");
 
-  const ProposalCard = ({ proposal }: { proposal: Props["proposals"][0] }) => {
-    const isExpanded = expanded === proposal.id;
+  const ProposalCard = ({ proposal, isPending }: { proposal: Props["proposals"][0]; isPending: boolean }) => {
+    const isOpen = expanded === proposal.id;
     const artists = (proposal.artists_proposed as {
-      artist_id: string;
-      quoted_price: number;
-      notes?: string;
+      artist_id?: string; quoted_price: number; notes?: string; name?: string;
       artist?: { user: { name: string }; categories: string[]; rating: number };
     }[]) ?? [];
 
+    const validityDays = proposal.validity_date ? daysUntilValidity(proposal.validity_date) : null;
+    const isExpiringSoon = validityDays !== null && validityDays <= 3 && validityDays >= 0;
+
     return (
       <motion.div
-        initial={{ opacity: 0, y: 10 }}
+        layout
+        initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        className={`rounded-2xl border overflow-hidden transition-all ${
-          proposal.status === "sent" ? "border-gold-300 shadow-sm shadow-gold-100" : ""
+        className={`rounded-3xl border overflow-hidden transition-shadow ${
+          isPending
+            ? isExpiringSoon
+              ? "border-red-300 shadow-lg shadow-red-100/60"
+              : "border-amber-300 shadow-lg shadow-amber-100/60"
+            : proposal.status === "accepted"
+            ? "border-emerald-200"
+            : "border-border opacity-70"
         }`}
       >
-        {proposal.status === "sent" && (
-          <div className="h-1 gold-gradient" />
+        {/* Top status bar */}
+        {isPending && (
+          <div className={`h-1.5 ${isExpiringSoon ? "bg-gradient-to-r from-red-400 to-orange-400 animate-pulse" : "gold-gradient"}`} />
         )}
-        <div className="p-5">
-          <div className="flex items-start justify-between">
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-semibold">{proposal.enquiry?.event_type ?? "Event"}</h3>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${getStatusColor(proposal.status)}`}>
-                  {getStatusLabel(proposal.status)}
-                </span>
+        {proposal.status === "accepted" && <div className="h-1.5 bg-gradient-to-r from-emerald-400 to-teal-500" />}
+
+        <div className="p-6">
+          {/* Header */}
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                <h3 className="font-display font-bold text-lg">{proposal.enquiry?.event_type ?? "Event"}</h3>
+                {proposal.status === "accepted" && (
+                  <span className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-semibold bg-emerald-100 text-emerald-700">
+                    <CheckCircle2 className="w-3 h-3" />Accepted
+                  </span>
+                )}
+                {proposal.status === "rejected" && (
+                  <span className="text-[11px] px-2.5 py-1 rounded-full font-semibold bg-red-100 text-red-600">Declined</span>
+                )}
               </div>
-              <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground flex-wrap">
-                <span className="flex items-center gap-1">
-                  <Calendar className="w-3 h-3" />
-                  {formatDate(proposal.enquiry?.event_date ?? "")}
-                </span>
-                <span className="flex items-center gap-1">
-                  <MapPin className="w-3 h-3" />
-                  {proposal.enquiry?.city}
-                </span>
+              <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{formatDate(proposal.enquiry?.event_date ?? "")}</span>
+                <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{proposal.enquiry?.city}</span>
               </div>
             </div>
-            <div className="text-right">
-              <p className="font-display font-bold text-xl">{formatCurrency(proposal.quoted_price)}</p>
-              <p className="text-xs text-muted-foreground">Total quoted</p>
+
+            <div className="text-right flex-shrink-0">
+              <p className="font-display font-bold text-2xl text-indigo-700">{formatCurrency(proposal.quoted_price)}</p>
+              <p className="text-[10px] text-muted-foreground font-medium">Total package</p>
             </div>
           </div>
 
-          {/* Artists proposed count */}
-          <div className="mt-3 flex items-center gap-2">
-            <div className="flex -space-x-2">
-              {artists.slice(0, 3).map((_, i) => (
-                <div
-                  key={i}
-                  className="w-7 h-7 rounded-full gold-gradient border-2 border-background flex items-center justify-center text-navy-900 text-[10px] font-bold"
-                >
-                  {i + 1}
-                </div>
-              ))}
+          {/* Validity warning */}
+          {isPending && validityDays !== null && (
+            <div className={`mt-4 flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium ${
+              validityDays <= 0 ? "bg-red-100 text-red-700 border border-red-200" :
+              isExpiringSoon ? "bg-red-50 text-red-700 border border-red-200" :
+              "bg-amber-50 text-amber-700 border border-amber-100"
+            }`}>
+              <Timer className="w-4 h-4 flex-shrink-0" />
+              {validityDays <= 0
+                ? "This proposal has expired. Please contact your coordinator."
+                : validityDays === 1
+                ? "Expires tomorrow! Accept to lock in this price."
+                : `Offer valid for ${validityDays} more days — prices may change after`}
             </div>
-            <span className="text-xs text-muted-foreground">
-              {artists.length} artist option{artists.length !== 1 ? "s" : ""} included
-            </span>
-          </div>
+          )}
 
-          <div className="flex items-center justify-between mt-4">
-            <button
-              onClick={() => setExpanded(isExpanded ? null : proposal.id)}
-              className="flex items-center gap-1 text-sm text-gold-600 hover:text-gold-700 font-medium"
-            >
-              {isExpanded ? "Hide details" : "View details"}
-              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
-            {proposal.status === "sent" && (
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="border-red-300 text-red-600 hover:bg-red-50"
-                  loading={rejecting === proposal.id}
-                  onClick={() => rejectProposal(proposal.id)}
-                >
-                  <XCircle className="w-4 h-4 mr-1.5" />Decline
-                </Button>
-                <Button
-                  size="sm"
-                  loading={accepting === proposal.id}
-                  onClick={() => acceptProposal(proposal.id, proposal.enquiry_id)}
-                >
-                  <CheckCircle2 className="w-4 h-4 mr-1.5" />Accept
-                </Button>
+          {/* Artist stacks */}
+          {artists.length > 0 && (
+            <div className="mt-4 flex items-center gap-3">
+              <div className="flex -space-x-2">
+                {artists.slice(0, 4).map((_, i) => (
+                  <div key={i} className="w-8 h-8 rounded-full gold-gradient border-2 border-background flex items-center justify-center text-navy-900 text-[11px] font-bold">
+                    {i + 1}
+                  </div>
+                ))}
               </div>
-            )}
-          </div>
+              <div>
+                <p className="text-sm font-semibold">{artists.length} artist option{artists.length !== 1 ? "s" : ""} curated for you</p>
+                <p className="text-xs text-muted-foreground">Handpicked by your coordinator</p>
+              </div>
+            </div>
+          )}
+
+          {/* Expand / collapse */}
+          <button
+            onClick={() => setExpanded(isOpen ? null : proposal.id)}
+            className="mt-4 flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-700 font-medium"
+          >
+            {isOpen ? <><ChevronUp className="w-4 h-4" />Hide details</> : <><ChevronDown className="w-4 h-4" />View full proposal</>}
+          </button>
 
           {/* Expanded details */}
           <AnimatePresence>
-            {isExpanded && (
+            {isOpen && (
               <motion.div
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: "auto", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
                 className="overflow-hidden"
               >
-                <div className="mt-4 pt-4 border-t space-y-4">
+                <div className="mt-5 pt-5 border-t space-y-5">
+                  {/* Coordinator message */}
                   {proposal.content && (
                     <div>
-                      <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">From your Coordinator</p>
-                      <p className="text-sm leading-relaxed bg-muted/50 rounded-xl p-4">{proposal.content}</p>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Message from your Coordinator</p>
+                      <div className="relative p-4 rounded-2xl bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-100">
+                        <div className="absolute top-3 left-3 w-1 h-8 bg-indigo-300 rounded-full" />
+                        <p className="text-sm leading-relaxed pl-4">{proposal.content}</p>
+                      </div>
                     </div>
                   )}
 
+                  {/* Artist options */}
                   {artists.length > 0 && (
                     <div>
-                      <p className="text-xs font-semibold text-muted-foreground uppercase mb-3">Proposed Artists</p>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Artist Options</p>
                       <div className="space-y-3">
                         {artists.map((a, i) => (
-                          <div
-                            key={i}
-                            className="flex items-center justify-between p-4 rounded-xl bg-muted/30 border"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-xl gold-gradient flex items-center justify-center text-navy-900 font-bold text-sm">
-                                {i + 1}
+                          <div key={i} className="flex items-start justify-between gap-3 p-4 rounded-2xl bg-card border hover:border-indigo-200 transition-colors">
+                            <div className="flex items-start gap-3">
+                              <div className="w-11 h-11 rounded-xl gold-gradient flex items-center justify-center text-navy-900 font-bold flex-shrink-0">
+                                <Mic2 className="w-5 h-5" />
                               </div>
                               <div>
-                                <p className="font-medium text-sm">Artist Option {i + 1}</p>
-                                {a.notes && <p className="text-xs text-muted-foreground">{a.notes}</p>}
+                                <p className="font-semibold text-sm">{a.name ?? `Artist Option ${i + 1}`}</p>
+                                {a.notes && <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{a.notes}</p>}
                               </div>
                             </div>
-                            <p className="font-bold text-sm">{formatCurrency(a.quoted_price)}</p>
+                            <div className="text-right flex-shrink-0">
+                              <p className="font-bold text-base text-indigo-700">{formatCurrency(a.quoted_price)}</p>
+                              <p className="text-[10px] text-muted-foreground">quoted</p>
+                            </div>
                           </div>
                         ))}
                       </div>
                     </div>
                   )}
 
-                  {proposal.validity_date && (
-                    <p className="text-xs text-muted-foreground">
-                      <Timer className="w-3 h-3 inline mr-1" />Proposal valid until {formatDate(proposal.validity_date)}
-                    </p>
+                  {/* Trust signals */}
+                  {isPending && (
+                    <div className="grid grid-cols-3 gap-3">
+                      {[
+                        { icon: Shield, label: "Verified Artists", desc: "All artists are background-verified" },
+                        { icon: Star,   label: "Quality Assured",   desc: "Rated 4.5+ by past clients" },
+                        { icon: Clock,  label: "On-time Guarantee", desc: "We handle all logistics" },
+                      ].map(({ icon: Icon, label, desc }) => (
+                        <div key={label} className="text-center p-3 rounded-xl bg-muted/30">
+                          <Icon className="w-4 h-4 mx-auto mb-1.5 text-indigo-500" />
+                          <p className="text-[10px] font-semibold">{label}</p>
+                          <p className="text-[9px] text-muted-foreground mt-0.5 leading-tight">{desc}</p>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* ── CTA Buttons ── */}
+          {isPending && (
+            <div className="mt-5 pt-5 border-t">
+              {confirmDecline === proposal.id ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-4 rounded-2xl bg-red-50 border border-red-200 space-y-3"
+                >
+                  <p className="text-sm font-semibold text-red-800">Are you sure you want to decline?</p>
+                  <p className="text-xs text-red-600">Your coordinator will reach out with a revised proposal. This may take 24–48 hours.</p>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" className="flex-1" onClick={() => setConfirmDecline(null)}>Keep Proposal</Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1 border-red-300 text-red-600 hover:bg-red-50"
+                      loading={rejecting === proposal.id}
+                      onClick={() => rejectProposal(proposal.id)}
+                    >
+                      Yes, Decline
+                    </Button>
+                  </div>
+                </motion.div>
+              ) : (
+                <div className="space-y-3">
+                  {/* Primary CTA */}
+                  <Button
+                    className="w-full h-14 text-base font-semibold bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-lg shadow-emerald-200 rounded-2xl"
+                    loading={accepting === proposal.id}
+                    onClick={() => acceptProposal(proposal.id, proposal.enquiry_id)}
+                  >
+                    <ThumbsUp className="w-5 h-5 mr-2" />
+                    Accept & Confirm Booking
+                    <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
+
+                  <p className="text-center text-xs text-muted-foreground flex items-center justify-center gap-1.5">
+                    <Shield className="w-3 h-3" />
+                    Secure · No payment charged until you confirm with coordinator
+                  </p>
+
+                  <button
+                    className="w-full text-xs text-muted-foreground hover:text-red-500 transition-colors py-1"
+                    onClick={() => { setExpanded(proposal.id); setConfirmDecline(proposal.id); }}
+                  >
+                    Not quite right? Decline and request revision
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </motion.div>
     );
   };
 
+  if (proposals.length === 0) {
+    return (
+      <div className="p-6 max-w-xl mx-auto py-24 text-center">
+        <div className="w-20 h-20 rounded-3xl gold-gradient flex items-center justify-center mx-auto mb-5">
+          <Sparkles className="w-10 h-10 text-navy-900" />
+        </div>
+        <h2 className="font-display font-bold text-2xl mb-2">No proposals yet</h2>
+        <p className="text-muted-foreground text-sm max-w-xs mx-auto">
+          Once you submit an enquiry, your coordinator will curate a personalised proposal with artist options.
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-3xl mx-auto">
+    <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-8">
+      {/* Pending proposals */}
       {pendingProposals.length > 0 && (
-        <div>
-          <h2 className="font-display font-semibold text-lg mb-4 flex items-center gap-2">
-            <Clock className="w-5 h-5 text-gold-500" />
-            Awaiting Your Review ({pendingProposals.length})
-          </h2>
-          <div className="space-y-4">
-            {pendingProposals.map((p) => <ProposalCard key={p.id} proposal={p} />)}
+        <div className="space-y-5">
+          <div className="flex items-center gap-3">
+            <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+            <h2 className="font-display font-bold text-xl">
+              {pendingProposals.length === 1
+                ? "Your proposal is ready to review"
+                : `${pendingProposals.length} proposals awaiting your decision`}
+            </h2>
           </div>
+
+          {/* Decision guidance */}
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-100 flex items-start gap-3">
+            <Sparkles className="w-5 h-5 text-indigo-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-indigo-900">How to choose</p>
+              <p className="text-xs text-indigo-700 mt-0.5 leading-relaxed">
+                Review each artist option's quoted price and notes. Once you accept, your coordinator will finalise the booking and collect the advance payment.
+              </p>
+            </div>
+          </div>
+
+          {pendingProposals.map((p) => <ProposalCard key={p.id} proposal={p} isPending />)}
         </div>
       )}
 
+      {/* Past proposals */}
       {otherProposals.length > 0 && (
-        <div>
-          <h2 className="font-display font-semibold text-lg mb-4">Previous Proposals</h2>
-          <div className="space-y-4">
-            {otherProposals.map((p) => <ProposalCard key={p.id} proposal={p} />)}
-          </div>
-        </div>
-      )}
-
-      {proposals.length === 0 && (
-        <div className="py-20 text-center">
-          <ClipboardList className="w-16 h-16 mx-auto text-muted-foreground/30 mb-4" />
-          <h3 className="font-display font-semibold text-xl mb-2">No proposals yet</h3>
-          <p className="text-muted-foreground text-sm max-w-sm mx-auto">
-            Once you submit an enquiry and our coordinator shortlists artists, proposals will appear here.
-          </p>
+        <div className="space-y-4">
+          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Previous Proposals</h2>
+          {otherProposals.map((p) => <ProposalCard key={p.id} proposal={p} isPending={false} />)}
         </div>
       )}
     </div>
   );
 }
 
-function ClipboardList({ className }: { className?: string }) {
+function ArrowRight({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
     </svg>
   );
 }
