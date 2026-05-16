@@ -17,20 +17,29 @@ import {
 } from "recharts";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { StatCard } from "@/components/dashboard/StatCard";
-import { FileText, TrendingUp, DollarSign, Calendar } from "lucide-react";
+import { FileText, TrendingUp, DollarSign, Calendar, UserCog, Award } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { format, subMonths, startOfMonth } from "date-fns";
+
+interface CoordinatorStat {
+  name: string;
+  total: number;
+  confirmed: number;
+  completed: number;
+  conversion: number;
+}
 
 interface ReportsProps {
   enquiries: { status: string; source: string; created_at: string; city: string }[];
   bookings: { status: string; event_date: string; total_amount: number; city: string }[];
   payments: { type: string; amount: number; status: string; paid_at: string | null }[];
+  coordinatorStats: CoordinatorStat[];
 }
 
 const COLORS = ["#f59e0b", "#3b82f6", "#10b981", "#8b5cf6", "#ef4444", "#ec4899"];
 
-export function AdminReportsClient({ enquiries, bookings, payments }: ReportsProps) {
+export function AdminReportsClient({ enquiries, bookings, payments, coordinatorStats }: ReportsProps) {
   // Monthly enquiries (last 6 months)
   const monthlyData = Array.from({ length: 6 }, (_, i) => {
     const month = subMonths(new Date(), 5 - i);
@@ -153,6 +162,77 @@ export function AdminReportsClient({ enquiries, bookings, payments }: ReportsPro
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* Coordinator Performance */}
+      {coordinatorStats.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <UserCog className="w-5 h-5 text-indigo-500" />Coordinator Performance
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-xl border overflow-hidden">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b bg-muted/30">
+                      {["Coordinator", "Total Enquiries", "Confirmed", "Completed", "Conversion Rate", "Performance"].map((h) => (
+                        <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {coordinatorStats.map((c, i) => (
+                      <motion.tr
+                        key={c.name}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.4 + i * 0.06 }}
+                        className="border-b last:border-0 hover:bg-accent/20"
+                      >
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm">
+                              {c.name[0]?.toUpperCase()}
+                            </div>
+                            <span className="font-medium text-sm">{c.name}</span>
+                            {i === 0 && <Award className="w-4 h-4 text-amber-500" />}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm font-semibold">{c.total}</td>
+                        <td className="px-4 py-3 text-sm text-blue-700 font-medium">{c.confirmed}</td>
+                        <td className="px-4 py-3 text-sm text-emerald-700 font-medium">{c.completed}</td>
+                        <td className="px-4 py-3">
+                          <span className={`text-sm font-bold ${c.conversion >= 50 ? "text-emerald-600" : c.conversion >= 25 ? "text-amber-600" : "text-red-600"}`}>
+                            {c.conversion}%
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="w-24">
+                            <div className="h-2 bg-muted rounded-full overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all"
+                                style={{
+                                  width: `${c.total ? Math.min(100, (c.confirmed / c.total) * 100) : 0}%`,
+                                  background: "linear-gradient(to right, #6366f1, #8b5cf6)",
+                                }}
+                              />
+                            </div>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">
+                              {c.total ? Math.round((c.confirmed / c.total) * 100) : 0}% confirmed
+                            </p>
+                          </div>
+                        </td>
+                      </motion.tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
     </div>
   );
 }

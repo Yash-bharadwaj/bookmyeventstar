@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { motion } from "framer-motion";
-import { Eye, Filter, Search, Globe, MessageCircle, Mail, Camera, Handshake, PersonStanding } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Eye, Filter, Search, Globe, MessageCircle, Mail, Camera, Handshake, PersonStanding, X, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Enquiry } from "@/types";
@@ -16,81 +16,169 @@ interface EnquiryTableProps {
   onAssign?: (enquiry: Enquiry) => void;
 }
 
-export function EnquiryTable({
-  enquiries,
-  baseHref,
-  showCoordinator = false,
-  onAssign,
-}: EnquiryTableProps) {
-  const [search, setSearch] = useState("");
+const STATUS_OPTIONS = [
+  "new", "assigned", "requirement_gathering", "shortlisting",
+  "proposal_sent", "confirmed", "in_progress", "completed", "cancelled",
+];
 
-  const filtered = enquiries.filter(
-    (e) =>
+const SOURCE_OPTIONS = ["website", "whatsapp", "email", "instagram", "referral", "walk_in"];
+
+export function EnquiryTable({ enquiries, baseHref, showCoordinator = false, onAssign }: EnquiryTableProps) {
+  const [search, setSearch] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [sourceFilter, setSourceFilter] = useState<string[]>([]);
+
+  const toggleStatus = (s: string) =>
+    setStatusFilter((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]);
+
+  const toggleSource = (s: string) =>
+    setSourceFilter((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]);
+
+  const clearFilters = () => { setStatusFilter([]); setSourceFilter([]); };
+
+  const activeFilterCount = statusFilter.length + sourceFilter.length;
+
+  const filtered = enquiries.filter((e) => {
+    const matchesSearch =
       e.event_type.toLowerCase().includes(search.toLowerCase()) ||
       e.city.toLowerCase().includes(search.toLowerCase()) ||
-      e.client?.name.toLowerCase().includes(search.toLowerCase())
-  );
+      (e.client?.name ?? "").toLowerCase().includes(search.toLowerCase());
+
+    const matchesStatus = statusFilter.length === 0 || statusFilter.includes(e.status);
+    const matchesSource = sourceFilter.length === 0 || sourceFilter.includes(e.source);
+
+    return matchesSearch && matchesStatus && matchesSource;
+  });
 
   const sourceIcons: Record<string, { icon: React.ElementType; color: string; label: string }> = {
-    website:   { icon: Globe,           color: "text-blue-500",   label: "Website" },
-    whatsapp:  { icon: MessageCircle,   color: "text-green-500",  label: "WhatsApp" },
-    email:     { icon: Mail,            color: "text-violet-500", label: "Email" },
-    instagram: { icon: Camera,          color: "text-pink-500",   label: "Instagram" },
-    referral:  { icon: Handshake,       color: "text-amber-500",  label: "Referral" },
-    walk_in:   { icon: PersonStanding,  color: "text-teal-500",   label: "Walk-in" },
+    website:   { icon: Globe,          color: "text-blue-500",   label: "Website" },
+    whatsapp:  { icon: MessageCircle,  color: "text-green-500",  label: "WhatsApp" },
+    email:     { icon: Mail,           color: "text-violet-500", label: "Email" },
+    instagram: { icon: Camera,         color: "text-pink-500",   label: "Instagram" },
+    referral:  { icon: Handshake,      color: "text-amber-500",  label: "Referral" },
+    walk_in:   { icon: PersonStanding, color: "text-teal-500",   label: "Walk-in" },
   };
 
   return (
     <div className="space-y-4">
+      {/* Toolbar */}
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search enquiries..."
+            placeholder="Search by client, event type, city..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
           />
         </div>
-        <Button variant="outline" size="sm">
+        <Button
+          variant={showFilters ? "default" : "outline"}
+          size="sm"
+          onClick={() => setShowFilters((v) => !v)}
+          className="relative"
+        >
           <Filter className="w-4 h-4 mr-2" />
           Filter
+          {activeFilterCount > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+              {activeFilterCount}
+            </span>
+          )}
         </Button>
+        {activeFilterCount > 0 && (
+          <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground h-8">
+            <X className="w-3.5 h-3.5 mr-1" />Clear
+          </Button>
+        )}
       </div>
 
+      {/* Filter Panel */}
+      <AnimatePresence>
+        {showFilters && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="rounded-xl border bg-muted/20 p-4 space-y-4">
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Status</p>
+                <div className="flex flex-wrap gap-2">
+                  {STATUS_OPTIONS.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => toggleStatus(s)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium transition-all border ${
+                        statusFilter.includes(s)
+                          ? "bg-indigo-600 text-white border-indigo-600"
+                          : "bg-background border-border text-muted-foreground hover:border-indigo-400"
+                      }`}
+                    >
+                      {getStatusLabel(s)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Source</p>
+                <div className="flex flex-wrap gap-2">
+                  {SOURCE_OPTIONS.map((s) => {
+                    const src = sourceIcons[s];
+                    const Icon = src?.icon ?? Globe;
+                    return (
+                      <button
+                        key={s}
+                        onClick={() => toggleSource(s)}
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all border ${
+                          sourceFilter.includes(s)
+                            ? "bg-indigo-600 text-white border-indigo-600"
+                            : "bg-background border-border text-muted-foreground hover:border-indigo-400"
+                        }`}
+                      >
+                        <Icon className="w-3 h-3" />
+                        {src?.label ?? s}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Results summary */}
+      {(search || activeFilterCount > 0) && (
+        <p className="text-xs text-muted-foreground">
+          Showing {filtered.length} of {enquiries.length} enquiries
+        </p>
+      )}
+
+      {/* Table */}
       <div className="rounded-2xl border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b bg-muted/30">
-                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Client / Event
-                </th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Date & City
-                </th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Budget
-                </th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Client / Event</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Date & City</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Budget</th>
                 {showCoordinator && (
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Coordinator
-                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Coordinator</th>
                 )}
-                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Status
-                </th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Source
-                </th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Source</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-muted-foreground text-sm">
-                    No enquiries found
+                  <td colSpan={showCoordinator ? 7 : 6} className="py-12 text-center text-muted-foreground text-sm">
+                    {enquiries.length === 0 ? "No enquiries yet" : "No enquiries match your filters"}
                   </td>
                 </tr>
               ) : (
@@ -99,7 +187,7 @@ export function EnquiryTable({
                     key={enquiry.id}
                     initial={{ opacity: 0, y: 5 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.05 }}
+                    transition={{ delay: i * 0.04 }}
                     className="border-b last:border-0 hover:bg-accent/30 transition-colors"
                   >
                     <td className="px-4 py-3">
@@ -126,9 +214,7 @@ export function EnquiryTable({
                       </td>
                     )}
                     <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${getStatusColor(enquiry.status)}`}
-                      >
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${getStatusColor(enquiry.status)}`}>
                         {getStatusLabel(enquiry.status)}
                       </span>
                     </td>
@@ -139,8 +225,7 @@ export function EnquiryTable({
                         const Icon = src.icon;
                         return (
                           <span title={src.label} className={`inline-flex items-center gap-1 text-xs font-medium ${src.color}`}>
-                            <Icon className="w-3.5 h-3.5" />
-                            {src.label}
+                            <Icon className="w-3.5 h-3.5" />{src.label}
                           </span>
                         );
                       })()}

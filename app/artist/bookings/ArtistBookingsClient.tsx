@@ -2,9 +2,16 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Calendar, MapPin, User, IndianRupee, CheckCircle, XCircle, Clock } from "lucide-react";
+import {
+  Calendar, MapPin, User, IndianRupee, CheckCircle, XCircle, Clock,
+  ClipboardList, Save,
+} from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Booking } from "@/types";
 import { formatDate, formatCurrency, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -18,14 +25,62 @@ interface BookingWithExtras extends Omit<Booking, "enquiry" | "artist"> {
   };
 }
 
+interface RequirementsForm {
+  sound_system: string;
+  accommodation: string;
+  transport: string;
+  hospitality: string;
+  other: string;
+}
+
 export function ArtistBookingsClient({ bookings }: { bookings: BookingWithExtras[] }) {
   const router = useRouter();
   const [updating, setUpdating] = useState<string | null>(null);
+  const [reqDialog, setReqDialog] = useState<BookingWithExtras | null>(null);
+  const [reqForm, setReqForm] = useState<RequirementsForm>({
+    sound_system: "", accommodation: "", transport: "", hospitality: "", other: "",
+  });
+  const [savingReq, setSavingReq] = useState(false);
   const today = new Date().toISOString().split("T")[0];
 
   const pending = bookings.filter((b) => b.status === "pending");
   const upcoming = bookings.filter((b) => b.status !== "pending" && b.event_date >= today && b.status !== "cancelled");
   const past = bookings.filter((b) => b.event_date < today || b.status === "completed");
+
+  const openReqDialog = (booking: BookingWithExtras) => {
+    // Parse existing requirements from special_requirements field
+    try {
+      const existing = booking.special_requirements ? JSON.parse(booking.special_requirements) : {};
+      setReqForm({
+        sound_system: existing.sound_system ?? "",
+        accommodation: existing.accommodation ?? "",
+        transport: existing.transport ?? "",
+        hospitality: existing.hospitality ?? "",
+        other: existing.other ?? "",
+      });
+    } catch {
+      setReqForm({ sound_system: "", accommodation: "", transport: "", hospitality: "", other: "" });
+    }
+    setReqDialog(booking);
+  };
+
+  const saveRequirements = async () => {
+    if (!reqDialog) return;
+    setSavingReq(true);
+    const supabase = createClient();
+    const requirementsJson = JSON.stringify(reqForm);
+    const { error } = await supabase
+      .from("bookings")
+      .update({ special_requirements: requirementsJson })
+      .eq("id", reqDialog.id);
+    if (error) toast.error("Failed to save requirements");
+    else {
+      toast.success("Performance requirements saved!");
+      setReqDialog(null);
+      router.refresh();
+    }
+    setSavingReq(false);
+  };
 
   const updateBooking = async (id: string, status: "confirmed" | "cancelled") => {
     setUpdating(id);
@@ -98,6 +153,20 @@ export function ArtistBookingsClient({ bookings }: { bookings: BookingWithExtras
           </Button>
         </div>
       )}
+
+      {(b.status === "confirmed" || b.status === "in_progress") && (
+        <div className="mt-3 pt-3 border-t">
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full"
+            onClick={() => openReqDialog(b)}
+          >
+            <ClipboardList className="w-3.5 h-3.5 mr-1.5" />
+            {b.special_requirements ? "Update Performance Requirements" : "Submit Performance Requirements"}
+          </Button>
+        </div>
+      )}
     </motion.div>
   );
 
@@ -138,6 +207,52 @@ export function ArtistBookingsClient({ bookings }: { bookings: BookingWithExtras
           {past.map((b) => <BookingCard key={b.id} b={b} />)}
         </TabsContent>
       </Tabs>
+
+      {/* Performance Requirements Dialog */}
+      <Dialog open={!!reqDialog} onOpenChange={(o) => !o && setReqDialog(null)}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Performance Requirements</DialogTitle>
+          </DialogHeader>
+          {reqDialog && (
+            <div className="space-y-4 mt-2">
+              <div className="p-3 rounded-xl bg-muted/40 text-sm">
+                <p><span className="font-medium">Event:</span> {reqDialog.enquiry?.event_type}</p>
+                <p><span className="font-medium">Date:</span> {formatDate(reqDialog.event_date)}</p>
+                <p><span className="font-medium">Venue:</span> {reqDialog.venue}, {reqDialog.city}</p>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Specify your technical and hospitality requirements for this event. These will be shared with the coordinator.
+              </p>
+
+              {[
+                { key: "sound_system" as const, label: "Sound System Requirements", placeholder: "e.g. 2x JBL speakers, wireless mic, monitor, soundcheck 2hrs before..." },
+                { key: "accommodation" as const, label: "Accommodation", placeholder: "e.g. 1 AC room for 1 night, check-in day before event..." },
+                { key: "transport" as const, label: "Travel / Transport", placeholder: "e.g. Flight from Mumbai, cab pickup from airport..." },
+                { key: "hospitality" as const, label: "Food & Hospitality", placeholder: "e.g. Vegetarian food, mineral water, green room..." },
+                { key: "other" as const, label: "Other Requirements", placeholder: "Any other specific needs or notes..." },
+              ].map(({ key, label, placeholder }) => (
+                <div key={key} className="space-y-1.5">
+                  <Label className="text-sm">{label}</Label>
+                  <Textarea
+                    placeholder={placeholder}
+                    value={reqForm[key]}
+                    onChange={(e) => setReqForm((prev) => ({ ...prev, [key]: e.target.value }))}
+                    className="min-h-[70px] text-sm"
+                  />
+                </div>
+              ))}
+
+              <div className="flex gap-3 justify-end pt-2">
+                <Button variant="outline" onClick={() => setReqDialog(null)}>Cancel</Button>
+                <Button onClick={saveRequirements} loading={savingReq}>
+                  <Save className="w-4 h-4 mr-2" />Save Requirements
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
