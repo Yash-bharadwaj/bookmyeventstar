@@ -6,7 +6,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Mail, Lock, User, Phone, Eye, EyeOff, CalendarCheck, Mic2, Globe } from "lucide-react";
+import { Mail, Lock, User, Phone, Eye, EyeOff, CalendarCheck, Mic2, Globe, Info, CheckCircle2 } from "lucide-react";
 import toast from "react-hot-toast";
 import { createClient } from "@/lib/supabase/client";
 import { registerSchema, RegisterFormData } from "@/lib/validations/auth";
@@ -52,7 +52,7 @@ export default function RegisterPage() {
           id: authData.user.id,
           name: data.name,
           email: data.email,
-          phone: data.phone,
+          phone: "+91" + data.phone,
           role: data.role,
           is_active: true,
         });
@@ -76,7 +76,11 @@ export default function RegisterPage() {
           });
         }
 
-        toast.success("Account created! Welcome to BookMyEventStar.");
+        toast.success(
+          data.role === "artist"
+            ? "Account created! Complete your profile to get listed."
+            : "Account created! Welcome to BookMyEventStar."
+        );
         router.push(`/${data.role}`);
       }
     } catch (error: unknown) {
@@ -128,6 +132,32 @@ export default function RegisterPage() {
             })}
           </div>
 
+          {/* Artist context panel */}
+          {selectedRole === "artist" && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3.5 space-y-2"
+            >
+              <p className="text-xs font-semibold text-amber-900 flex items-center gap-1.5">
+                <Info className="w-3.5 h-3.5 flex-shrink-0" />What happens after you register?
+              </p>
+              <ul className="space-y-1.5">
+                {[
+                  "Complete your artist profile — bio, categories, cities, portfolio photos",
+                  "Your profile is reviewed and verified by our team",
+                  "Once verified, you appear in client and coordinator searches",
+                ].map((step, i) => (
+                  <li key={i} className="flex items-start gap-2 text-[11px] text-amber-800">
+                    <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-amber-600" />
+                    {step}
+                  </li>
+                ))}
+              </ul>
+            </motion.div>
+          )}
+
           <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-4">
             <div className="space-y-1.5">
               <Label>Full Name</Label>
@@ -157,7 +187,8 @@ export default function RegisterPage() {
                 </div>
                 <Input
                   type="tel"
-                  placeholder="9999999999"
+                  placeholder="10-digit mobile number"
+                  maxLength={10}
                   icon={<Phone className="w-4 h-4" />}
                   error={errors.phone?.message}
                   {...register("phone")}

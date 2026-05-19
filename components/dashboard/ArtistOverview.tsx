@@ -35,6 +35,7 @@ interface ArtistOverviewProps {
   upcomingCount: number;
   completedCount: number;
   artistPhotoCount: number;
+  hasAvatar?: boolean;
 }
 
 export function ArtistOverview({
@@ -44,13 +45,14 @@ export function ArtistOverview({
   upcomingCount,
   completedCount,
   artistPhotoCount,
+  hasAvatar = false,
 }: ArtistOverviewProps) {
   const router = useRouter();
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const today = new Date().toISOString().split("T")[0];
 
   const completion =
-    artistProfile !== null ? aggregateCompletionFromStoredProfile(artistProfile, artistPhotoCount) : null;
+    artistProfile !== null ? aggregateCompletionFromStoredProfile(artistProfile, artistPhotoCount, hasAvatar) : null;
 
   const pendingRequests = bookings.filter((b) => b.status === "pending");
   const recent = bookings.slice(0, 5);

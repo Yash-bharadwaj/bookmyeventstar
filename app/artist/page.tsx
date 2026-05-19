@@ -65,6 +65,7 @@ export default async function ArtistPage() {
         upcomingCount={upcomingBookings.length}
         completedCount={completedBookings.length}
         artistPhotoCount={artistPhotoCount}
+        hasAvatar={!!profile.avatar_url}
       />
     </DashboardLayout>
   );
