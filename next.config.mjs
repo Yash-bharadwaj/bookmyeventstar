@@ -1,3 +1,13 @@
+import withPWA from "next-pwa";
+
+const withPWAConfig = withPWA({
+  dest: "public",
+  register: true,
+  skipWaiting: true,
+  disable: process.env.NODE_ENV === "development",
+  buildExcludes: [/middleware-manifest\.json$/],
+});
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
@@ -6,9 +16,8 @@ const nextConfig = {
       { protocol: "https", hostname: "images.unsplash.com" },
     ],
   },
-  experimental: {
-    serverActions: { allowedOrigins: ["localhost:3000"] },
-  },
+  // No serverActions.allowedOrigins — removing localhost-only restriction so
+  // Server Actions work on Vercel and any production domain.
 };
 
-export default nextConfig;
+export default withPWAConfig(nextConfig);
