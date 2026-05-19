@@ -5,10 +5,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
-  Search, Star, MapPin, CheckCircle2, IndianRupee,
-  X, Phone, Mail, User, Calendar, Sparkles,
+  Search, Star, MapPin, CheckCircle2,
+  X, Phone, Mail, User, Calendar,
   Mic2, Shield, TrendingUp, ChevronRight, Send,
-  ArrowRight,
+  ArrowRight, Play, ChevronLeft, Images, Video,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -70,9 +70,20 @@ const getColor = (cats: string[]) => catColor[cats?.[0]] ?? "from-navy-800 to-na
 function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void }) {
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [activeMediaIdx, setActiveMediaIdx] = useState(0);
   const color = getColor(artist.categories);
 
-  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<QuickForm>({
+  // Build ordered media list: avatar first, then portfolio sorted primary-first
+  const allMedia = [
+    ...(artist.user.avatar_url ? [{ url: artist.user.avatar_url, type: "image" as const, is_primary: true }] : []),
+    ...([...artist.media]
+      .sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0))
+      .filter((m) => m.url !== artist.user.avatar_url)),
+  ];
+  const activeMedia = allMedia[activeMediaIdx];
+  const hasMedia = allMedia.length > 0;
+
+  const { register, handleSubmit, setValue, formState: { errors } } = useForm<QuickForm>({
     resolver: zodResolver(quickSchema),
   });
 
@@ -94,9 +105,8 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
       });
       if (error) throw error;
 
-      // Also insert a notification in the DB for admin
       await supabase.from("notifications").insert({
-        user_id: "00000001-0000-0000-0000-000000000001", // admin
+        user_id: "00000001-0000-0000-0000-000000000001",
         title:   "New Enquiry Received",
         message: `${data.name} wants to book ${artist.user.name} for ${data.event_type} in ${data.city}.`,
         type:    "info",
@@ -120,7 +130,7 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
       onClick={onClose}
     >
       {/* Backdrop */}
-      <div className="flex-1 bg-black/50 backdrop-blur-sm" />
+      <div className="flex-1 bg-black/60 backdrop-blur-sm" />
 
       {/* Drawer panel */}
       <motion.div
@@ -128,87 +138,201 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
         animate={{ x: 0 }}
         exit={{ x: "100%" }}
         transition={{ type: "spring", damping: 28, stiffness: 300 }}
-        className="w-full max-w-lg bg-white shadow-2xl flex flex-col overflow-y-auto"
+        className="w-full max-w-[620px] bg-white shadow-2xl flex flex-col overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Artist Hero Banner */}
-        <div className={`relative h-52 ${artist.user.avatar_url ? "bg-gray-900" : `bg-gradient-to-br ${color}`} flex-shrink-0`}>
-          {artist.user.avatar_url ? (
-            <img src={artist.user.avatar_url} alt={artist.user.name} className="w-full h-full object-cover" />
-          ) : (
-            <>
+
+        {/* ── Hero Media Block ── */}
+        <div className="relative flex-shrink-0" style={{ height: "320px" }}>
+          {/* Main media display */}
+          {!hasMedia ? (
+            <div className={`absolute inset-0 bg-gradient-to-br ${color} flex items-center justify-center`}>
               <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "20px 20px" }} />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="font-bold text-6xl text-white/30">{getInitials(artist.user.name)}</span>
-              </div>
-            </>
+              <span className="font-bold text-7xl text-white/30 relative z-10">{getInitials(artist.user.name)}</span>
+            </div>
+          ) : activeMedia?.type === "video" ? (
+            <video
+              key={activeMedia.url}
+              src={activeMedia.url}
+              className="absolute inset-0 w-full h-full object-cover bg-black"
+              controls
+              playsInline
+            />
+          ) : (
+            <img
+              key={activeMedia?.url}
+              src={activeMedia?.url}
+              alt={artist.user.name}
+              className="absolute inset-0 w-full h-full object-cover object-top"
+            />
           )}
-          {/* Bottom gradient overlay */}
-          <div className="absolute bottom-0 inset-x-0 h-20 bg-gradient-to-t from-black/60 to-transparent" />
+
+          {/* Gradient overlay at bottom for text readability */}
+          <div className="absolute bottom-0 inset-x-0 h-28 bg-gradient-to-t from-black/80 via-black/40 to-transparent pointer-events-none" />
+
+          {/* Close button */}
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/30 hover:bg-black/50 flex items-center justify-center text-white transition-colors backdrop-blur-sm"
+            className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/40 hover:bg-black/60 flex items-center justify-center text-white transition-colors backdrop-blur-sm z-10"
           >
             <X className="w-5 h-5" />
           </button>
+
+          {/* Verified badge */}
           {artist.is_verified && (
-            <div className="absolute top-4 left-4 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/20 backdrop-blur-sm text-white text-xs font-semibold border border-white/30">
+            <div className="absolute top-4 left-4 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/20 backdrop-blur-sm text-white text-xs font-semibold border border-white/30 z-10">
               <Shield className="w-3.5 h-3.5" />
               Verified Artist
             </div>
           )}
-          {/* Name overlay at bottom */}
-          <div className="absolute bottom-4 left-6 right-14">
-            <h2 className="font-display text-xl font-bold text-white drop-shadow">{artist.user.name}</h2>
-          </div>
-        </div>
 
-        {/* Artist Info */}
-        <div className="px-6 pt-4 pb-4 border-b">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="flex flex-wrap gap-1.5">
-                {artist.categories.map((c) => (
-                  <span key={c} className="text-xs font-medium text-violet-700 bg-violet-50 px-2.5 py-0.5 rounded-full border border-violet-100">{c}</span>
-                ))}
+          {/* Name + price overlay */}
+          <div className="absolute bottom-0 inset-x-0 px-5 pb-4 z-10">
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <h2 className="font-display text-2xl font-bold text-white drop-shadow-lg leading-tight">
+                  {artist.user.name}
+                </h2>
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  {artist.categories.map((c) => (
+                    <span key={c} className="text-[11px] font-semibold text-white/90 bg-white/20 backdrop-blur-sm px-2.5 py-0.5 rounded-full border border-white/25">
+                      {c}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="text-right flex-shrink-0 bg-black/30 backdrop-blur-sm rounded-xl px-3 py-2">
+                <p className="text-[10px] text-white/70 font-medium">Starting from</p>
+                <p className="text-lg font-bold text-amber-400">{formatCurrency(artist.base_price)}</p>
               </div>
             </div>
-            <div className="text-right flex-shrink-0">
-              <p className="text-xs text-muted-foreground">Starting from</p>
-              <p className="text-xl font-bold text-gold-600">{formatCurrency(artist.base_price)}</p>
-            </div>
           </div>
 
-          {/* Stats row */}
-          <div className="flex items-center gap-5 mt-4">
-            <div className="flex items-center gap-1.5">
-              <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-              <span className="font-bold text-sm">{Number(artist.rating).toFixed(1)}</span>
-              <span className="text-xs text-muted-foreground">rating</span>
+          {/* Media thumbnails strip — shown if >1 media item */}
+          {allMedia.length > 1 && (
+            <div className="absolute bottom-16 right-4 flex gap-1.5 z-10">
+              {allMedia.slice(0, 6).map((m, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setActiveMediaIdx(idx)}
+                  className={`relative w-10 h-10 rounded-lg overflow-hidden border-2 transition-all flex-shrink-0 ${
+                    activeMediaIdx === idx ? "border-white scale-110 shadow-lg" : "border-white/40 opacity-70 hover:opacity-100"
+                  }`}
+                >
+                  {m.type === "video" ? (
+                    <div className="absolute inset-0 bg-black flex items-center justify-center">
+                      <Play className="w-3 h-3 text-white fill-white" />
+                    </div>
+                  ) : (
+                    <img src={m.url} alt="" className="w-full h-full object-cover object-top" />
+                  )}
+                </button>
+              ))}
+              {allMedia.length > 6 && (
+                <div className="w-10 h-10 rounded-lg bg-black/50 backdrop-blur-sm border-2 border-white/40 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+                  +{allMedia.length - 6}
+                </div>
+              )}
             </div>
-            <div className="flex items-center gap-1.5">
-              <TrendingUp className="w-4 h-4 text-emerald-500" />
-              <span className="font-bold text-sm">{artist.total_bookings}</span>
-              <span className="text-xs text-muted-foreground">bookings</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <MapPin className="w-4 h-4 text-rose-500" />
-              <span className="text-xs text-muted-foreground">{artist.cities.slice(0, 3).join(", ")}{artist.cities.length > 3 ? ` +${artist.cities.length - 3}` : ""}</span>
-            </div>
-          </div>
+          )}
         </div>
 
-        {/* Bio */}
+        {/* ── Stats row ── */}
+        <div className="px-6 py-4 border-b flex items-center gap-6">
+          <div className="flex items-center gap-1.5">
+            <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center">
+              <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-navy-900 leading-none">{Number(artist.rating).toFixed(1)}</p>
+              <p className="text-[10px] text-muted-foreground">Rating</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
+              <TrendingUp className="w-4 h-4 text-emerald-500" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-navy-900 leading-none">{artist.total_bookings}</p>
+              <p className="text-[10px] text-muted-foreground">Bookings</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-8 h-8 rounded-lg bg-rose-50 flex items-center justify-center">
+              <MapPin className="w-4 h-4 text-rose-500" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-navy-900 leading-none">{artist.cities.length}</p>
+              <p className="text-[10px] text-muted-foreground">Cities</p>
+            </div>
+          </div>
+          {allMedia.length > 1 && (
+            <div className="flex items-center gap-1.5 ml-auto">
+              <div className="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center">
+                <Images className="w-4 h-4 text-violet-500" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-navy-900 leading-none">{allMedia.length}</p>
+                <p className="text-[10px] text-muted-foreground">Portfolio</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── About ── */}
         {artist.bio && (
           <div className="px-6 py-4 border-b">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">About</h3>
+            <h3 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">About</h3>
             <p className="text-sm text-gray-700 leading-relaxed">{artist.bio}</p>
           </div>
         )}
 
-        {/* Available Cities */}
+        {/* ── Portfolio grid (images + videos, exclude avatar shown in hero) ── */}
+        {artist.media.length > 0 && (
+          <div className="px-6 py-4 border-b">
+            <h3 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">
+              Portfolio · {artist.media.length} item{artist.media.length !== 1 ? "s" : ""}
+            </h3>
+            <div className="grid grid-cols-3 gap-2">
+              {artist.media.map((m, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    const heroIdx = allMedia.findIndex((am) => am.url === m.url);
+                    if (heroIdx !== -1) setActiveMediaIdx(heroIdx);
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-all ${
+                    allMedia[activeMediaIdx]?.url === m.url
+                      ? "border-violet-500 ring-2 ring-violet-200"
+                      : "border-transparent hover:border-violet-300"
+                  }`}
+                >
+                  {m.type === "video" ? (
+                    <div className="absolute inset-0 bg-gray-900 flex flex-col items-center justify-center gap-1">
+                      <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                        <Play className="w-5 h-5 text-white fill-white ml-0.5" />
+                      </div>
+                      <span className="text-[9px] text-white/70 font-medium uppercase tracking-wide">Video</span>
+                    </div>
+                  ) : (
+                    <img src={m.url} alt="Portfolio" className="w-full h-full object-cover object-top" />
+                  )}
+                  {m.type === "video" && (
+                    <div className="absolute top-1.5 left-1.5">
+                      <Video className="w-3.5 h-3.5 text-white drop-shadow" />
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-2">Tap any photo or video to preview above</p>
+          </div>
+        )}
+
+        {/* ── Available Cities ── */}
         <div className="px-6 py-4 border-b">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Available In</h3>
+          <h3 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Available In</h3>
           <div className="flex flex-wrap gap-1.5">
             {artist.cities.map((c) => (
               <span key={c} className="flex items-center gap-1 text-xs bg-gray-50 border rounded-full px-2.5 py-1 text-gray-700">
@@ -219,7 +343,7 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
         </div>
 
         {/* ── Quick Enquiry Form ── */}
-        <div className="px-6 py-6 flex-1">
+        <div className="px-6 py-6 flex-1 bg-gray-50/50">
           {submitted ? (
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
@@ -239,20 +363,21 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
             </motion.div>
           ) : (
             <>
-              <div className="flex items-center gap-2.5 mb-5">
-                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${color} flex items-center justify-center shadow-md`}>
+              {/* Form header */}
+              <div className="flex items-center gap-3 mb-5 pb-4 border-b border-gray-200">
+                <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${color} flex items-center justify-center shadow-md flex-shrink-0`}>
                   <Mic2 className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-navy-900">Book {artist.user.name}</h3>
-                  <p className="text-xs text-muted-foreground">Fill in the details — we'll call you in 2 hours</p>
+                  <h3 className="font-bold text-navy-900 text-base">Book {artist.user.name}</h3>
+                  <p className="text-xs text-muted-foreground">Free enquiry · Our team calls within 2 hours</p>
                 </div>
               </div>
 
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Your Name <span className="text-rose-500">*</span></Label>
+                    <Label className="text-xs font-semibold text-gray-600">Your Name <span className="text-rose-500">*</span></Label>
                     <Input
                       placeholder="Rahul Sharma"
                       icon={<User className="w-4 h-4" />}
@@ -261,7 +386,7 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Mobile Number <span className="text-rose-500">*</span></Label>
+                    <Label className="text-xs font-semibold text-gray-600">Mobile Number <span className="text-rose-500">*</span></Label>
                     <Input
                       placeholder="9999999999"
                       icon={<Phone className="w-4 h-4" />}
@@ -272,7 +397,7 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Email Address <span className="text-rose-500">*</span></Label>
+                  <Label className="text-xs font-semibold text-gray-600">Email Address <span className="text-rose-500">*</span></Label>
                   <Input
                     type="email"
                     placeholder="you@example.com"
@@ -284,7 +409,7 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Event Type <span className="text-rose-500">*</span></Label>
+                    <Label className="text-xs font-semibold text-gray-600">Event Type <span className="text-rose-500">*</span></Label>
                     <Select onValueChange={(v) => setValue("event_type", v)}>
                       <SelectTrigger className={errors.event_type ? "border-destructive" : ""}>
                         <SelectValue placeholder="Select..." />
@@ -296,7 +421,7 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
                     {errors.event_type && <p className="text-[10px] text-destructive">{errors.event_type.message}</p>}
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Event Date <span className="text-rose-500">*</span></Label>
+                    <Label className="text-xs font-semibold text-gray-600">Event Date <span className="text-rose-500">*</span></Label>
                     <Input
                       type="date"
                       icon={<Calendar className="w-4 h-4" />}
@@ -308,7 +433,7 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Event City <span className="text-rose-500">*</span></Label>
+                  <Label className="text-xs font-semibold text-gray-600">Event City <span className="text-rose-500">*</span></Label>
                   <Select onValueChange={(v) => setValue("city", v)}>
                     <SelectTrigger className={errors.city ? "border-destructive" : ""}>
                       <SelectValue placeholder="Select city..." />
@@ -321,7 +446,7 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Special Requirements (optional)</Label>
+                  <Label className="text-xs font-semibold text-gray-600">Special Requirements (optional)</Label>
                   <Textarea
                     placeholder="Any specific songs, performance duration, stage requirements..."
                     className="min-h-[70px] text-sm"
@@ -329,11 +454,11 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
                   />
                 </div>
 
-                {/* Artist pre-fill pill */}
+                {/* Trust pill */}
                 <div className="flex items-center gap-2 p-3 rounded-xl bg-violet-50 border border-violet-100">
-                  <Mic2 className="w-4 h-4 text-violet-600 flex-shrink-0" />
+                  <CheckCircle2 className="w-4 h-4 text-violet-600 flex-shrink-0" />
                   <p className="text-xs text-violet-700">
-                    <span className="font-semibold">Artist preference:</span> {artist.user.name} — automatically added to your enquiry
+                    <span className="font-semibold">{artist.user.name}</span> will be added to your enquiry automatically
                   </p>
                 </div>
 
@@ -347,7 +472,7 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
                   Send Enquiry — It&apos;s Free
                 </Button>
 
-                <p className="text-center text-xs text-muted-foreground">
+                <p className="text-center text-xs text-muted-foreground pb-2">
                   No payment required now · Our team calls within 2 hours
                 </p>
               </form>
