@@ -406,8 +406,10 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
               <Input
                 type="number"
                 placeholder="e.g. 50000"
+                min={1000}
+                step={500}
                 error={errors.base_price?.message}
-                {...register("base_price")}
+                {...register("base_price", { valueAsNumber: true })}
               />
               <p className="text-xs text-muted-foreground">This is the starting price shown to clients</p>
             </div>
