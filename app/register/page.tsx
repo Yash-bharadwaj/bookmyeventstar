@@ -6,13 +6,14 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Mail, Lock, User, Phone, Sparkles, Eye, EyeOff, CalendarCheck, Mic2, Globe } from "lucide-react";
+import { Mail, Lock, User, Phone, Eye, EyeOff, CalendarCheck, Mic2, Globe } from "lucide-react";
 import toast from "react-hot-toast";
 import { createClient } from "@/lib/supabase/client";
 import { registerSchema, RegisterFormData } from "@/lib/validations/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -69,6 +70,8 @@ export default function RegisterPage() {
             rating: 0,
             total_bookings: 0,
             is_verified: false,
+            is_listed: false,
+            is_profile_complete: false,
             social_links: {},
           });
         }
@@ -92,14 +95,8 @@ export default function RegisterPage() {
         className="w-full max-w-md"
       >
         <div className="bg-white rounded-3xl shadow-2xl p-8">
-          <div className="flex items-center gap-2 mb-6">
-            <div className="w-9 h-9 rounded-xl gold-gradient flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-navy-900" />
-            </div>
-            <span className="font-display font-bold">
-              <span className="text-navy-900">BookMy</span>
-              <span className="text-gradient-gold">EventStar</span>
-            </span>
+          <div className="mb-6 flex justify-start">
+            <BrandLogo href="/" size="md" />
           </div>
 
           <h2 className="font-display text-2xl font-bold text-navy-900">Create your account</h2>

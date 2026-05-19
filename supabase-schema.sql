@@ -54,6 +54,8 @@ create table if not exists public.artist_profiles (
   rating numeric(3,2) default 0 check (rating >= 0 and rating <= 5),
   total_bookings integer default 0,
   is_verified boolean default false,
+  is_listed boolean not null default true,
+  is_profile_complete boolean not null default false,
   social_links jsonb default '{}',
   rider_notes text,
   created_at timestamptz not null default now(),
@@ -110,6 +112,11 @@ create table if not exists public.enquiries (
                       'proposal_sent','confirmed','in_progress','completed','cancelled')),
   source text not null default 'website'
     check (source in ('website','whatsapp','email','instagram','referral','walk_in')),
+  submitter_type text not null default 'personal'
+    check (submitter_type in ('personal','company','planner')),
+  phone_verified_at timestamptz,
+  follow_up_date date,
+  follow_up_notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -141,8 +148,9 @@ create table if not exists public.bookings (
   advance_amount numeric(12,2) default 0,
   total_amount numeric(12,2) default 0,
   balance_amount numeric(12,2) generated always as (total_amount - advance_amount) stored,
-  status text not null default 'confirmed'
-    check (status in ('confirmed','in_progress','completed','cancelled')),
+  status text not null default 'pending'
+    check (status in ('pending','confirmed','in_progress','completed','cancelled')),
+  cancellation_reason text,
   special_requirements text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -257,6 +265,10 @@ create policy "Artist can update own profile" on public.artist_profiles
   for update using (auth.uid() = user_id);
 create policy "Artist can insert own profile" on public.artist_profiles
   for insert with check (auth.uid() = user_id);
+create policy "Admin can update artist profiles" on public.artist_profiles
+  for update
+  using (public.get_user_role() = 'admin')
+  with check (public.get_user_role() = 'admin');
 
 -- ---- ARTIST MEDIA ----
 create policy "Anyone can view artist media" on public.artist_media

@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Eye, Filter, Search, Globe, MessageCircle, Mail, Camera, Handshake, PersonStanding, X, ChevronDown } from "lucide-react";
+import { Eye, Filter, Search, Globe, MessageCircle, Mail, Camera, Handshake, PersonStanding, X, ChevronDown, Briefcase, Building2, Heart, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Enquiry } from "@/types";
-import { formatDate, formatCurrency, getStatusColor, getStatusLabel } from "@/lib/utils";
+import { Enquiry, EnquirySubmitterType } from "@/types";
+import { formatDate, formatCurrency, formatDateTime, getStatusColor, getStatusLabel } from "@/lib/utils";
 import Link from "next/link";
 
 interface EnquiryTableProps {
@@ -23,11 +23,18 @@ const STATUS_OPTIONS = [
 
 const SOURCE_OPTIONS = ["website", "whatsapp", "email", "instagram", "referral", "walk_in"];
 
+const SUBMITTER_OPTIONS: { value: EnquirySubmitterType; label: string; color: string }[] = [
+  { value: "personal", label: "Personal", color: "bg-slate-100 text-slate-700 border-slate-200" },
+  { value: "company", label: "Company", color: "bg-blue-100 text-blue-800 border-blue-200" },
+  { value: "planner", label: "Planner", color: "bg-amber-100 text-amber-900 border-amber-200" },
+];
+
 export function EnquiryTable({ enquiries, baseHref, showCoordinator = false, onAssign }: EnquiryTableProps) {
   const [search, setSearch] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [sourceFilter, setSourceFilter] = useState<string[]>([]);
+  const [submitterFilter, setSubmitterFilter] = useState<EnquirySubmitterType[]>([]);
 
   const toggleStatus = (s: string) =>
     setStatusFilter((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]);
@@ -35,9 +42,16 @@ export function EnquiryTable({ enquiries, baseHref, showCoordinator = false, onA
   const toggleSource = (s: string) =>
     setSourceFilter((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]);
 
-  const clearFilters = () => { setStatusFilter([]); setSourceFilter([]); };
+  const toggleSubmitter = (s: EnquirySubmitterType) =>
+    setSubmitterFilter((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
 
-  const activeFilterCount = statusFilter.length + sourceFilter.length;
+  const clearFilters = () => {
+    setStatusFilter([]);
+    setSourceFilter([]);
+    setSubmitterFilter([]);
+  };
+
+  const activeFilterCount = statusFilter.length + sourceFilter.length + submitterFilter.length;
 
   const filtered = enquiries.filter((e) => {
     const matchesSearch =
@@ -47,8 +61,10 @@ export function EnquiryTable({ enquiries, baseHref, showCoordinator = false, onA
 
     const matchesStatus = statusFilter.length === 0 || statusFilter.includes(e.status);
     const matchesSource = sourceFilter.length === 0 || sourceFilter.includes(e.source);
+    const st = e.submitter_type ?? "personal";
+    const matchesSubmitter = submitterFilter.length === 0 || submitterFilter.includes(st);
 
-    return matchesSearch && matchesStatus && matchesSource;
+    return matchesSearch && matchesStatus && matchesSource && matchesSubmitter;
   });
 
   const sourceIcons: Record<string, { icon: React.ElementType; color: string; label: string }> = {
@@ -145,6 +161,29 @@ export function EnquiryTable({ enquiries, baseHref, showCoordinator = false, onA
                   })}
                 </div>
               </div>
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Who is booking</p>
+                <div className="flex flex-wrap gap-2">
+                  {SUBMITTER_OPTIONS.map((opt) => {
+                    const Icon = opt.value === "personal" ? Heart : opt.value === "company" ? Building2 : Briefcase;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => toggleSubmitter(opt.value)}
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all border ${
+                          submitterFilter.includes(opt.value)
+                            ? "bg-indigo-600 text-white border-indigo-600"
+                            : "bg-background border-border text-muted-foreground hover:border-indigo-400"
+                        }`}
+                      >
+                        <Icon className="w-3 h-3" />
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </motion.div>
         )}
@@ -193,6 +232,30 @@ export function EnquiryTable({ enquiries, baseHref, showCoordinator = false, onA
                     <td className="px-4 py-3">
                       <p className="font-medium text-sm">{enquiry.client?.name ?? "—"}</p>
                       <p className="text-xs text-muted-foreground">{enquiry.event_type}</p>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                        {(() => {
+                          const st = enquiry.submitter_type ?? "personal";
+                          const meta = SUBMITTER_OPTIONS.find((o) => o.value === st);
+                          const Icon = st === "personal" ? Heart : st === "company" ? Building2 : Briefcase;
+                          return (
+                            <span
+                              className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-semibold border ${meta?.color ?? "bg-slate-100 text-slate-700 border-slate-200"}`}
+                            >
+                              <Icon className="w-3 h-3" />
+                              {meta?.label ?? st}
+                            </span>
+                          );
+                        })()}
+                        {enquiry.phone_verified_at && (
+                          <span
+                            title={`Phone verified ${formatDateTime(enquiry.phone_verified_at)}`}
+                            className="inline-flex items-center gap-0.5 text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-1.5 py-0.5"
+                          >
+                            <ShieldCheck className="w-3 h-3" />
+                            OTP
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <p className="text-sm">{formatDate(enquiry.event_date)}</p>

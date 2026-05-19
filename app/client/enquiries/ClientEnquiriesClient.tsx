@@ -7,6 +7,7 @@ import {
   IndianRupee, UserCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 import { formatDate, formatCurrency, getInitials } from "@/lib/utils";
 import Link from "next/link";
 
@@ -162,28 +163,32 @@ export function ClientEnquiriesClient({ enquiries }: Props) {
           )}
 
           {/* Coordinator + actions */}
-          <div className="mt-4 pt-4 border-t flex items-center justify-between flex-wrap gap-3">
+          <div className="mt-4 pt-4 border-t space-y-3">
             {e.coordinator ? (
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 text-xs font-bold flex-shrink-0">
-                  {getInitials(e.coordinator.name)}
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 text-xs font-bold flex-shrink-0">
+                    {getInitials(e.coordinator.name)}
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold">{e.coordinator.name}</p>
+                    <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                      <UserCheck className="w-3 h-3" />Your Coordinator
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs font-semibold">{e.coordinator.name}</p>
-                  <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-                    <UserCheck className="w-3 h-3" />Your Coordinator
-                  </p>
+                <div className="flex gap-2">
+                  <a href={`tel:${e.coordinator.phone}`}>
+                    <Button variant="outline" size="sm" className="h-9 w-9 p-0">
+                      <Phone className="w-4 h-4" />
+                    </Button>
+                  </a>
+                  <Link href="/client/messages">
+                    <Button variant="outline" size="sm" className="h-9 w-9 p-0">
+                      <MessageSquare className="w-4 h-4" />
+                    </Button>
+                  </Link>
                 </div>
-                <a href={`tel:${e.coordinator.phone}`}>
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 ml-1">
-                    <Phone className="w-3.5 h-3.5" />
-                  </Button>
-                </a>
-                <Link href="/client/messages">
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-                    <MessageSquare className="w-3.5 h-3.5" />
-                  </Button>
-                </Link>
               </div>
             ) : (
               <p className="text-xs text-muted-foreground flex items-center gap-1.5">
@@ -191,17 +196,17 @@ export function ClientEnquiriesClient({ enquiries }: Props) {
               </p>
             )}
 
-            <div className="flex gap-2 ml-auto">
+            <div className="flex flex-col sm:flex-row gap-2">
               {isActionNeeded && (
-                <Link href="/client/proposals">
-                  <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-white text-xs">
-                    Review Proposal <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+                <Link href="/client/proposals" className="flex-1">
+                  <Button className="w-full h-11 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold">
+                    Review Proposal <ArrowRight className="w-4 h-4 ml-1.5" />
                   </Button>
                 </Link>
               )}
-              <Link href={`/client/enquiries/${e.id}`}>
-                <Button size="sm" variant="outline" className="text-xs">
-                  View Details <ChevronRight className="w-3.5 h-3.5 ml-1" />
+              <Link href={`/client/enquiries/${e.id}`} className={isActionNeeded ? "sm:flex-shrink-0" : "flex-1"}>
+                <Button variant="outline" className="w-full h-11 sm:h-9 text-sm">
+                  View Details <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
               </Link>
             </div>
@@ -273,8 +278,8 @@ export function ClientEnquiriesClient({ enquiries }: Props) {
           animate={{ opacity: 1, scale: 1 }}
           className="text-center py-20 rounded-3xl border-2 border-dashed border-muted"
         >
-          <div className="w-16 h-16 rounded-2xl gold-gradient flex items-center justify-center mx-auto mb-4">
-            <Sparkles className="w-8 h-8 text-navy-900" />
+          <div className="flex justify-center mb-4">
+            <BrandLogo size="md" />
           </div>
           <h3 className="font-display font-bold text-xl mb-2">Plan your first event</h3>
           <p className="text-muted-foreground text-sm mb-6 max-w-xs mx-auto">

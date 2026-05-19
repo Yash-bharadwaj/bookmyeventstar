@@ -99,6 +99,20 @@
     background-size: 200% 100%;
     animation: shimmer 1.5s infinite;
   }
+
+  /* iOS safe area insets — used by BottomNav and dialogs */
+  .safe-area-bottom {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+
+  /* Ensure tap targets are at least 44px tall on mobile */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
 }
 
 /* react-big-calendar overrides */

@@ -4,9 +4,11 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowLeft, Calendar, MapPin, IndianRupee, User, Phone, Mail,
-  FileText, Clock, CheckCircle, Send, ClipboardList,
+  FileText, Clock, CheckCircle, Send, ClipboardList, Bell,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDate, formatCurrency, getStatusColor, getStatusLabel } from "@/lib/utils";
@@ -37,8 +39,13 @@ export function CoordinatorEnquiryDetail({ enquiry, proposals, coordinatorId }: 
   const [notes, setNotes] = useState(enquiry.other_requirements ?? "");
   const [status, setStatus] = useState(enquiry.status);
   const [saving, setSaving] = useState(false);
+  const [followUpDate, setFollowUpDate] = useState(enquiry.follow_up_date ?? "");
+  const [followUpNotes, setFollowUpNotes] = useState(enquiry.follow_up_notes ?? "");
+  const [savingFollowUp, setSavingFollowUp] = useState(false);
 
   const currentStepIndex = STATUS_FLOW.findIndex((s) => s.key === status);
+  const today = new Date().toISOString().split("T")[0];
+  const followUpDue = followUpDate && followUpDate <= today;
 
   const saveUpdate = async () => {
     setSaving(true);
@@ -50,6 +57,19 @@ export function CoordinatorEnquiryDetail({ enquiry, proposals, coordinatorId }: 
     if (error) toast.error("Failed to save");
     else toast.success("Enquiry updated!");
     setSaving(false);
+    router.refresh();
+  };
+
+  const saveFollowUp = async () => {
+    setSavingFollowUp(true);
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("enquiries")
+      .update({ follow_up_date: followUpDate || null, follow_up_notes: followUpNotes || null })
+      .eq("id", enquiry.id);
+    if (error) toast.error("Failed to save follow-up");
+    else toast.success("Follow-up scheduled!");
+    setSavingFollowUp(false);
     router.refresh();
   };
 
@@ -80,7 +100,8 @@ export function CoordinatorEnquiryDetail({ enquiry, proposals, coordinatorId }: 
         <h2 className="font-semibold text-sm mb-4 flex items-center gap-2">
           <Clock className="w-4 h-4 text-blue-500" />Pipeline Progress
         </h2>
-        <div className="flex items-center gap-1 overflow-x-auto pb-1">
+        <div className="relative">
+          <div className="flex items-center gap-1 overflow-x-auto pb-2 scrollbar-hide">
           {STATUS_FLOW.map((s, i) => (
             <div key={s.key} className="flex items-center gap-1 flex-shrink-0">
               <div className="flex flex-col items-center">
@@ -98,7 +119,11 @@ export function CoordinatorEnquiryDetail({ enquiry, proposals, coordinatorId }: 
               )}
             </div>
           ))}
+          </div>
+          {/* Fade gradient hint for mobile */}
+          <div className="absolute right-0 top-0 bottom-2 w-8 bg-gradient-to-l from-background to-transparent pointer-events-none md:hidden" />
         </div>
+        <p className="text-xs text-muted-foreground mt-1 md:hidden">Scroll to see all steps →</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -171,6 +196,55 @@ export function CoordinatorEnquiryDetail({ enquiry, proposals, coordinatorId }: 
           />
         </div>
         <Button onClick={saveUpdate} loading={saving}>Save Changes</Button>
+      </div>
+
+      {/* Follow-up Tracker */}
+      <div className="rounded-2xl border p-5 space-y-4">
+        <h2 className="font-semibold text-sm flex items-center gap-2">
+          <Bell className={`w-4 h-4 ${followUpDue ? "text-red-500" : "text-violet-500"}`} />
+          Follow-up Tracker
+          {followUpDue && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-600 font-semibold ml-1">
+              Due Today
+            </span>
+          )}
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Next Follow-up Date</Label>
+            <Input
+              type="date"
+              value={followUpDate}
+              min={today}
+              onChange={(e) => setFollowUpDate(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Follow-up Notes</Label>
+            <Input
+              placeholder="e.g. Call client to confirm budget, check artist availability…"
+              value={followUpNotes}
+              onChange={(e) => setFollowUpNotes(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="flex items-center justify-between">
+          {enquiry.follow_up_date && (
+            <p className="text-xs text-muted-foreground">
+              Last saved: {new Date(enquiry.follow_up_date).toLocaleDateString("en-IN")}
+              {enquiry.follow_up_notes && ` — ${enquiry.follow_up_notes}`}
+            </p>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={saveFollowUp}
+            loading={savingFollowUp}
+            className="ml-auto"
+          >
+            <Bell className="w-3.5 h-3.5 mr-1.5" />Save Follow-up
+          </Button>
+        </div>
       </div>
 
       {/* Proposals */}

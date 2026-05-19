@@ -15,6 +15,8 @@ export default async function CoordinatorArtistsPage() {
       .from("artist_profiles")
       .select("*, user:users(name,email,phone,avatar_url), media:artist_media(url,is_primary,type)")
       .eq("is_verified", true)
+      .eq("is_listed", true)
+      .eq("is_profile_complete", true)
       .order("rating", { ascending: false }),
 
     supabase

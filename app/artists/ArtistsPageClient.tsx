@@ -8,7 +8,7 @@ import {
   Search, Star, MapPin, CheckCircle2, IndianRupee,
   X, Phone, Mail, User, Calendar, Sparkles,
   Mic2, Shield, TrendingUp, ChevronRight, Send,
-  ArrowRight, SlidersHorizontal,
+  ArrowRight,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -131,8 +131,19 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
         onClick={(e) => e.stopPropagation()}
       >
         {/* Artist Hero Banner */}
-        <div className={`relative h-52 bg-gradient-to-br ${color} flex-shrink-0`}>
-          <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "20px 20px" }} />
+        <div className={`relative h-52 ${artist.user.avatar_url ? "bg-gray-900" : `bg-gradient-to-br ${color}`} flex-shrink-0`}>
+          {artist.user.avatar_url ? (
+            <img src={artist.user.avatar_url} alt={artist.user.name} className="w-full h-full object-cover" />
+          ) : (
+            <>
+              <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "20px 20px" }} />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="font-bold text-6xl text-white/30">{getInitials(artist.user.name)}</span>
+              </div>
+            </>
+          )}
+          {/* Bottom gradient overlay */}
+          <div className="absolute bottom-0 inset-x-0 h-20 bg-gradient-to-t from-black/60 to-transparent" />
           <button
             onClick={onClose}
             className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/30 hover:bg-black/50 flex items-center justify-center text-white transition-colors backdrop-blur-sm"
@@ -145,20 +156,17 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
               Verified Artist
             </div>
           )}
-          {/* Avatar */}
-          <div className="absolute -bottom-10 left-6">
-            <div className="w-20 h-20 rounded-2xl bg-white shadow-xl flex items-center justify-center border-4 border-white">
-              <span className="text-2xl font-bold text-navy-900">{getInitials(artist.user.name)}</span>
-            </div>
+          {/* Name overlay at bottom */}
+          <div className="absolute bottom-4 left-6 right-14">
+            <h2 className="font-display text-xl font-bold text-white drop-shadow">{artist.user.name}</h2>
           </div>
         </div>
 
         {/* Artist Info */}
-        <div className="px-6 pt-14 pb-4 border-b">
+        <div className="px-6 pt-4 pb-4 border-b">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="font-display text-2xl font-bold text-navy-900">{artist.user.name}</h2>
-              <div className="flex flex-wrap gap-1.5 mt-1.5">
+              <div className="flex flex-wrap gap-1.5">
                 {artist.categories.map((c) => (
                   <span key={c} className="text-xs font-medium text-violet-700 bg-violet-50 px-2.5 py-0.5 rounded-full border border-violet-100">{c}</span>
                 ))}
@@ -352,12 +360,11 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
 
 /* ── Main Component ──────────────────────────────────── */
 export function ArtistsPageClient({ artists, initialCategory, initialCity }: Props) {
-  const [search, setSearch]         = useState("");
-  const [category, setCategory]     = useState(initialCategory ?? "all");
-  const [city, setCity]             = useState(initialCity ?? "all");
-  const [sortBy, setSortBy]         = useState("rating");
-  const [selected, setSelected]     = useState<Artist | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
+  const [search, setSearch]     = useState("");
+  const [category, setCategory] = useState(initialCategory ?? "all");
+  const [city, setCity]         = useState(initialCity ?? "all");
+  const [sortBy, setSortBy]     = useState("rating");
+  const [selected, setSelected] = useState<Artist | null>(null);
 
   const filtered = artists
     .filter((a) => {
@@ -392,8 +399,8 @@ export function ArtistsPageClient({ artists, initialCategory, initialCity }: Pro
 
         {/* ── Filters ── */}
         <div className="mb-8 space-y-3">
-          {/* Search + filter toggle */}
-          <div className="flex gap-3">
+          {/* Row 1: Search + City + Sort — always visible */}
+          <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
@@ -403,74 +410,35 @@ export function ArtistsPageClient({ artists, initialCategory, initialCity }: Pro
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
               />
             </div>
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-all ${showFilters ? "bg-violet-600 text-white border-violet-600" : "bg-white border-gray-200 text-gray-700 hover:border-violet-300"}`}
-            >
-              <SlidersHorizontal className="w-4 h-4" />
-              Filters
-            </button>
+            <Select value={city} onValueChange={setCity}>
+              <SelectTrigger className="w-full sm:w-44">
+                <SelectValue placeholder="All Cities" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Cities</SelectItem>
+                {INDIA_CITIES.map((c) => <SelectItem key={c.name} value={c.name}>{c.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger className="w-full sm:w-44">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="rating">Top Rated</SelectItem>
+                <SelectItem value="bookings">Most Booked</SelectItem>
+                <SelectItem value="price_asc">Price: Low → High</SelectItem>
+                <SelectItem value="price_desc">Price: High → Low</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* Expandable filters */}
-          <AnimatePresence>
-            {showFilters && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="overflow-hidden"
-              >
-                <div className="flex flex-col sm:flex-row gap-3 pt-1">
-                  <Select value={category} onValueChange={setCategory}>
-                    <SelectTrigger className="w-full sm:w-56">
-                      <SelectValue placeholder="All Categories" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Categories</SelectItem>
-                      {ARTIST_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <Select value={city} onValueChange={setCity}>
-                    <SelectTrigger className="w-full sm:w-48">
-                      <SelectValue placeholder="All Cities" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Cities</SelectItem>
-                      {INDIA_CITIES.map((c) => <SelectItem key={c.name} value={c.name}>{c.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <Select value={sortBy} onValueChange={setSortBy}>
-                    <SelectTrigger className="w-full sm:w-48">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="rating">Top Rated</SelectItem>
-                      <SelectItem value="bookings">Most Booked</SelectItem>
-                      <SelectItem value="price_asc">Price: Low → High</SelectItem>
-                      <SelectItem value="price_desc">Price: High → Low</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {(category !== "all" || city !== "all" || search) && (
-                    <button
-                      onClick={() => { setSearch(""); setCategory("all"); setCity("all"); }}
-                      className="text-sm text-rose-600 hover:text-rose-700 font-medium underline whitespace-nowrap"
-                    >
-                      Clear all
-                    </button>
-                  )}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Category pills */}
-          <div className="flex gap-2 flex-wrap">
-            {["all", "Bollywood Singer", "DJ", "Classical Singer", "Ghazal Singer", "Folk Artist", "Instrumentalist"].map((c) => (
+          {/* Row 2: Category chips — scrollable, all categories */}
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            {["all", ...ARTIST_CATEGORIES].map((c) => (
               <button
                 key={c}
                 onClick={() => setCategory(c)}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all border ${
+                className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all border flex-shrink-0 ${
                   category === c
                     ? "bg-violet-600 text-white border-violet-600 shadow-md shadow-violet-200"
                     : "bg-white text-gray-600 border-gray-200 hover:border-violet-300 hover:text-violet-600"
@@ -479,6 +447,21 @@ export function ArtistsPageClient({ artists, initialCategory, initialCity }: Pro
                 {c === "all" ? "All Artists" : c}
               </button>
             ))}
+          </div>
+
+          {/* Result count + clear */}
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">
+              Showing <span className="font-semibold text-foreground">{filtered.length}</span> verified artist{filtered.length !== 1 ? "s" : ""}
+            </p>
+            {(category !== "all" || city !== "all" || search) && (
+              <button
+                onClick={() => { setSearch(""); setCategory("all"); setCity("all"); }}
+                className="text-xs text-rose-600 hover:text-rose-700 font-medium underline"
+              >
+                Clear all filters
+              </button>
+            )}
           </div>
         </div>
 
@@ -510,23 +493,28 @@ export function ArtistsPageClient({ artists, initialCategory, initialCity }: Pro
                 >
                   <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300">
                     {/* Card top banner */}
-                    <div className={`relative h-36 bg-gradient-to-br ${color}`}>
-                      <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "18px 18px" }} />
+                    <div className={`relative h-44 ${artist.user.avatar_url ? "bg-gray-900" : `bg-gradient-to-br ${color}`}`}>
+                      {artist.user.avatar_url ? (
+                        <img src={artist.user.avatar_url} alt={artist.user.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <>
+                          <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "18px 18px" }} />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="font-bold text-4xl text-white/50">{getInitials(artist.user.name)}</span>
+                          </div>
+                        </>
+                      )}
+                      {/* Bottom gradient for readability */}
+                      <div className="absolute bottom-0 inset-x-0 h-16 bg-gradient-to-t from-black/50 to-transparent" />
                       {artist.is_verified && (
                         <div className="absolute top-3 right-3 flex items-center gap-1 bg-white/20 backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-1 rounded-full border border-white/30">
                           <Shield className="w-2.5 h-2.5" /> Verified
                         </div>
                       )}
-                      {/* Avatar */}
-                      <div className="absolute -bottom-8 left-4">
-                        <div className="w-16 h-16 rounded-xl bg-white shadow-lg flex items-center justify-center border-2 border-white">
-                          <span className="font-bold text-lg text-navy-900">{getInitials(artist.user.name)}</span>
-                        </div>
-                      </div>
                     </div>
 
                     {/* Card body */}
-                    <div className="pt-10 px-4 pb-4">
+                    <div className="pt-3 px-4 pb-4">
                       <h3 className="font-display font-bold text-navy-900 truncate">{artist.user.name}</h3>
                       <p className="text-xs text-muted-foreground truncate mt-0.5">
                         {artist.categories.slice(0, 2).join(" · ")}

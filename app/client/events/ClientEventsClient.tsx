@@ -92,7 +92,7 @@ export function ClientEventsClient({ bookings, clientId }: { bookings: BookingWi
       >
         {days <= 7 && days >= 0 && <div className="h-1 bg-gradient-to-r from-amber-400 to-orange-400" />}
 
-        <div className="p-5 flex gap-5 items-start">
+        <div className="p-4 sm:p-5 flex gap-4 sm:gap-5 items-start">
           <CountdownBadge dateStr={booking.event_date} />
 
           <div className="flex-1 min-w-0">
@@ -104,26 +104,28 @@ export function ClientEventsClient({ bookings, clientId }: { bookings: BookingWi
             </div>
 
             {booking.artist?.user ? (
-              <div className="mt-4 p-3 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-100 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl gold-gradient flex items-center justify-center text-navy-900 font-bold text-sm flex-shrink-0">
-                    {getInitials(booking.artist.user.name)}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <p className="font-semibold text-sm">{booking.artist.user.name}</p>
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+              <div className="mt-4 p-3 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-100">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl gold-gradient flex items-center justify-center text-navy-900 font-bold text-sm flex-shrink-0">
+                      {getInitials(booking.artist.user.name)}
                     </div>
-                    <p className="text-xs text-muted-foreground">{booking.artist.categories[0]}</p>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-semibold text-sm">{booking.artist.user.name}</p>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                      </div>
+                      <p className="text-xs text-muted-foreground">{booking.artist.categories[0]}</p>
+                    </div>
                   </div>
+                  {booking.artist.user.phone && (
+                    <a href={`tel:${booking.artist.user.phone}`} className="flex-shrink-0">
+                      <Button size="sm" variant="outline" className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 h-9">
+                        <Phone className="w-3.5 h-3.5 mr-1.5" />Call Artist
+                      </Button>
+                    </a>
+                  )}
                 </div>
-                {booking.artist.user.phone && (
-                  <a href={`tel:${booking.artist.user.phone}`}>
-                    <Button size="sm" variant="outline" className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 text-xs h-8">
-                      <Phone className="w-3.5 h-3.5 mr-1.5" />Call Artist
-                    </Button>
-                  </a>
-                )}
               </div>
             ) : (
               <div className="mt-4 p-3 rounded-xl bg-muted/30 border flex items-center gap-2 text-sm text-muted-foreground">
@@ -313,12 +315,12 @@ export function ClientEventsClient({ bookings, clientId }: { bookings: BookingWi
               />
             </div>
 
-            <div className="flex gap-3 justify-end">
-              <Button variant="outline" onClick={() => setFeedbackOpen(false)}>Skip</Button>
+            <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">
+              <Button variant="outline" className="h-11 w-full sm:w-auto" onClick={() => setFeedbackOpen(false)}>Skip</Button>
               <Button
                 onClick={submitFeedback}
                 loading={submitting}
-                className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white"
+                className="h-11 w-full sm:w-auto bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold"
               >
                 <Star className="w-4 h-4 mr-2" />Submit Review
               </Button>

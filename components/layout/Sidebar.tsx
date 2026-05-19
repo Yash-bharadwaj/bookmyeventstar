@@ -19,9 +19,9 @@ import {
   MessageSquare,
   ChevronLeft,
   ChevronRight,
-  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 import { UserRole } from "@/types";
 import { useState } from "react";
 
@@ -102,33 +102,21 @@ export function Sidebar({ role, userName }: SidebarProps) {
 
   return (
     <motion.aside
-      animate={{ width: collapsed ? 72 : 256 }}
+      animate={{ width: collapsed ? 80 : 256 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
       className="relative hidden md:flex flex-col h-screen bg-navy-900 border-r border-white/10 overflow-hidden flex-shrink-0"
     >
       {/* Logo */}
-      <div className="flex items-center gap-3 px-4 py-5 border-b border-white/10">
-        <div className="w-9 h-9 rounded-xl gold-gradient flex items-center justify-center flex-shrink-0 animate-glow">
-          <Sparkles className="w-5 h-5 text-navy-900" />
-        </div>
-        <AnimatePresence>
-          {!collapsed && (
-            <motion.div
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              transition={{ duration: 0.2 }}
-              className="overflow-hidden"
-            >
-              <span className="font-display font-bold text-white text-sm leading-tight block">
-                BookMy
-              </span>
-              <span className="text-gradient-gold font-display font-bold text-sm leading-tight block">
-                EventStar
-              </span>
-            </motion.div>
-          )}
-        </AnimatePresence>
+      <div className={`flex items-center border-b border-white/10 py-4 ${collapsed ? "justify-center px-2" : "gap-3 px-4"}`}>
+        <Link href="/" className="min-w-0 shrink flex justify-center">
+          <BrandLogo
+            size={collapsed ? "sm" : "md"}
+            frame={false}
+            priority
+            className={collapsed ? "max-w-[52px]" : ""}
+            imgClassName={collapsed ? "!h-7 !max-w-[52px] object-contain" : undefined}
+          />
+        </Link>
       </div>
 
       {/* Role badge */}

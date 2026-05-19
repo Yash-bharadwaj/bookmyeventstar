@@ -4,8 +4,9 @@ import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Star, MapPin, IndianRupee, CheckCircle2, Check, Plus, X,
-  SlidersHorizontal, ChevronDown, ChevronUp, ArrowUpDown, Phone,
-  Calendar, Filter, Sparkles, ArrowRight, Mic2, Send,
+  SlidersHorizontal, ArrowUpDown, Phone, Mail,
+  Calendar, Sparkles, ArrowRight, Mic2, Send,
+  User, Award, BookOpen, ImageIcon, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -64,6 +65,8 @@ export function ArtistSearchClient({ artists, enquiries }: Props) {
   const [verifiedOnly, setVerifiedOnly]   = useState(false);
   const [showFilters, setShowFilters]     = useState(true);
   const [shortlisted, setShortlisted]     = useState<Set<string>>(new Set());
+  const [profileArtist, setProfileArtist] = useState<Artist | null>(null);
+  const [photoIdx, setPhotoIdx]           = useState(0);
 
   const allCities = useMemo(() => uniqueCities(artists), [artists]);
 
@@ -405,8 +408,12 @@ export function ArtistSearchClient({ artists, enquiries }: Props) {
               {/* Shortlisted avatars */}
               <div className="flex -space-x-2 flex-shrink-0">
                 {shortlistedArtists.slice(0, 5).map((a) => (
-                  <div key={a.id} className="w-9 h-9 rounded-full gold-gradient border-2 border-navy-900 flex items-center justify-center text-navy-900 text-xs font-bold flex-shrink-0">
-                    {getInitials(a.user?.name ?? "A")}
+                  <div key={a.id} className="w-9 h-9 rounded-full border-2 border-navy-900 overflow-hidden flex-shrink-0 flex items-center justify-center gold-gradient">
+                    {a.user?.avatar_url ? (
+                      <img src={a.user.avatar_url} alt={a.user?.name ?? ""} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-navy-900 text-xs font-bold">{getInitials(a.user?.name ?? "A")}</span>
+                    )}
                   </div>
                 ))}
                 {shortlisted.size > 5 && (
@@ -484,6 +491,8 @@ export function ArtistSearchClient({ artists, enquiries }: Props) {
                   <div className="relative h-44 bg-gradient-to-br from-navy-900 to-navy-700 flex items-center justify-center">
                     {photo ? (
                       <img src={photo} alt={artist.user?.name} className="w-full h-full object-cover" />
+                    ) : artist.user?.avatar_url ? (
+                      <img src={artist.user.avatar_url} alt={artist.user?.name} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-20 h-20 rounded-full gold-gradient flex items-center justify-center text-navy-900 font-bold text-2xl">
                         {getInitials(artist.user?.name ?? "A")}
@@ -573,20 +582,30 @@ export function ArtistSearchClient({ artists, enquiries }: Props) {
                       <p className="text-xs text-muted-foreground mt-2 line-clamp-2 leading-relaxed">{artist.bio}</p>
                     )}
 
-                    {/* Action */}
-                    <Button
-                      size="sm"
-                      className={`w-full mt-3 ${
-                        isShortlisted
-                          ? "bg-indigo-100 text-indigo-700 hover:bg-red-50 hover:text-red-600 border border-indigo-200"
-                          : "bg-indigo-600 hover:bg-indigo-700 text-white"
-                      }`}
-                      onClick={() => toggleShortlist(artist.id)}
-                    >
-                      {isShortlisted
-                        ? <><X className="w-3.5 h-3.5 mr-1.5" />Remove from Shortlist</>
-                        : <><Plus className="w-3.5 h-3.5 mr-1.5" />Add to Shortlist</>}
-                    </Button>
+                    {/* Actions */}
+                    <div className="flex gap-2 mt-3">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 text-xs"
+                        onClick={() => { setProfileArtist(artist); setPhotoIdx(0); }}
+                      >
+                        <User className="w-3.5 h-3.5 mr-1.5" />View Profile
+                      </Button>
+                      <Button
+                        size="sm"
+                        className={`flex-1 text-xs ${
+                          isShortlisted
+                            ? "bg-indigo-100 text-indigo-700 hover:bg-red-50 hover:text-red-600 border border-indigo-200"
+                            : "bg-indigo-600 hover:bg-indigo-700 text-white"
+                        }`}
+                        onClick={() => toggleShortlist(artist.id)}
+                      >
+                        {isShortlisted
+                          ? <><X className="w-3 h-3 mr-1" />Remove</>
+                          : <><Plus className="w-3 h-3 mr-1" />Shortlist</>}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </motion.div>
@@ -594,6 +613,288 @@ export function ArtistSearchClient({ artists, enquiries }: Props) {
           })}
         </div>
       )}
+
+      {/* ══════════════════════════════════════════
+          ARTIST PROFILE DRAWER
+      ══════════════════════════════════════════ */}
+      <AnimatePresence>
+        {profileArtist && (() => {
+          const a = profileArtist;
+          const photos = a.media.filter((m) => m.type === "photo");
+          const isShortlisted = shortlisted.has(a.id);
+          const withinBudget = enquiry ? a.base_price <= enquiry.budget_max : null;
+          const social = (a as any).social_links ?? {};
+
+          return (
+            <>
+              {/* Backdrop */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/50 z-40 backdrop-blur-sm"
+                onClick={() => setProfileArtist(null)}
+              />
+
+              {/* Drawer panel */}
+              <motion.div
+                initial={{ x: "100%" }}
+                animate={{ x: 0 }}
+                exit={{ x: "100%" }}
+                transition={{ type: "spring", damping: 28, stiffness: 280 }}
+                className="fixed right-0 top-0 h-full w-full max-w-lg bg-background z-50 shadow-2xl flex flex-col overflow-hidden"
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between p-4 border-b flex-shrink-0">
+                  <button
+                    onClick={() => setProfileArtist(null)}
+                    className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4" />Back to search
+                  </button>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant={isShortlisted ? "outline" : "default"}
+                      className={isShortlisted ? "border-indigo-300 text-indigo-700" : ""}
+                      onClick={() => toggleShortlist(a.id)}
+                    >
+                      {isShortlisted
+                        ? <><Check className="w-3.5 h-3.5 mr-1.5" />Shortlisted</>
+                        : <><Plus className="w-3.5 h-3.5 mr-1.5" />Shortlist</>}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Scrollable content */}
+                <div className="flex-1 overflow-y-auto">
+
+                  {/* Photo gallery */}
+                  <div className="relative h-64 bg-gradient-to-br from-navy-900 to-navy-700 flex-shrink-0">
+                    {photos.length > 0 ? (
+                      <>
+                        <img
+                          src={photos[photoIdx]?.url}
+                          alt={a.user?.name}
+                          className="w-full h-full object-cover"
+                        />
+                        {photos.length > 1 && (
+                          <>
+                            <button
+                              onClick={() => setPhotoIdx((i) => (i - 1 + photos.length) % photos.length)}
+                              className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 flex items-center justify-center text-white hover:bg-black/70 transition-colors"
+                            >
+                              <ChevronLeft className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => setPhotoIdx((i) => (i + 1) % photos.length)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 flex items-center justify-center text-white hover:bg-black/70 transition-colors"
+                            >
+                              <ChevronRight className="w-4 h-4" />
+                            </button>
+                            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+                              {photos.map((_, i) => (
+                                <button
+                                  key={i}
+                                  onClick={() => setPhotoIdx(i)}
+                                  className={`w-1.5 h-1.5 rounded-full transition-all ${i === photoIdx ? "bg-white scale-125" : "bg-white/40"}`}
+                                />
+                              ))}
+                            </div>
+                          </>
+                        )}
+                        <div className="absolute bottom-3 right-3 px-2 py-0.5 rounded-full bg-black/50 text-white text-[10px]">
+                          {photoIdx + 1}/{photos.length} photos
+                        </div>
+                      </>
+                    ) : a.user?.avatar_url ? (
+                      <img src={a.user.avatar_url} alt={a.user?.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <div className="w-24 h-24 rounded-full gold-gradient flex items-center justify-center text-navy-900 font-bold text-3xl">
+                          {getInitials(a.user?.name ?? "A")}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Verified overlay */}
+                    {a.is_verified && (
+                      <div className="absolute top-3 left-3 flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/90 backdrop-blur-sm">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                        <span className="text-xs text-white font-semibold">Verified Artist</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-5 space-y-5">
+
+                    {/* Name + rating + budget fit */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h2 className="font-display font-bold text-xl">{a.user?.name}</h2>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <div className="flex items-center gap-1">
+                            {[1,2,3,4,5].map((s) => (
+                              <Star key={s} className={`w-4 h-4 ${s <= Math.round(a.rating) ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30"}`} />
+                            ))}
+                            <span className="text-sm font-semibold ml-1">{a.rating.toFixed(1)}</span>
+                          </div>
+                          <span className="text-xs text-muted-foreground">· {a.total_bookings} bookings</span>
+                        </div>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className={`font-display font-bold text-xl ${withinBudget === true ? "text-emerald-700" : withinBudget === false ? "text-red-600" : "text-indigo-700"}`}>
+                          {formatCurrency(a.base_price)}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">base price</p>
+                        {withinBudget !== null && (
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full mt-1 inline-block ${
+                            withinBudget ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"
+                          }`}>
+                            {withinBudget ? "Within budget" : "Over budget"}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Contact row */}
+                    <div className="flex gap-3 flex-wrap">
+                      {a.user?.phone && (
+                        <a href={`tel:${a.user.phone}`} className="flex items-center gap-2 px-3 py-2 rounded-xl border hover:bg-accent transition-colors text-sm">
+                          <Phone className="w-4 h-4 text-emerald-600" />{a.user.phone}
+                        </a>
+                      )}
+                      {a.user?.email && (
+                        <a href={`mailto:${a.user.email}`} className="flex items-center gap-2 px-3 py-2 rounded-xl border hover:bg-accent transition-colors text-sm">
+                          <Mail className="w-4 h-4 text-indigo-500" />{a.user.email}
+                        </a>
+                      )}
+                    </div>
+
+                    {/* Categories */}
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Specialities</p>
+                      <div className="flex flex-wrap gap-2">
+                        {a.categories.map((c) => (
+                          <span key={c} className="px-3 py-1.5 rounded-full bg-indigo-50 border border-indigo-100 text-xs font-medium text-indigo-700">
+                            {c}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Cities */}
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Available Cities</p>
+                      <div className="flex flex-wrap gap-2">
+                        {a.cities.map((c) => (
+                          <span key={c} className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border ${
+                            enquiry?.city === c
+                              ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                              : "bg-muted/40 text-muted-foreground"
+                          }`}>
+                            <MapPin className="w-3 h-3" />{c}
+                            {enquiry?.city === c && <Check className="w-3 h-3" />}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Stats row */}
+                    <div className="grid grid-cols-3 gap-3">
+                      {[
+                        { icon: Star,     label: "Rating",   value: `${a.rating.toFixed(1)} / 5` },
+                        { icon: BookOpen, label: "Bookings", value: String(a.total_bookings) },
+                        { icon: Award,    label: "Status",   value: a.is_verified ? "Verified" : "Unverified" },
+                      ].map(({ icon: Icon, label, value }) => (
+                        <div key={label} className="text-center p-3 rounded-xl bg-muted/30 border">
+                          <Icon className="w-4 h-4 mx-auto mb-1 text-muted-foreground" />
+                          <p className="text-xs font-semibold">{value}</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">{label}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Bio */}
+                    {a.bio && (
+                      <div>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">About</p>
+                        <p className="text-sm leading-relaxed text-muted-foreground">{a.bio}</p>
+                      </div>
+                    )}
+
+                    {/* Social links */}
+                    {Object.keys(social).length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Social / Portfolio</p>
+                        <div className="flex flex-wrap gap-2">
+                          {(Object.entries(social) as [string, unknown][]).map(([platform, url]) =>
+                            url ? (
+                              <a
+                                key={platform}
+                                href={String(url)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-3 py-1.5 rounded-xl border text-xs capitalize hover:bg-accent transition-colors"
+                              >
+                                {platform}
+                              </a>
+                            ) : null
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* If within enquiry context, show fit summary */}
+                    {enquiry && (
+                      <div className={`p-4 rounded-2xl border ${withinBudget ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}>
+                        <p className="text-xs font-semibold uppercase tracking-wide mb-2 ${withinBudget ? 'text-emerald-700' : 'text-red-700'}">
+                          Fit for: {enquiry.event_type} · {enquiry.client?.name}
+                        </p>
+                        <div className="space-y-1 text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Client budget</span>
+                            <span className="font-semibold">{formatCurrency(enquiry.budget_min)} – {formatCurrency(enquiry.budget_max)}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Artist base price</span>
+                            <span className={`font-semibold ${withinBudget ? "text-emerald-700" : "text-red-600"}`}>{formatCurrency(a.base_price)}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">City match</span>
+                            <span className={`font-semibold ${a.cities.includes(enquiry.city) ? "text-emerald-700" : "text-amber-600"}`}>
+                              {a.cities.includes(enquiry.city) ? `Available in ${enquiry.city}` : `Not listed in ${enquiry.city}`}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Footer CTA */}
+                <div className="p-4 border-t flex gap-3 flex-shrink-0">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => setProfileArtist(null)}
+                  >
+                    Close
+                  </Button>
+                  <Button
+                    className={`flex-1 ${isShortlisted ? "bg-red-50 text-red-600 border border-red-200 hover:bg-red-100" : "bg-indigo-600 hover:bg-indigo-700 text-white"}`}
+                    onClick={() => { toggleShortlist(a.id); if (!isShortlisted) setProfileArtist(null); }}
+                  >
+                    {isShortlisted
+                      ? <><X className="w-4 h-4 mr-2" />Remove from Shortlist</>
+                      : <><Plus className="w-4 h-4 mr-2" />Add to Shortlist</>}
+                  </Button>
+                </div>
+              </motion.div>
+            </>
+          );
+        })()}
+      </AnimatePresence>
     </div>
   );
 }

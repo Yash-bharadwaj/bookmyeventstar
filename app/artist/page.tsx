@@ -17,6 +17,16 @@ export default async function ArtistPage() {
     .eq("user_id", user.id)
     .single();
 
+  let artistPhotoCount = 0;
+  if (artistProfile?.id) {
+    const { count } = await supabase
+      .from("artist_media")
+      .select("id", { count: "exact", head: true })
+      .eq("artist_id", artistProfile.id)
+      .eq("type", "photo");
+    artistPhotoCount = count ?? 0;
+  }
+
   const today = new Date().toISOString().split("T")[0];
 
   const [{ data: bookings }, { data: payments }] = await Promise.all([
@@ -54,6 +64,7 @@ export default async function ArtistPage() {
         totalEarnings={totalEarnings}
         upcomingCount={upcomingBookings.length}
         completedCount={completedBookings.length}
+        artistPhotoCount={artistPhotoCount}
       />
     </DashboardLayout>
   );

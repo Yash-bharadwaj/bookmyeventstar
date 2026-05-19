@@ -162,18 +162,18 @@ export function ClientPaymentsClient({ bookings, payments: initialPayments }: Pr
                   </div>
 
                   {/* Amounts */}
-                  <div className="p-4 grid grid-cols-3 gap-4 text-sm">
-                    <div className="text-center p-3 rounded-xl bg-muted/30">
-                      <p className="text-muted-foreground text-xs">Total</p>
-                      <p className="font-bold mt-0.5">{formatCurrency(booking.total_amount)}</p>
+                  <div className="p-4 grid grid-cols-3 gap-2 sm:gap-4 text-sm">
+                    <div className="text-center p-2.5 sm:p-3 rounded-xl bg-muted/30">
+                      <p className="text-muted-foreground text-[10px] sm:text-xs">Total</p>
+                      <p className="font-bold text-xs sm:text-sm mt-0.5 truncate">{formatCurrency(booking.total_amount)}</p>
                     </div>
-                    <div className="text-center p-3 rounded-xl bg-emerald-50">
-                      <p className="text-emerald-600 text-xs">Advance</p>
-                      <p className="font-bold text-emerald-700 mt-0.5">{formatCurrency(booking.advance_amount)}</p>
+                    <div className="text-center p-2.5 sm:p-3 rounded-xl bg-emerald-50">
+                      <p className="text-emerald-600 text-[10px] sm:text-xs">Advance</p>
+                      <p className="font-bold text-emerald-700 text-xs sm:text-sm mt-0.5 truncate">{formatCurrency(booking.advance_amount)}</p>
                     </div>
-                    <div className={`text-center p-3 rounded-xl ${booking.balance_amount > 0 ? "bg-amber-50" : "bg-emerald-50"}`}>
-                      <p className={`text-xs ${booking.balance_amount > 0 ? "text-amber-600" : "text-emerald-600"}`}>Balance</p>
-                      <p className={`font-bold mt-0.5 ${booking.balance_amount > 0 ? "text-amber-700" : "text-emerald-700"}`}>
+                    <div className={`text-center p-2.5 sm:p-3 rounded-xl ${booking.balance_amount > 0 ? "bg-amber-50" : "bg-emerald-50"}`}>
+                      <p className={`text-[10px] sm:text-xs ${booking.balance_amount > 0 ? "text-amber-600" : "text-emerald-600"}`}>Balance</p>
+                      <p className={`font-bold text-xs sm:text-sm mt-0.5 truncate ${booking.balance_amount > 0 ? "text-amber-700" : "text-emerald-700"}`}>
                         {formatCurrency(booking.balance_amount)}
                       </p>
                     </div>
@@ -192,31 +192,29 @@ export function ClientPaymentsClient({ bookings, payments: initialPayments }: Pr
 
                   {/* Payment action buttons */}
                   {["confirmed", "in_progress", "completed"].includes(booking.status) && (
-                    <div className="px-4 pb-4 flex gap-2 flex-wrap">
+                    <div className="px-4 pb-4 flex flex-col sm:flex-row gap-2">
                       {!advancePaid && (
                         <Button
-                          size="sm"
                           variant="outline"
-                          className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                          className="w-full sm:w-auto h-11 sm:h-9 border-emerald-300 text-emerald-700 hover:bg-emerald-50 text-sm"
                           onClick={() => openPayDialog(booking, "advance")}
                         >
-                          <CreditCard className="w-3.5 h-3.5 mr-1.5" />
-                          Pay Advance ({formatCurrency(booking.advance_amount)})
+                          <CreditCard className="w-4 h-4 mr-2" />
+                          Pay Advance — {formatCurrency(booking.advance_amount)}
                         </Button>
                       )}
                       {advancePaid && !finalPaid && booking.balance_amount > 0 && (
                         <Button
-                          size="sm"
                           variant="outline"
-                          className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                          className="w-full sm:w-auto h-11 sm:h-9 border-blue-300 text-blue-700 hover:bg-blue-50 text-sm"
                           onClick={() => openPayDialog(booking, "final")}
                         >
-                          <CreditCard className="w-3.5 h-3.5 mr-1.5" />
-                          Pay Balance ({formatCurrency(booking.balance_amount)})
+                          <CreditCard className="w-4 h-4 mr-2" />
+                          Pay Balance — {formatCurrency(booking.balance_amount)}
                         </Button>
                       )}
                       {advancePaid && finalPaid && (
-                        <div className="flex items-center gap-1.5 text-emerald-600 text-sm font-medium">
+                        <div className="flex items-center gap-1.5 text-emerald-600 text-sm font-semibold">
                           <CheckCircle2 className="w-4 h-4" />Fully Paid
                         </div>
                       )}
@@ -287,9 +285,9 @@ export function ClientPaymentsClient({ bookings, payments: initialPayments }: Pr
                 <p>This records your offline payment. Our coordinator will verify and confirm receipt.</p>
               </div>
 
-              <div className="flex gap-3 justify-end">
-                <Button variant="outline" onClick={() => setPayDialog(null)}>Cancel</Button>
-                <Button onClick={markAsPaid} loading={marking}>
+              <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">
+                <Button variant="outline" className="w-full sm:w-auto h-11" onClick={() => setPayDialog(null)}>Cancel</Button>
+                <Button className="w-full sm:w-auto h-11" onClick={markAsPaid} loading={marking}>
                   <CreditCard className="w-4 h-4 mr-2" />Confirm Payment
                 </Button>
               </div>

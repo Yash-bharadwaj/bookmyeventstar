@@ -19,6 +19,8 @@ export type EnquirySource =
   | "referral"
   | "walk_in";
 
+export type EnquirySubmitterType = "personal" | "company" | "planner";
+
 export type BookingStatus =
   | "pending"
   | "confirmed"
@@ -63,6 +65,10 @@ export interface ArtistProfile {
   rating: number;
   total_bookings: number;
   is_verified: boolean;
+  /** When false, hidden from clients and coordinators in browse/search */
+  is_listed: boolean;
+  /** Checklist satisfied (bio, price, geography, portfolio, extras) — synced from app logic */
+  is_profile_complete?: boolean;
   social_links: Record<string, string>;
   rider_notes?: string;
   user?: User;
@@ -95,7 +101,7 @@ export interface Availability {
 
 export interface Enquiry {
   id: string;
-  client_id: string;
+  client_id: string | null;
   coordinator_id?: string;
   event_type: string;
   event_date: string;
@@ -107,6 +113,10 @@ export interface Enquiry {
   other_requirements?: string;
   status: EnquiryStatus;
   source: EnquirySource;
+  submitter_type?: EnquirySubmitterType;
+  phone_verified_at?: string | null;
+  follow_up_date?: string | null;
+  follow_up_notes?: string | null;
   created_at: string;
   updated_at: string;
   client?: User;
@@ -146,6 +156,7 @@ export interface Booking {
   balance_amount: number;
   status: BookingStatus;
   special_requirements?: string;
+  cancellation_reason?: string;
   created_at: string;
   artist?: ArtistProfile & { user: User };
   coordinator?: User;
@@ -204,6 +215,15 @@ export interface City {
   id: string;
   name: string;
   state: string;
+}
+
+export interface Message {
+  id: string;
+  enquiry_id: string;
+  sender_id: string;
+  sender_name: string;
+  content: string;
+  created_at: string;
 }
 
 export interface DashboardStats {

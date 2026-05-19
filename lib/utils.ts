@@ -96,7 +96,7 @@ export const ARTIST_CATEGORIES = [
   "DJ",
   "Band",
   "Comedian",
-  "Anchor/Emcee",
+  "Anchor / Emcee",
   "Dancer / Dance Troupe",
   "Magician",
   "Instrumentalist",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { LogOut, Settings, User, Sparkles } from "lucide-react";
+import { LogOut, Settings, User } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
   DropdownMenu,
@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 import { NotificationBell } from "./NotificationBell";
 import { getInitials } from "@/lib/utils";
 import { User as UserType } from "@/types";
@@ -34,14 +35,8 @@ export function TopBar({ user, title }: TopBarProps) {
     <header className="h-16 border-b border-border bg-background/95 backdrop-blur-sm flex items-center justify-between px-4 md:px-6 sticky top-0 z-30">
       <div className="flex items-center gap-3">
         {/* Mobile logo */}
-        <div className="md:hidden flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg gold-gradient flex items-center justify-center">
-            <Sparkles className="w-4 h-4 text-navy-900" />
-          </div>
-          <span className="font-display font-bold text-sm">
-            <span className="text-navy-900">BookMy</span>
-            <span className="text-gradient-gold">EventStar</span>
-          </span>
+        <div className="md:hidden">
+          <BrandLogo href="/" size="sm" />
         </div>
 
         {title && (

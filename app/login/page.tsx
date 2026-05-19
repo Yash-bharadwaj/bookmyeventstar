@@ -6,18 +6,20 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Mail, Lock, Sparkles, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff } from "lucide-react";
 import toast from "react-hot-toast";
 import { createClient } from "@/lib/supabase/client";
 import { loginSchema, LoginFormData } from "@/lib/validations/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 
 export default function LoginPage() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showTestCreds, setShowTestCreds] = useState(false);
 
   const {
     register,
@@ -69,11 +71,9 @@ export default function LoginPage() {
           transition={{ duration: 0.8 }}
           className="relative text-center"
         >
-          <div className="w-20 h-20 rounded-2xl gold-gradient mx-auto mb-6 flex items-center justify-center shadow-2xl shadow-gold-500/30 animate-glow">
-            <Sparkles className="w-10 h-10 text-navy-900" />
+          <div className="flex justify-center mb-8">
+            <BrandLogo href="/" size="xl" priority />
           </div>
-          <h1 className="font-display text-4xl font-bold text-white mb-2">BookMy</h1>
-          <h1 className="font-display text-4xl font-bold text-gradient-gold mb-6">EventStar</h1>
           <p className="text-white/70 text-lg max-w-sm">
             India&apos;s premier artist management and event booking platform
           </p>
@@ -101,14 +101,8 @@ export default function LoginPage() {
           transition={{ duration: 0.5 }}
           className="w-full max-w-md"
         >
-          <div className="lg:hidden flex items-center gap-2 mb-8">
-            <div className="w-9 h-9 rounded-xl gold-gradient flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-navy-900" />
-            </div>
-            <span className="font-display font-bold">
-              <span className="text-navy-900">BookMy</span>
-              <span className="text-gradient-gold">EventStar</span>
-            </span>
+          <div className="lg:hidden mb-8">
+            <BrandLogo href="/" size="lg" priority />
           </div>
 
           <h2 className="font-display text-3xl font-bold text-navy-900">Welcome back</h2>
@@ -167,12 +161,23 @@ export default function LoginPage() {
             </Link>
           </p>
 
-          <div className="mt-8 p-4 rounded-xl bg-muted/50 text-xs text-muted-foreground space-y-1">
-            <p className="font-semibold text-foreground mb-2">Test Accounts:</p>
-            <p><span className="font-medium">Admin:</span> <span className="font-mono">admin@bmes.com</span> / <span className="font-mono">Admin@123</span></p>
-            <p><span className="font-medium">Coordinator:</span> <span className="font-mono">coordinator@bmes.com</span> / <span className="font-mono">Coord@123</span></p>
-            <p><span className="font-medium">Client:</span> <span className="font-mono">client@bmes.com</span> / <span className="font-mono">Client@123</span></p>
-            <p><span className="font-medium">Artist:</span> <span className="font-mono">artist@bmes.com</span> / <span className="font-mono">Artist@123</span></p>
+          <div className="mt-8 rounded-xl bg-muted/50 text-xs overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setShowTestCreds(!showTestCreds)}
+              className="w-full flex items-center justify-between p-3 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <span className="font-medium">Demo accounts</span>
+              <span>{showTestCreds ? "▲" : "▼"}</span>
+            </button>
+            {showTestCreds && (
+              <div className="px-4 pb-4 pt-1 space-y-1 text-muted-foreground border-t">
+                <p><span className="font-medium">Admin:</span> <span className="font-mono">admin@bmes.com</span> / <span className="font-mono">Admin@123</span></p>
+                <p><span className="font-medium">Coordinator:</span> <span className="font-mono">coordinator@bmes.com</span> / <span className="font-mono">Coord@123</span></p>
+                <p><span className="font-medium">Client:</span> <span className="font-mono">client@bmes.com</span> / <span className="font-mono">Client@123</span></p>
+                <p><span className="font-medium">Artist:</span> <span className="font-mono">artist@bmes.com</span> / <span className="font-mono">Artist@123</span></p>
+              </div>
+            )}
           </div>
         </motion.div>
       </div>

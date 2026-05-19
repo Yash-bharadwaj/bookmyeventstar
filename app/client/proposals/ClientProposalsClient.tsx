@@ -8,6 +8,7 @@ import {
   Mic2, Clock, Shield, ThumbsUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 import { Proposal } from "@/types";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -38,8 +39,18 @@ export function ClientProposalsClient({ proposals }: Props) {
     setAccepting(proposalId);
     try {
       const supabase = createClient();
+      const proposal = proposals.find((p) => p.id === proposalId);
       await supabase.from("proposals").update({ status: "accepted" }).eq("id", proposalId);
       await supabase.from("enquiries").update({ status: "confirmed" }).eq("id", enquiryId);
+      if (proposal?.coordinator_id) {
+        await supabase.from("notifications").insert({
+          user_id: proposal.coordinator_id,
+          title: "Proposal Accepted",
+          message: `Client has accepted the proposal for ${proposal.enquiry?.event_type ?? "the event"}. Create the booking now.`,
+          type: "success",
+          link: `/coordinator/enquiries/${enquiryId}`,
+        });
+      }
       toast.success("Booking confirmed! Our coordinator will be in touch shortly.", { duration: 5000 });
       router.refresh();
     } catch {
@@ -98,12 +109,12 @@ export function ClientProposalsClient({ proposals }: Props) {
         )}
         {proposal.status === "accepted" && <div className="h-1.5 bg-gradient-to-r from-emerald-400 to-teal-500" />}
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {/* Header */}
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap mb-1">
-                <h3 className="font-display font-bold text-lg">{proposal.enquiry?.event_type ?? "Event"}</h3>
+                <h3 className="font-display font-bold text-base sm:text-lg">{proposal.enquiry?.event_type ?? "Event"}</h3>
                 {proposal.status === "accepted" && (
                   <span className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-semibold bg-emerald-100 text-emerald-700">
                     <CheckCircle2 className="w-3 h-3" />Accepted
@@ -120,7 +131,7 @@ export function ClientProposalsClient({ proposals }: Props) {
             </div>
 
             <div className="text-right flex-shrink-0">
-              <p className="font-display font-bold text-2xl text-indigo-700">{formatCurrency(proposal.quoted_price)}</p>
+              <p className="font-display font-bold text-xl sm:text-2xl text-indigo-700">{formatCurrency(proposal.quoted_price)}</p>
               <p className="text-[10px] text-muted-foreground font-medium">Total package</p>
             </div>
           </div>
@@ -215,16 +226,16 @@ export function ClientProposalsClient({ proposals }: Props) {
 
                   {/* Trust signals */}
                   {isPending && (
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-3 gap-2">
                       {[
-                        { icon: Shield, label: "Verified Artists", desc: "All artists are background-verified" },
-                        { icon: Star,   label: "Quality Assured",   desc: "Rated 4.5+ by past clients" },
-                        { icon: Clock,  label: "On-time Guarantee", desc: "We handle all logistics" },
+                        { icon: Shield, label: "Verified Artists", desc: "Background-verified" },
+                        { icon: Star,   label: "Quality Assured",   desc: "Rated 4.5+ stars" },
+                        { icon: Clock,  label: "On-time",           desc: "We handle logistics" },
                       ].map(({ icon: Icon, label, desc }) => (
-                        <div key={label} className="text-center p-3 rounded-xl bg-muted/30">
-                          <Icon className="w-4 h-4 mx-auto mb-1.5 text-indigo-500" />
-                          <p className="text-[10px] font-semibold">{label}</p>
-                          <p className="text-[9px] text-muted-foreground mt-0.5 leading-tight">{desc}</p>
+                        <div key={label} className="text-center p-2.5 rounded-xl bg-muted/30">
+                          <Icon className="w-4 h-4 mx-auto mb-1 text-indigo-500" />
+                          <p className="text-[10px] font-semibold leading-tight">{label}</p>
+                          <p className="text-[9px] text-muted-foreground mt-0.5 leading-tight hidden sm:block">{desc}</p>
                         </div>
                       ))}
                     </div>
@@ -245,12 +256,11 @@ export function ClientProposalsClient({ proposals }: Props) {
                 >
                   <p className="text-sm font-semibold text-red-800">Are you sure you want to decline?</p>
                   <p className="text-xs text-red-600">Your coordinator will reach out with a revised proposal. This may take 24–48 hours.</p>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="flex-1" onClick={() => setConfirmDecline(null)}>Keep Proposal</Button>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Button variant="outline" className="flex-1 h-11" onClick={() => setConfirmDecline(null)}>Keep Proposal</Button>
                     <Button
-                      size="sm"
                       variant="outline"
-                      className="flex-1 border-red-300 text-red-600 hover:bg-red-50"
+                      className="flex-1 h-11 border-red-300 text-red-600 hover:bg-red-50"
                       loading={rejecting === proposal.id}
                       onClick={() => rejectProposal(proposal.id)}
                     >
@@ -262,13 +272,13 @@ export function ClientProposalsClient({ proposals }: Props) {
                 <div className="space-y-3">
                   {/* Primary CTA */}
                   <Button
-                    className="w-full h-14 text-base font-semibold bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-lg shadow-emerald-200 rounded-2xl"
+                    className="w-full h-14 sm:h-14 text-base font-bold bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-lg shadow-emerald-200 rounded-2xl active:scale-[0.98] transition-transform"
                     loading={accepting === proposal.id}
                     onClick={() => acceptProposal(proposal.id, proposal.enquiry_id)}
                   >
-                    <ThumbsUp className="w-5 h-5 mr-2" />
+                    <ThumbsUp className="w-5 h-5 mr-2 flex-shrink-0" />
                     Accept & Confirm Booking
-                    <ArrowRight className="w-4 h-4 ml-2" />
+                    <ArrowRight className="w-4 h-4 ml-2 flex-shrink-0" />
                   </Button>
 
                   <p className="text-center text-xs text-muted-foreground flex items-center justify-center gap-1.5">
@@ -294,8 +304,8 @@ export function ClientProposalsClient({ proposals }: Props) {
   if (proposals.length === 0) {
     return (
       <div className="p-6 max-w-xl mx-auto py-24 text-center">
-        <div className="w-20 h-20 rounded-3xl gold-gradient flex items-center justify-center mx-auto mb-5">
-          <Sparkles className="w-10 h-10 text-navy-900" />
+        <div className="flex justify-center mb-5">
+          <BrandLogo size="lg" />
         </div>
         <h2 className="font-display font-bold text-2xl mb-2">No proposals yet</h2>
         <p className="text-muted-foreground text-sm max-w-xs mx-auto">

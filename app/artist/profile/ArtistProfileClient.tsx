@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { motion } from "framer-motion";
-import { Camera, Plus, X, Save, Star, CheckCircle2, Upload, Loader2, Image as ImageIcon, Video } from "lucide-react";
+import { Camera, Plus, X, Save, Star, CheckCircle2, Upload, Loader2, Image as ImageIcon, Video, EyeOff, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,8 @@ import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import { ArtistProfile, ArtistMedia, User } from "@/types";
 import { ARTIST_CATEGORIES, INDIA_CITIES, formatCurrency, getInitials } from "@/lib/utils";
+import { evaluateArtistProfile, type ArtistProfileCompletionInput } from "@/lib/artist-profile-completion";
+import { ProfileCompletionGauge } from "@/components/artist/ProfileCompletionGauge";
 
 const profileSchema = z.object({
   bio: z.string().min(20, "Bio must be at least 20 characters"),
@@ -39,9 +41,12 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(user.avatar_url ?? null);
   const [mediaList, setMediaList] = useState<ArtistMedia[]>(initialMedia);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const [selectedCategories, setSelectedCategories] = useState<string[]>(
     artistProfile?.categories ?? []
   );
@@ -49,7 +54,7 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
     artistProfile?.cities ?? []
   );
 
-  const { register, handleSubmit, formState: { errors } } = useForm<ProfileFormData>({
+  const { register, handleSubmit, watch, getValues, formState: { errors } } = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
       bio: artistProfile?.bio ?? "",
@@ -59,6 +64,77 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
       youtube: artistProfile?.social_links?.youtube ?? "",
     },
   });
+
+  const wBio = watch("bio");
+  const wBasePrice = watch("base_price");
+  const wInstagram = watch("instagram");
+  const wYoutube = watch("youtube");
+  const wRiderNotes = watch("rider_notes");
+
+  const photos = mediaList.filter((m) => m.type === "photo");
+  const videos = mediaList.filter((m) => m.type === "video");
+
+  const flushProfileCompleteToDb = async (explicitPhotoCount?: number, explicitHasAvatar?: boolean) => {
+    if (!artistProfile?.id) return;
+    const supabase = createClient();
+    const snap: ArtistProfileCompletionInput = {
+      bio: getValues("bio") ?? "",
+      base_price: Number(getValues("base_price")) || 0,
+      categories: selectedCategories,
+      cities: selectedCities,
+      photoCount: explicitPhotoCount ?? photos.length,
+      hasAvatar: explicitHasAvatar ?? !!avatarUrl,
+      instagram: getValues("instagram"),
+      youtube: getValues("youtube"),
+      rider_notes: getValues("rider_notes"),
+    };
+    const { isComplete } = evaluateArtistProfile(snap);
+    await supabase.from("artist_profiles").update({ is_profile_complete: isComplete }).eq("id", artistProfile.id);
+  };
+
+  const liveCompletion = useMemo(() => {
+    const snap: ArtistProfileCompletionInput = {
+      bio: wBio ?? "",
+      base_price: Number(wBasePrice) || 0,
+      categories: selectedCategories,
+      cities: selectedCities,
+      photoCount: photos.length,
+      hasAvatar: !!avatarUrl,
+      instagram: wInstagram,
+      youtube: wYoutube,
+      rider_notes: wRiderNotes,
+    };
+    return evaluateArtistProfile(snap);
+  }, [wBio, wBasePrice, wInstagram, wYoutube, wRiderNotes, selectedCategories, selectedCities, photos.length, avatarUrl]);
+
+  const uploadAvatar = async (file: File) => {
+    if (!file) return;
+    setUploadingAvatar(true);
+    const supabase = createClient();
+    const ext = file.name.split(".").pop() ?? "jpg";
+    const path = `profile/${user.id}.${ext}`;
+    const { error: upErr } = await supabase.storage
+      .from("artist-media")
+      .upload(path, file, { cacheControl: "3600", upsert: true });
+    if (upErr) {
+      toast.error("Failed to upload photo: " + upErr.message);
+      setUploadingAvatar(false);
+      return;
+    }
+    const { data: urlData } = supabase.storage.from("artist-media").getPublicUrl(path);
+    const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+    const { error: dbErr } = await supabase.from("users").update({ avatar_url: publicUrl }).eq("id", user.id);
+    if (dbErr) {
+      toast.error("Failed to save photo");
+      setUploadingAvatar(false);
+      return;
+    }
+    setAvatarUrl(publicUrl);
+    toast.success("Profile photo updated!");
+    await flushProfileCompleteToDb(undefined, true);
+    setUploadingAvatar(false);
+    router.refresh();
+  };
 
   const toggleCategory = (cat: string) => {
     setSelectedCategories((prev) =>
@@ -76,6 +152,17 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
     setSaving(true);
     try {
       const supabase = createClient();
+      const { isComplete } = evaluateArtistProfile({
+        bio: data.bio,
+        base_price: data.base_price,
+        categories: selectedCategories,
+        cities: selectedCities,
+        photoCount: photos.length,
+        hasAvatar: !!avatarUrl,
+        instagram: data.instagram,
+        youtube: data.youtube,
+        rider_notes: data.rider_notes,
+      });
       await supabase
         .from("artist_profiles")
         .update({
@@ -88,6 +175,7 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
             instagram: data.instagram,
             youtube: data.youtube,
           },
+          is_profile_complete: isComplete,
         })
         .eq("user_id", user.id);
 
@@ -107,6 +195,7 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
     }
     setUploading(true);
     const supabase = createClient();
+    let aggregated = [...mediaList];
     for (const file of Array.from(files)) {
       const isVideo = file.type.startsWith("video/");
       const ext = file.name.split(".").pop();
@@ -131,11 +220,15 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
         .select()
         .single();
       if (!dbErr && record) {
-        setMediaList((prev) => [...prev, record as ArtistMedia]);
+        aggregated = [...aggregated, record as ArtistMedia];
+        setMediaList(aggregated);
         toast.success(`${file.name} uploaded!`);
       }
     }
+    const photoCount = aggregated.filter((m) => m.type === "photo").length;
+    await flushProfileCompleteToDb(photoCount);
     setUploading(false);
+    router.refresh();
   };
 
   const deleteMedia = async (item: ArtistMedia) => {
@@ -147,9 +240,13 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
       await supabase.storage.from("artist-media").remove([urlParts[1]]);
     }
     await supabase.from("artist_media").delete().eq("id", item.id);
-    setMediaList((prev) => prev.filter((m) => m.id !== item.id));
+    const next = mediaList.filter((m) => m.id !== item.id);
+    setMediaList(next);
+    const photoCount = next.filter((m) => m.type === "photo").length;
+    await flushProfileCompleteToDb(photoCount);
     toast.success("Removed");
     setDeletingId(null);
+    router.refresh();
   };
 
   const setPrimary = async (id: string) => {
@@ -161,39 +258,108 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
     toast.success("Primary photo set!");
   };
 
-  const photos = mediaList.filter((m) => m.type === "photo");
-  const videos = mediaList.filter((m) => m.type === "video");
-
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-4xl mx-auto">
-      {/* Profile header */}
+      {artistProfile && (
+        <ProfileCompletionGauge
+          percent={liveCompletion.percent}
+          isComplete={liveCompletion.isComplete}
+          items={liveCompletion.items}
+          verified={artistProfile.is_verified}
+          listed={artistProfile.is_listed !== false}
+          showOnExplore={
+            liveCompletion.isComplete &&
+            !!artistProfile.is_verified &&
+            artistProfile.is_listed !== false
+          }
+        />
+      )}
+      {artistProfile && artistProfile.is_listed === false && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 flex items-start gap-2">
+          <EyeOff className="w-5 h-5 flex-shrink-0 mt-0.5 text-amber-700" />
+          <p>
+            <span className="font-semibold">Hidden from browse.</span> Complete the checklist above; an admin must list your
+            profile for you to appear. Until checklist + verified + listed, clients won&apos;t see you on explore — existing bookings
+            stay as they are.
+          </p>
+        </div>
+      )}
+      {/* Profile header — only avatar overlaps the banner; text stays on solid card */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="rounded-2xl overflow-hidden border"
+        className="rounded-2xl border bg-card shadow-sm overflow-hidden"
       >
-        <div className="h-32 navy-gradient relative">
-          <div className="absolute inset-0 gold-shimmer bg-gold-shimmer bg-[length:200%_100%] animate-shimmer opacity-20" />
+        <div className="h-24 sm:h-28 navy-gradient relative">
+          <div className="absolute inset-0 gold-shimmer bg-gold-shimmer bg-[length:200%_100%] animate-shimmer opacity-20 pointer-events-none" />
         </div>
-        <div className="px-6 pb-6">
-          <div className="flex items-end gap-4 -mt-10 mb-4">
-            <div className="w-20 h-20 rounded-2xl gold-gradient border-4 border-background flex items-center justify-center text-navy-900 font-bold text-2xl shadow-xl">
-              {getInitials(user.name)}
+        <div className="relative z-[1] px-4 sm:px-6 pb-6 pt-3 bg-card">
+          <div className="flex flex-col sm:flex-row gap-4 sm:items-end sm:gap-6">
+            <div className="-mt-12 sm:-mt-14 relative z-[2] shrink-0 self-start sm:self-auto">
+              {/* Hidden avatar file input */}
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => e.target.files?.[0] && uploadAvatar(e.target.files[0])}
+              />
+              <button
+                type="button"
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={uploadingAvatar}
+                className="group relative w-[4.75rem] h-[4.75rem] sm:w-20 sm:h-20 rounded-2xl border-4 border-card shadow-lg overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500"
+                title="Upload profile photo"
+              >
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+                ) : (
+                  <div className={`w-full h-full flex flex-col items-center justify-center gap-0.5 ${uploadingAvatar ? "gold-gradient" : "bg-amber-50 border-2 border-dashed border-amber-400"}`}>
+                    {uploadingAvatar ? (
+                      <Loader2 className="w-5 h-5 text-navy-900 animate-spin" />
+                    ) : (
+                      <>
+                        <Camera className="w-5 h-5 text-amber-500" />
+                        <span className="text-[9px] font-semibold text-amber-600 leading-tight">Add Photo</span>
+                      </>
+                    )}
+                  </div>
+                )}
+                {/* Hover overlay */}
+                {avatarUrl && !uploadingAvatar && (
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Camera className="w-5 h-5 text-white" />
+                  </div>
+                )}
+                {uploadingAvatar && avatarUrl && (
+                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                    <Loader2 className="w-5 h-5 text-white animate-spin" />
+                  </div>
+                )}
+              </button>
+              {/* Required badge when no photo */}
+              {!avatarUrl && (
+                <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shadow">
+                  Required
+                </span>
+              )}
             </div>
-            <div className="pb-2">
-              <h2 className="font-display text-xl font-bold">{user.name}</h2>
-              <p className="text-muted-foreground text-sm">{user.email}</p>
-              <div className="flex items-center gap-2 mt-1">
+            <div className="min-w-0 flex-1 space-y-2 sm:pb-0.5">
+              <h2 className="font-display text-lg sm:text-xl font-bold text-navy-900 truncate">
+                {user.name}
+              </h2>
+              <p className="text-muted-foreground text-sm break-all">{user.email}</p>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                 {artistProfile?.is_verified ? (
                   <div className="flex items-center gap-1 text-xs text-emerald-600 font-medium">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                     Verified Artist
                   </div>
                 ) : (
                   <div className="text-xs text-muted-foreground">Profile under review</div>
                 )}
                 <div className="flex items-center gap-1">
-                  <Star className="w-3.5 h-3.5 fill-gold-500 text-gold-500" />
+                  <Star className="w-3.5 h-3.5 fill-gold-500 text-gold-500 shrink-0" />
                   <span className="text-xs font-medium">{(artistProfile?.rating ?? 0).toFixed(1)}</span>
                 </div>
               </div>
@@ -202,7 +368,26 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
         </div>
       </motion.div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      {!avatarUrl && (
+    <button
+      type="button"
+      onClick={() => avatarInputRef.current?.click()}
+      className="w-full rounded-2xl border-2 border-dashed border-amber-400 bg-amber-50/60 px-4 py-3.5 flex items-center gap-3 hover:bg-amber-50 transition-colors text-left"
+    >
+      <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
+        <AlertCircle className="w-5 h-5 text-amber-600" />
+      </div>
+      <div>
+        <p className="text-sm font-semibold text-amber-900">Profile photo required</p>
+        <p className="text-xs text-amber-700 mt-0.5">Tap to upload a photo. Clients can&apos;t book artists without a profile picture.</p>
+      </div>
+      <div className="ml-auto flex items-center gap-1.5 text-amber-700 text-xs font-semibold flex-shrink-0">
+        <Camera className="w-4 h-4" />Upload
+      </div>
+    </button>
+  )}
+
+  <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         {/* Bio & Pricing */}
         <Card>
           <CardHeader><CardTitle>About You</CardTitle></CardHeader>

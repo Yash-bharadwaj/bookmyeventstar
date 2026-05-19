@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Download, X, Star, Smartphone } from "lucide-react";
+import { Download, X, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -77,9 +78,7 @@ export function InstallPrompt() {
           >
             <div className="bg-navy-900 border border-gold-500/30 rounded-2xl p-4 shadow-2xl shadow-gold-500/10">
               <div className="flex items-start gap-3">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold-500 to-gold-600 flex items-center justify-center flex-shrink-0">
-                  <Star className="w-6 h-6 text-navy-900 fill-navy-900" />
-                </div>
+                <BrandLogo size="sm" frame={false} className="flex-shrink-0" imgClassName="!h-10 !max-w-[100px]" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
                     <p className="font-semibold text-white text-sm">Install BookMyEventStar</p>

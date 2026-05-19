@@ -13,6 +13,7 @@ import {
   Wrench,
   Receipt,
   UtensilsCrossed,
+  Bell,
   type LucideIcon,
 } from "lucide-react";
 import { StatCard } from "./StatCard";
@@ -28,6 +29,7 @@ interface CoordinatorOverviewProps {
   enquiries: Enquiry[];
   upcomingBookings: Booking[];
   pendingTasks: (Task & { booking?: { event_date: string; venue: string; city: string } })[];
+  followUpEnquiries?: (Enquiry & { follow_up_date: string; follow_up_notes?: string })[];
 }
 
 const taskTypeLabels: Record<string, string> = {
@@ -58,6 +60,7 @@ export function CoordinatorOverview({
   enquiries,
   upcomingBookings,
   pendingTasks,
+  followUpEnquiries = [],
 }: CoordinatorOverviewProps) {
   const router = useRouter();
 
@@ -92,6 +95,46 @@ export function CoordinatorOverview({
             <ArrowRight className="w-3 h-3 ml-1" />
           </Button>
         </motion.div>
+      )}
+
+      {/* Today's Follow-ups */}
+      {followUpEnquiries.length > 0 && (
+        <Card className="border-violet-200 bg-violet-50/30">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Bell className="w-4 h-4 text-violet-500" />
+              Today&apos;s Follow-ups ({followUpEnquiries.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {followUpEnquiries.map((e, i) => (
+              <motion.div
+                key={e.id}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.06 }}
+              >
+                <Link href={`/coordinator/enquiries/${e.id}`}>
+                  <div className="flex items-center justify-between p-3 rounded-xl border bg-white hover:border-violet-300 hover:shadow-sm transition-all">
+                    <div>
+                      <p className="font-semibold text-sm">{e.event_type}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{e.client?.name} · {e.city}</p>
+                      {e.follow_up_notes && (
+                        <p className="text-xs text-violet-600 mt-0.5 truncate max-w-xs">{e.follow_up_notes}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${getStatusColor(e.status)}`}>
+                        {getStatusLabel(e.status)}
+                      </span>
+                      <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                  </div>
+                </Link>
+              </motion.div>
+            ))}
+          </CardContent>
+        </Card>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

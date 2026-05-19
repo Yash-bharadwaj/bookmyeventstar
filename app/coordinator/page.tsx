@@ -13,7 +13,7 @@ export default async function CoordinatorPage() {
 
   const today = new Date().toISOString().split("T")[0];
 
-  const [{ data: myEnquiries }, { data: myBookings }, { data: pendingTasks }] = await Promise.all([
+  const [{ data: myEnquiries }, { data: myBookings }, { data: pendingTasks }, { data: followUps }] = await Promise.all([
     supabase
       .from("enquiries")
       .select("*, client:users!enquiries_client_id_fkey(name,email,phone)")
@@ -42,6 +42,15 @@ export default async function CoordinatorPage() {
       )
       .order("due_date")
       .limit(10),
+    supabase
+      .from("enquiries")
+      .select("*, client:users!enquiries_client_id_fkey(name,email,phone)")
+      .eq("coordinator_id", user.id)
+      .lte("follow_up_date", today)
+      .not("follow_up_date", "is", null)
+      .not("status", "in", '("completed","cancelled")')
+      .order("follow_up_date")
+      .limit(10),
   ]);
 
   return (
@@ -50,6 +59,7 @@ export default async function CoordinatorPage() {
         enquiries={myEnquiries ?? []}
         upcomingBookings={myBookings ?? []}
         pendingTasks={pendingTasks ?? []}
+        followUpEnquiries={(followUps ?? []) as any}
       />
     </DashboardLayout>
   );

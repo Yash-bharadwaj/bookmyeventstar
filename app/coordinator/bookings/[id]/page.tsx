@@ -13,13 +13,14 @@ export default async function CoordinatorBookingDetailPage({ params }: { params:
   const { data: booking } = await supabase
     .from("bookings")
     .select(`
-      id, event_date, venue, city, advance_amount, total_amount, balance_amount, status, special_requirements, enquiry_id, artist_id, coordinator_id, created_at,
+      id, event_date, venue, city, advance_amount, total_amount, balance_amount, status, special_requirements, cancellation_reason, enquiry_id, artist_id, coordinator_id, created_at,
       enquiry:enquiries(event_type, client:users!enquiries_client_id_fkey(id,name,email,phone)),
       artist:artist_profiles!bookings_artist_id_fkey(
-        id, categories, bio,
+        id, user_id, categories, bio,
         user:users!artist_profiles_user_id_fkey(name,email,phone)
       ),
-      tasks:tasks(*)
+      tasks:tasks(*),
+      settlement:payments(amount, status, type)
     `)
     .eq("id", params.id)
     .eq("coordinator_id", user.id)
@@ -29,6 +30,8 @@ export default async function CoordinatorBookingDetailPage({ params }: { params:
 
   const rawEnquiry: any = Array.isArray(booking.enquiry) ? booking.enquiry[0] ?? null : booking.enquiry;
   const rawArtist: any = Array.isArray(booking.artist) ? booking.artist[0] ?? null : booking.artist;
+  const payments: any[] = Array.isArray(booking.settlement) ? booking.settlement : [];
+  const settlementPayment = payments.find((p: any) => p.type === "artist_settlement" && p.status === "paid") ?? null;
 
   const b = {
     ...booking,
@@ -40,6 +43,7 @@ export default async function CoordinatorBookingDetailPage({ params }: { params:
       ...rawArtist,
       user: Array.isArray(rawArtist.user) ? rawArtist.user[0] ?? null : rawArtist.user,
     } : null,
+    settlement: settlementPayment,
   };
 
   return (

@@ -4,12 +4,17 @@ import { useState } from "react";
 import {
   ArrowLeft, Calendar, MapPin, User, Phone, Mail,
   IndianRupee, Mic2, CheckCircle, Plane, Wrench, Receipt, UtensilsCrossed,
+  Wallet, AlertTriangle,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatDate, formatCurrency, getStatusColor, getStatusLabel, getInitials } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import toast from "react-hot-toast";
@@ -40,6 +45,18 @@ export function CoordinatorBookingDetail({ booking }: { booking: any }) {
   const [updatingTask, setUpdatingTask] = useState<string | null>(null);
   const [bookingStatus, setBookingStatus] = useState(booking.status);
   const [savingStatus, setSavingStatus] = useState(false);
+  // Cancellation
+  const [cancellationReason, setCancellationReason] = useState("");
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  // Artist Settlement
+  const [settlementAmount, setSettlementAmount] = useState(
+    String(Math.round(booking.total_amount * 0.7))
+  );
+  const [settlementNotes, setSettlementNotes] = useState("");
+  const [savingSettlement, setSavingSettlement] = useState(false);
+  const [existingSettlement, setExistingSettlement] = useState<{ amount: number; status: string } | null>(
+    booking.settlement ?? null
+  );
 
   const updateTask = async (taskId: string, done: boolean) => {
     setUpdatingTask(taskId);
@@ -50,13 +67,60 @@ export function CoordinatorBookingDetail({ booking }: { booking: any }) {
     router.refresh();
   };
 
-  const updateStatus = async () => {
+  const updateStatus = async (overrideStatus?: string, reason?: string) => {
+    const finalStatus = overrideStatus ?? bookingStatus;
     setSavingStatus(true);
     const supabase = createClient();
-    await supabase.from("bookings").update({ status: bookingStatus }).eq("id", booking.id);
+    const updatePayload: Record<string, unknown> = { status: finalStatus };
+    if (finalStatus === "cancelled" && reason) updatePayload.cancellation_reason = reason;
+    await supabase.from("bookings").update(updatePayload).eq("id", booking.id);
+    if (finalStatus === "completed") {
+      await supabase.from("enquiries").update({ status: "completed" }).eq("id", booking.enquiry_id);
+    }
     toast.success("Booking status updated!");
     setSavingStatus(false);
+    setShowCancelDialog(false);
     router.refresh();
+  };
+
+  const handleStatusChange = (newStatus: string) => {
+    setBookingStatus(newStatus);
+    if (newStatus === "cancelled") setShowCancelDialog(true);
+  };
+
+  const recordSettlement = async () => {
+    if (!settlementAmount || Number(settlementAmount) <= 0) {
+      toast.error("Enter a valid settlement amount");
+      return;
+    }
+    setSavingSettlement(true);
+    const supabase = createClient();
+    const { error } = await supabase.from("payments").insert({
+      booking_id: booking.id,
+      type: "artist_settlement",
+      amount: Number(settlementAmount),
+      status: "paid",
+      notes: settlementNotes || `Settlement for booking ${booking.id.slice(0, 8).toUpperCase()}`,
+      paid_at: new Date().toISOString(),
+    });
+    if (error) {
+      toast.error("Failed to record settlement");
+    } else {
+      // Notify artist
+      if (booking.artist?.user_id) {
+        await supabase.from("notifications").insert({
+          user_id: booking.artist.user_id,
+          title: "Payment Settled",
+          message: `Your settlement of ${new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 0 }).format(Number(settlementAmount))} has been processed.`,
+          type: "success",
+          link: "/artist/earnings",
+        });
+      }
+      setExistingSettlement({ amount: Number(settlementAmount), status: "paid" });
+      toast.success("Artist settlement recorded!");
+      router.refresh();
+    }
+    setSavingSettlement(false);
   };
 
   const completedTasks = (booking.tasks ?? []).filter((t: any) => t.status === "done").length;
@@ -171,23 +235,134 @@ export function CoordinatorBookingDetail({ booking }: { booking: any }) {
       <div className="rounded-2xl border p-5 space-y-3">
         <h2 className="font-semibold text-sm">Update Booking Status</h2>
         <div className="flex items-center gap-3">
-          <Select value={bookingStatus} onValueChange={setBookingStatus}>
+          <Select value={bookingStatus} onValueChange={handleStatusChange}>
             <SelectTrigger className="w-48">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="pending">Pending (Awaiting Artist)</SelectItem>
               <SelectItem value="confirmed">Confirmed</SelectItem>
               <SelectItem value="in_progress">In Progress</SelectItem>
               <SelectItem value="completed">Completed</SelectItem>
               <SelectItem value="cancelled">Cancelled</SelectItem>
             </SelectContent>
           </Select>
-          <Button onClick={updateStatus} loading={savingStatus} disabled={bookingStatus === booking.status}>
+          <Button
+            onClick={() => updateStatus()}
+            loading={savingStatus}
+            disabled={bookingStatus === booking.status || bookingStatus === "cancelled"}
+          >
             Update
           </Button>
         </div>
+        {booking.cancellation_reason && (
+          <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <span className="font-semibold">Cancellation reason:</span> {booking.cancellation_reason}
+          </p>
+        )}
       </div>
+
+      {/* Artist Settlement */}
+      {(booking.status === "completed" || booking.status === "in_progress") && (
+        <div className="rounded-2xl border p-5 space-y-4">
+          <h2 className="font-semibold text-sm flex items-center gap-2">
+            <Wallet className="w-4 h-4 text-emerald-500" />Artist Settlement
+          </h2>
+          {existingSettlement ? (
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-50 border border-emerald-200">
+              <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-emerald-800">Settlement Paid</p>
+                <p className="text-xs text-emerald-600">{formatCurrency(existingSettlement.amount)} settled to artist</p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-100">
+                  <p className="text-blue-500 font-medium">Total</p>
+                  <p className="font-bold text-blue-700 mt-0.5">{formatCurrency(booking.total_amount)}</p>
+                </div>
+                <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-100">
+                  <p className="text-amber-500 font-medium">Platform Fee (~30%)</p>
+                  <p className="font-bold text-amber-700 mt-0.5">{formatCurrency(Math.round(booking.total_amount * 0.3))}</p>
+                </div>
+                <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-100">
+                  <p className="text-emerald-500 font-medium">Artist Share (~70%)</p>
+                  <p className="font-bold text-emerald-700 mt-0.5">{formatCurrency(Math.round(booking.total_amount * 0.7))}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Settlement Amount (₹)</Label>
+                  <div className="relative">
+                    <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                    <Input
+                      type="number"
+                      className="pl-8"
+                      value={settlementAmount}
+                      onChange={(e) => setSettlementAmount(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Notes (optional)</Label>
+                  <Input
+                    placeholder="e.g. via NEFT, ref #12345"
+                    value={settlementNotes}
+                    onChange={(e) => setSettlementNotes(e.target.value)}
+                  />
+                </div>
+              </div>
+              <Button
+                onClick={recordSettlement}
+                loading={savingSettlement}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                <Wallet className="w-4 h-4 mr-2" />Record Artist Settlement
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Cancellation Dialog */}
+      <Dialog open={showCancelDialog} onOpenChange={(o) => { if (!o) { setShowCancelDialog(false); setBookingStatus(booking.status); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="w-5 h-5" />Cancel Booking
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <p className="text-sm text-muted-foreground">
+              This will cancel the booking for <span className="font-semibold text-foreground">{booking.enquiry?.event_type}</span>. Please provide a reason.
+            </p>
+            <div className="space-y-1.5">
+              <Label>Cancellation Reason <span className="text-destructive">*</span></Label>
+              <Textarea
+                placeholder="e.g. Client requested cancellation, Artist unavailable, Budget constraints…"
+                value={cancellationReason}
+                onChange={(e) => setCancellationReason(e.target.value)}
+                className="min-h-[80px]"
+              />
+            </div>
+            <div className="flex gap-3 justify-end">
+              <Button variant="outline" onClick={() => { setShowCancelDialog(false); setBookingStatus(booking.status); }}>
+                Go Back
+              </Button>
+              <Button
+                className="bg-red-600 hover:bg-red-700 text-white"
+                loading={savingStatus}
+                disabled={!cancellationReason.trim()}
+                onClick={() => updateStatus("cancelled", cancellationReason)}
+              >
+                Confirm Cancellation
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Tasks Checklist */}
       <div className="rounded-2xl border p-5 space-y-4">

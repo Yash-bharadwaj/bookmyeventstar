@@ -4,7 +4,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Star, CheckCircle2, XCircle, Phone, MapPin,
-  Filter, X, Shield, ShieldOff,
+  Filter, X, Shield, ShieldOff, Eye, EyeOff,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -25,15 +25,28 @@ const VERIFY_TABS = [
   { key: "verified",   label: "Verified" },
 ];
 
+const LIST_TABS = [
+  { key: "all",     label: "All visibility" },
+  { key: "listed",  label: "Listed for clients" },
+  { key: "unlisted", label: "Hidden from browse" },
+];
+
+function isListedProfile(a: ArtistWithUser) {
+  return a.is_listed !== false;
+}
+
 export function AdminArtistsClient({ artists }: { artists: ArtistWithUser[] }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [verifyTab, setVerifyTab] = useState("all");
+  const [listTab, setListTab] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [showCategoryFilter, setShowCategoryFilter] = useState(false);
   const [toggling, setToggling] = useState<string | null>(null);
+  const [listingToggling, setListingToggling] = useState<string | null>(null);
 
   const unverifiedCount = artists.filter((a) => !a.is_verified).length;
+  const hiddenCount = artists.filter((a) => a.is_listed === false).length;
 
   const filtered = artists.filter((a) => {
     const matchesSearch =
@@ -46,9 +59,14 @@ export function AdminArtistsClient({ artists }: { artists: ArtistWithUser[] }) {
       verifyTab === "verified" ? a.is_verified :
       !a.is_verified;
 
+    const matchesList =
+      listTab === "all" ? true :
+      listTab === "listed" ? isListedProfile(a) :
+      !isListedProfile(a);
+
     const matchesCategory = !categoryFilter || a.categories.includes(categoryFilter);
 
-    return matchesSearch && matchesVerify && matchesCategory;
+    return matchesSearch && matchesVerify && matchesList && matchesCategory;
   });
 
   const toggleVerify = async (artistId: string, current: boolean) => {
@@ -61,6 +79,28 @@ export function AdminArtistsClient({ artists }: { artists: ArtistWithUser[] }) {
     if (error) toast.error("Failed to update");
     else toast.success(current ? "Artist unverified" : "Artist verified!");
     setToggling(null);
+    router.refresh();
+  };
+
+  const toggleListed = async (artistId: string, currentListed: boolean) => {
+    setListingToggling(artistId);
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("artist_profiles")
+      .update({ is_listed: !currentListed })
+      .eq("id", artistId);
+    if (error) toast.error("Failed to update visibility");
+    else if (!currentListed) {
+      const a = artists.find((x) => x.id === artistId);
+      if (a?.is_profile_complete && a.is_verified) {
+        toast.success("Artist listed and eligible to appear on explore once filters match.");
+      } else {
+        toast.success(
+          "Listed. Explore requires a complete profile checklist, verification, and this listing toggle."
+        );
+      }
+    } else toast.success("Artist hidden from client & coordinator browse");
+    setListingToggling(null);
     router.refresh();
   };
 
@@ -87,6 +127,29 @@ export function AdminArtistsClient({ artists }: { artists: ArtistWithUser[] }) {
             {tab.key === "all" && (
               <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground">
                 {artists.length}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Directory listing (clients & coordinators) */}
+      <div className="flex gap-2 border-b pb-1 -mt-1">
+        {LIST_TABS.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setListTab(tab.key)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-2 ${
+              listTab === tab.key
+                ? "text-slate-900 bg-slate-100"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {tab.label}
+            {tab.key === "unlisted" && hiddenCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-700">
+                {hiddenCount}
               </span>
             )}
           </button>
@@ -169,7 +232,7 @@ export function AdminArtistsClient({ artists }: { artists: ArtistWithUser[] }) {
               transition={{ delay: i * 0.04 }}
               className={`rounded-2xl border p-4 hover:shadow-md transition-all ${
                 !artist.is_verified ? "border-amber-200 bg-amber-50/20" : ""
-              }`}
+              } ${!isListedProfile(artist) ? "border-dashed border-slate-300 bg-slate-50/50" : ""}`}
             >
               {/* Header */}
               <div className="flex items-start justify-between gap-3 mb-3">
@@ -184,7 +247,7 @@ export function AdminArtistsClient({ artists }: { artists: ArtistWithUser[] }) {
                     <p className="text-xs text-muted-foreground truncate">{artist.user.email}</p>
                   </div>
                 </div>
-                <div className="flex-shrink-0">
+                <div className="flex-shrink-0 flex flex-col items-end gap-1">
                   {artist.is_verified ? (
                     <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">
                       <CheckCircle2 className="w-3 h-3" />Verified
@@ -192,6 +255,24 @@ export function AdminArtistsClient({ artists }: { artists: ArtistWithUser[] }) {
                   ) : (
                     <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">
                       <XCircle className="w-3 h-3" />Pending
+                    </span>
+                  )}
+                  {artist.is_profile_complete === true ? (
+                    <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-violet-100 text-violet-800 font-semibold">
+                      Profile complete
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 font-semibold">
+                      Profile incomplete
+                    </span>
+                  )}
+                  {isListedProfile(artist) ? (
+                    <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-medium">
+                      <Eye className="w-3 h-3" />Listed
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 font-medium">
+                      <EyeOff className="w-3 h-3" />Hidden
                     </span>
                   )}
                 </div>
@@ -232,14 +313,33 @@ export function AdminArtistsClient({ artists }: { artists: ArtistWithUser[] }) {
                 <span className="font-semibold text-indigo-700">{formatCurrency(artist.base_price)}</span>
               </div>
 
-              {/* Action */}
-              <Button
-                size="sm"
-                variant={artist.is_verified ? "outline" : "default"}
-                className={`w-full mt-3 ${artist.is_verified ? "border-red-200 text-red-600 hover:bg-red-50" : "bg-emerald-600 hover:bg-emerald-700 text-white"}`}
-                disabled={toggling === artist.id}
-                onClick={() => toggleVerify(artist.id, artist.is_verified)}
-              >
+              {/* Actions */}
+              <div className="space-y-2 mt-3">
+                <Button
+                  size="sm"
+                  variant={isListedProfile(artist) ? "outline" : "default"}
+                  className={`w-full ${isListedProfile(artist) ? "border-slate-300" : "bg-slate-700 hover:bg-slate-800 text-white"}`}
+                  disabled={listingToggling === artist.id}
+                  onClick={() => toggleListed(artist.id, isListedProfile(artist))}
+                >
+                  {listingToggling === artist.id ? (
+                    <span className="flex items-center gap-2 justify-center">
+                      <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                      Updating…
+                    </span>
+                  ) : isListedProfile(artist) ? (
+                    <><EyeOff className="w-3.5 h-3.5 mr-1.5" />Hide from clients & coordinators</>
+                  ) : (
+                    <><Eye className="w-3.5 h-3.5 mr-1.5" />List for clients & coordinators</>
+                  )}
+                </Button>
+                <Button
+                  size="sm"
+                  variant={artist.is_verified ? "outline" : "default"}
+                  className={`w-full ${artist.is_verified ? "border-red-200 text-red-600 hover:bg-red-50" : "bg-emerald-600 hover:bg-emerald-700 text-white"}`}
+                  disabled={toggling === artist.id}
+                  onClick={() => toggleVerify(artist.id, artist.is_verified)}
+                >
                 {toggling === artist.id ? (
                   <span className="flex items-center gap-2">
                     <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
@@ -251,6 +351,7 @@ export function AdminArtistsClient({ artists }: { artists: ArtistWithUser[] }) {
                   <><Shield className="w-3.5 h-3.5 mr-1.5" />Verify Artist</>
                 )}
               </Button>
+              </div>
             </motion.div>
           ))}
         </div>

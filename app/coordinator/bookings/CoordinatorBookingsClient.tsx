@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { CheckCircle2, Clock, AlertCircle, Calendar, MapPin, User, IndianRupee, Mic2, Plane, Wrench, Receipt, UtensilsCrossed, ExternalLink, type LucideIcon } from "lucide-react";
+import { CheckCircle2, Clock, AlertCircle, Calendar, MapPin, User, IndianRupee, Mic2, Plane, Wrench, Receipt, UtensilsCrossed, ExternalLink, Search, XCircle, type LucideIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -55,6 +55,19 @@ const TASK_COLORS: Record<string, string> = {
 export function CoordinatorBookingsClient({ bookings }: { bookings: BookingWithExtras[] }) {
   const router = useRouter();
   const [updatingTask, setUpdatingTask] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+
+  const searchFilter = (b: BookingWithExtras) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (
+      b.venue?.toLowerCase().includes(q) ||
+      b.city?.toLowerCase().includes(q) ||
+      b.artist?.user.name?.toLowerCase().includes(q) ||
+      b.enquiry?.client?.name?.toLowerCase().includes(q) ||
+      b.enquiry?.event_type?.toLowerCase().includes(q)
+    );
+  };
 
   const updateTaskStatus = async (taskId: string, done: boolean) => {
     setUpdatingTask(taskId);
@@ -68,9 +81,9 @@ export function CoordinatorBookingsClient({ bookings }: { bookings: BookingWithE
     router.refresh();
   };
 
-  const upcoming = bookings.filter((b) => b.status === "confirmed" || b.status === "in_progress");
-  const completed = bookings.filter((b) => b.status === "completed");
-  const cancelled = bookings.filter((b) => b.status === "cancelled");
+  const upcoming  = bookings.filter((b) => (b.status === "confirmed" || b.status === "in_progress" || b.status === "pending") && searchFilter(b));
+  const completed = bookings.filter((b) => b.status === "completed" && searchFilter(b));
+  const cancelled = bookings.filter((b) => b.status === "cancelled" && searchFilter(b));
 
   const BookingCard = ({ booking }: { booking: BookingWithExtras }) => {
     const completedTasks = booking.tasks?.filter((t) => t.status === "done").length ?? 0;
@@ -197,31 +210,63 @@ export function CoordinatorBookingsClient({ bookings }: { bookings: BookingWithE
   };
 
   return (
-    <div className="p-4 md:p-6">
+    <div className="p-4 md:p-6 space-y-4">
+      {/* Search */}
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <input
+          placeholder="Search by venue, city, artist, client..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full pl-9 pr-10 py-2.5 rounded-xl border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+        />
+        {search && (
+          <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2">
+            <XCircle className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+          </button>
+        )}
+      </div>
+
       <Tabs defaultValue="upcoming">
         <TabsList>
-          <TabsTrigger value="upcoming">
-            Upcoming ({upcoming.length})
-          </TabsTrigger>
-          <TabsTrigger value="completed">
-            Completed ({completed.length})
-          </TabsTrigger>
-          <TabsTrigger value="cancelled">
-            Cancelled ({cancelled.length})
-          </TabsTrigger>
+          <TabsTrigger value="upcoming">Upcoming ({upcoming.length})</TabsTrigger>
+          <TabsTrigger value="completed">Completed ({completed.length})</TabsTrigger>
+          <TabsTrigger value="cancelled">Cancelled ({cancelled.length})</TabsTrigger>
         </TabsList>
         <TabsContent value="upcoming" className="mt-6 space-y-4">
           {upcoming.length === 0 ? (
-            <p className="text-center py-12 text-muted-foreground">No upcoming bookings</p>
+            <div className="py-14 text-center">
+              <Calendar className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
+              <p className="font-semibold text-sm">{search ? "No bookings match your search" : "No upcoming bookings"}</p>
+              <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
+                {search ? "Try a different keyword." : "Upcoming and in-progress events will appear here."}
+              </p>
+            </div>
           ) : (
             upcoming.map((b) => <BookingCard key={b.id} booking={b} />)
           )}
         </TabsContent>
         <TabsContent value="completed" className="mt-6 space-y-4">
-          {completed.map((b) => <BookingCard key={b.id} booking={b} />)}
+          {completed.length === 0 ? (
+            <div className="py-14 text-center">
+              <CheckCircle2 className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
+              <p className="font-semibold text-sm">{search ? "No completed bookings match your search" : "No completed bookings yet"}</p>
+              <p className="text-xs text-muted-foreground mt-1">Completed events will appear here after the event date passes.</p>
+            </div>
+          ) : (
+            completed.map((b) => <BookingCard key={b.id} booking={b} />)
+          )}
         </TabsContent>
         <TabsContent value="cancelled" className="mt-6 space-y-4">
-          {cancelled.map((b) => <BookingCard key={b.id} booking={b} />)}
+          {cancelled.length === 0 ? (
+            <div className="py-14 text-center">
+              <XCircle className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
+              <p className="font-semibold text-sm">{search ? "No cancelled bookings match your search" : "No cancelled bookings"}</p>
+              <p className="text-xs text-muted-foreground mt-1">That&apos;s great! No cancellations so far.</p>
+            </div>
+          ) : (
+            cancelled.map((b) => <BookingCard key={b.id} booking={b} />)
+          )}
         </TabsContent>
       </Tabs>
     </div>

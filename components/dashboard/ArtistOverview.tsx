@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "framer-motion";
 import {
   Star,
@@ -20,6 +21,10 @@ import { Button } from "@/components/ui/button";
 import { ArtistProfile, Booking } from "@/types";
 import { formatDate, formatCurrency, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { aggregateCompletionFromStoredProfile } from "@/lib/artist-profile-completion";
+import { ProfileCompletionGauge } from "@/components/artist/ProfileCompletionGauge";
+import toast from "react-hot-toast";
 
 interface ArtistOverviewProps {
   artistProfile: ArtistProfile | null;
@@ -29,6 +34,7 @@ interface ArtistOverviewProps {
   totalEarnings: number;
   upcomingCount: number;
   completedCount: number;
+  artistPhotoCount: number;
 }
 
 export function ArtistOverview({
@@ -37,34 +43,86 @@ export function ArtistOverview({
   totalEarnings,
   upcomingCount,
   completedCount,
+  artistPhotoCount,
 }: ArtistOverviewProps) {
   const router = useRouter();
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
   const today = new Date().toISOString().split("T")[0];
 
-  const pendingRequests = bookings.filter((b) => b.status === "confirmed" && b.event_date >= today);
+  const completion =
+    artistProfile !== null ? aggregateCompletionFromStoredProfile(artistProfile, artistPhotoCount) : null;
+
+  const pendingRequests = bookings.filter((b) => b.status === "pending");
   const recent = bookings.slice(0, 5);
+
+  const handleBookingAction = async (bookingId: string, action: "confirmed" | "cancelled") => {
+    setUpdatingId(bookingId);
+    const supabase = createClient();
+    const { error } = await supabase.from("bookings").update({ status: action }).eq("id", bookingId);
+    if (error) {
+      toast.error("Failed to update booking");
+    } else {
+      toast.success(action === "confirmed" ? "Booking accepted!" : "Booking declined");
+      // Notify coordinator
+      const { data: booking } = await supabase
+        .from("bookings")
+        .select("coordinator_id, enquiry:enquiries(event_type)")
+        .eq("id", bookingId)
+        .single();
+      if (booking?.coordinator_id) {
+        const eventType = (booking.enquiry as any)?.event_type ?? "event";
+        await supabase.from("notifications").insert({
+          user_id: booking.coordinator_id,
+          title: action === "confirmed" ? "Artist Confirmed Booking" : "Artist Declined Booking",
+          message: `Artist has ${action === "confirmed" ? "accepted" : "declined"} the booking for ${eventType}.`,
+          type: action === "confirmed" ? "success" : "warning",
+          link: "/coordinator/bookings",
+        });
+      }
+      router.refresh();
+    }
+    setUpdatingId(null);
+  };
 
   return (
     <div className="p-4 md:p-6 space-y-6">
-      {/* Profile completion alert */}
-      {artistProfile && (!artistProfile.bio || artistProfile.categories.length === 0) && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex items-center gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200"
-        >
-          <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0" />
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-amber-800">Complete your profile to get more bookings</p>
-            <p className="text-xs text-amber-600 mt-0.5">Add bio, categories, pricing and photos</p>
-          </div>
-          <Button size="sm" variant="outline" className="border-amber-300 text-amber-700"
-            onClick={() => router.push("/artist/profile")}>
-            Complete <ArrowRight className="w-3 h-3 ml-1" />
-          </Button>
-        </motion.div>
+      {completion && artistProfile && (
+        <ProfileCompletionGauge
+          percent={completion.percent}
+          isComplete={completion.isComplete}
+          items={completion.items}
+          verified={!!artistProfile.is_verified}
+          listed={artistProfile.is_listed !== false}
+          showOnExplore={
+            completion.isComplete &&
+            !!artistProfile.is_verified &&
+            artistProfile.is_listed !== false
+          }
+        />
       )}
 
+      {artistProfile &&
+        !(completion?.isComplete) && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200"
+          >
+            <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-amber-800">Finish your profile checklist</p>
+              <p className="text-xs text-amber-600 mt-0.5">You are not shown on browse until checklist, verification, and listing are complete</p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-amber-300 text-amber-700"
+              onClick={() => router.push("/artist/profile")}
+            >
+              Edit profile <ArrowRight className="w-3 h-3 ml-1" />
+            </Button>
+          </motion.div>
+        )}
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Total Earnings" value={formatCurrency(totalEarnings)} icon={IndianRupee} color="gold" index={0} />
@@ -124,10 +182,23 @@ export function ArtistOverview({
                 <div className="text-right">
                   <p className="font-bold text-sm">{formatCurrency(b.total_amount)}</p>
                   <div className="flex gap-2 mt-2">
-                    <Button size="sm" variant="outline" className="text-xs py-1 h-7 border-red-200 text-red-600">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs py-1 h-7 border-red-200 text-red-600"
+                      disabled={updatingId === b.id}
+                      onClick={() => handleBookingAction(b.id, "cancelled")}
+                    >
                       Decline
                     </Button>
-                    <Button size="sm" className="text-xs py-1 h-7">Accept</Button>
+                    <Button
+                      size="sm"
+                      className="text-xs py-1 h-7"
+                      disabled={updatingId === b.id}
+                      onClick={() => handleBookingAction(b.id, "confirmed")}
+                    >
+                      Accept
+                    </Button>
                   </div>
                 </div>
               </motion.div>

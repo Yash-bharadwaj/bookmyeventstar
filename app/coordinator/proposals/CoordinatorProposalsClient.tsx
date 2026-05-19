@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Send, Trash2, Building2, Star, Phone,
@@ -85,6 +85,7 @@ export function CoordinatorProposalsClient({
   const [bookingCity, setBookingCity] = useState("");
   const [totalAmount, setTotalAmount] = useState("");
   const [advanceAmount, setAdvanceAmount] = useState("");
+  const [selectedBookingArtistId, setSelectedBookingArtistId] = useState("");
 
   // Derive the selected enquiry object
   const selectedEnquiry = useMemo(
@@ -128,17 +129,60 @@ export function CoordinatorProposalsClient({
     setSelectedArtists((prev) => prev.map((s, idx) => idx === i ? { ...s, [field]: value } : s));
 
   const addArtistSlot = () =>
-    setSelectedArtists((prev) => [...prev, { artistId: "", name: "", price: 0, notes: "" }]);
+    setSelectedArtists((prev) =>
+      prev.length >= MAX_ARTISTS ? prev : [...prev, { artistId: "", name: "", price: 0, notes: "" }]
+    );
 
   const removeArtistSlot = (i: number) =>
     setSelectedArtists((prev) => prev.filter((_, idx) => idx !== i));
 
   const totalQuoted = selectedArtists.reduce((s, a) => Math.max(s, a.price), 0);
 
+  const MAX_ARTISTS = 5;
+
   const resetForm = () => {
     setSelectedEnquiryId(""); setContent(""); setValidityDate(addDays(DEFAULT_VALIDITY_DAYS));
     setSelectedArtists([{ artistId: "", name: "", price: 0, notes: "" }]);
   };
+
+  // Read sessionStorage on mount (coming from shortlist page)
+  useEffect(() => {
+    const storedArtistIds: string[] = JSON.parse(sessionStorage.getItem("shortlisted_artists") ?? "[]");
+    const storedEnquiryId: string = sessionStorage.getItem("shortlisted_enquiry") ?? "";
+
+    if (storedArtistIds.length === 0 && !storedEnquiryId) return;
+
+    // Clear so re-navigating doesn't re-trigger
+    sessionStorage.removeItem("shortlisted_artists");
+    sessionStorage.removeItem("shortlisted_enquiry");
+
+    // Pre-fill enquiry
+    if (storedEnquiryId) {
+      const enq = enquiries.find((e) => e.id === storedEnquiryId);
+      if (enq) {
+        setSelectedEnquiryId(storedEnquiryId);
+        setContent(
+          `Dear ${enq.client?.name ?? "Client"},\n\nThank you for your enquiry for ${enq.event_type} in ${enq.city} on ${formatDate(enq.event_date)}.\n\nBased on your requirements and budget, we have curated the following artist options for you. Please review and let us know your preference.`
+        );
+      }
+    }
+
+    // Pre-fill artists (max 5)
+    const capped = storedArtistIds.slice(0, MAX_ARTISTS);
+    if (capped.length > 0) {
+      const slots: SelectedArtist[] = capped.map((id) => {
+        const a = artists.find((x) => x.id === id);
+        return a
+          ? { artistId: id, name: a.user?.name ?? "", price: a.base_price, notes: "" }
+          : { artistId: id, name: "", price: 0, notes: "" };
+      });
+      setSelectedArtists(slots);
+    }
+
+    // Auto-open the create dialog
+    setShowCreate(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const sendProposal = async (proposalId: string, enquiryId: string) => {
     setSending(proposalId);
@@ -204,22 +248,27 @@ export function CoordinatorProposalsClient({
       toast.error("Please fill all booking details");
       return;
     }
+    if (!selectedBookingArtistId) {
+      toast.error("Please select the confirmed artist");
+      return;
+    }
     setCreatingBooking(true);
     try {
       const supabase = createClient();
-      const { error } = await supabase.from("bookings").insert({
+      const { data: newBooking, error } = await supabase.from("bookings").insert({
         enquiry_id: proposal.enquiry_id,
         coordinator_id: coordinatorId,
+        artist_id: selectedBookingArtistId,
         event_date: proposal.enquiry?.event_date,
         venue, city: bookingCity,
         total_amount: Number(totalAmount),
         advance_amount: Number(advanceAmount),
-        balance_amount: Number(totalAmount) - Number(advanceAmount),
         status: "pending",
         special_requirements: proposal.content,
-      });
+      }).select("id").single();
       if (error) throw error;
       await supabase.from("enquiries").update({ status: "confirmed" }).eq("id", proposal.enquiry_id);
+      // Notify client
       const { data: enq } = await supabase.from("enquiries").select("client_id,event_type").eq("id", proposal.enquiry_id).single();
       if (enq?.client_id) {
         await supabase.from("notifications").insert({
@@ -228,9 +277,24 @@ export function CoordinatorProposalsClient({
           type: "success", link: "/client/events",
         });
       }
-      toast.success("Booking created! Artist will confirm shortly.");
+      // Notify the selected artist
+      const { data: artistProfile } = await supabase
+        .from("artist_profiles")
+        .select("user_id")
+        .eq("id", selectedBookingArtistId)
+        .single();
+      if (artistProfile?.user_id) {
+        await supabase.from("notifications").insert({
+          user_id: artistProfile.user_id,
+          title: "New Booking Request",
+          message: `You have a new booking request for ${enq?.event_type ?? "an event"} in ${bookingCity} on ${proposal.enquiry?.event_date ? new Date(proposal.enquiry.event_date).toLocaleDateString("en-IN") : ""}. Please accept or decline.`,
+          type: "info",
+          link: "/artist/bookings",
+        });
+      }
+      toast.success("Booking created! Artist has been notified to confirm.");
       setShowBooking(null);
-      setVenue(""); setBookingCity(""); setTotalAmount(""); setAdvanceAmount("");
+      setVenue(""); setBookingCity(""); setTotalAmount(""); setAdvanceAmount(""); setSelectedBookingArtistId("");
       router.refresh();
     } catch {
       toast.error("Failed to create booking");
@@ -297,6 +361,10 @@ export function CoordinatorProposalsClient({
                   setBookingCity(p.enquiry?.city ?? "");
                   setTotalAmount(String(p.quoted_price));
                   setAdvanceAmount(String(Math.round(p.quoted_price * 0.3)));
+                  // Auto-select if only one artist proposed
+                  const list = (p.artists_proposed as any[]) ?? [];
+                  if (list.length === 1) setSelectedBookingArtistId(list[0].artist_id);
+                  else setSelectedBookingArtistId("");
                 }}>
                 <Building2 className="w-3.5 h-3.5 mr-1.5" />Create Booking
               </Button>
@@ -632,9 +700,17 @@ export function CoordinatorProposalsClient({
                     </span>
                   )}
                 </Label>
-                <Button size="sm" variant="outline" onClick={addArtistSlot}>
-                  <Plus className="w-3.5 h-3.5 mr-1" />Add Option
-                </Button>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">{selectedArtists.length}/{MAX_ARTISTS}</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={addArtistSlot}
+                    disabled={selectedArtists.length >= MAX_ARTISTS}
+                  >
+                    <Plus className="w-3.5 h-3.5 mr-1" />Add Option
+                  </Button>
+                </div>
               </div>
 
               {selectedArtists.map((slot, i) => {
@@ -807,7 +883,7 @@ export function CoordinatorProposalsClient({
       {/* ══════════════════════════════════════════
           CREATE BOOKING DIALOG
       ══════════════════════════════════════════ */}
-      <Dialog open={!!showBooking} onOpenChange={(o) => { if (!o) setShowBooking(null); }}>
+      <Dialog open={!!showBooking} onOpenChange={(o) => { if (!o) { setShowBooking(null); setSelectedBookingArtistId(""); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="font-display">Create Booking</DialogTitle>
@@ -828,6 +904,31 @@ export function CoordinatorProposalsClient({
                   </div>
                 ))}
               </div>
+
+              {/* Artist selection — pick which proposed artist is confirmed */}
+              {showBooking && (showBooking.artists_proposed as any[])?.length > 0 && (
+                <div className="space-y-1.5">
+                  <Label>Confirmed Artist <span className="text-destructive">*</span></Label>
+                  <Select value={selectedBookingArtistId} onValueChange={setSelectedBookingArtistId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select the artist being booked…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(showBooking.artists_proposed as any[]).map((a: any) => (
+                        <SelectItem key={a.artist_id} value={a.artist_id}>
+                          <div className="flex items-center gap-2">
+                            <Mic2 className="w-3.5 h-3.5 text-muted-foreground" />
+                            <span className="font-medium">{a.name}</span>
+                            <span className="text-muted-foreground text-xs">·</span>
+                            <span className="text-xs font-semibold text-indigo-600">{formatCurrency(a.quoted_price)}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground">The artist will receive a notification and must accept this booking.</p>
+                </div>
+              )}
 
               {/* Venue */}
               <div className="space-y-1.5">

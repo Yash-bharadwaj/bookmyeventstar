@@ -28,6 +28,8 @@ export default async function CoordinatorProposalsPage() {
       .from("artist_profiles")
       .select("id, categories, cities, base_price, rating, total_bookings, user:users!artist_profiles_user_id_fkey(name, phone)")
       .eq("is_verified", true)
+      .eq("is_listed", true)
+      .eq("is_profile_complete", true)
       .order("rating", { ascending: false }),
 
     supabase

@@ -7,6 +7,7 @@ import {
   PartyPopper, UserCheck, Mic2, IndianRupee, Star,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 import { Enquiry, Proposal, Booking } from "@/types";
 import { formatDate, formatCurrency, getInitials } from "@/lib/utils";
 import Link from "next/link";
@@ -105,14 +106,14 @@ export function ClientOverview({ enquiries, proposals, upcomingBookings, userNam
               ? `Your next event is in ${daysLeft} days. We can't wait!`
               : "Ready to plan something extraordinary? Let's make it unforgettable."}
           </p>
-          <div className="flex gap-3 mt-5 flex-wrap">
-            <Link href="/enquiry">
-              <Button size="sm" className="bg-gold-500 hover:bg-gold-400 text-navy-900 font-semibold">
+          <div className="flex flex-col sm:flex-row gap-3 mt-5">
+            <Link href="/enquiry" className="flex-1 sm:flex-none">
+              <Button size="sm" className="w-full sm:w-auto bg-gold-500 hover:bg-gold-400 text-navy-900 font-semibold h-11 sm:h-9">
                 <Sparkles className="w-4 h-4 mr-2" />Plan New Event
               </Button>
             </Link>
-            <Link href="/artists">
-              <Button size="sm" variant="glass">
+            <Link href="/artists" className="flex-1 sm:flex-none">
+              <Button size="sm" variant="glass" className="w-full sm:w-auto h-11 sm:h-9">
                 <Mic2 className="w-4 h-4 mr-2" />Browse Artists
               </Button>
             </Link>
@@ -128,7 +129,7 @@ export function ClientOverview({ enquiries, proposals, upcomingBookings, userNam
           className="relative overflow-hidden rounded-2xl border-2 border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50 p-5"
         >
           <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-amber-200/30 -translate-y-1/2 translate-x-1/2" />
-          <div className="relative flex items-start justify-between gap-4">
+          <div className="relative flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div className="flex items-start gap-4">
               <div className="w-12 h-12 rounded-2xl gold-gradient flex items-center justify-center flex-shrink-0 shadow-md">
                 <ClipboardList className="w-6 h-6 text-navy-900" />
@@ -140,12 +141,12 @@ export function ClientOverview({ enquiries, proposals, upcomingBookings, userNam
                     : `${pendingProposals.length} proposals are waiting for your decision`}
                 </p>
                 <p className="text-sm text-amber-700 mt-1">
-                  Our coordinator has curated the perfect artists for your event. Accept to confirm your booking.
+                  Our coordinator has curated the perfect artists for your event.
                 </p>
               </div>
             </div>
-            <Link href="/client/proposals" className="flex-shrink-0">
-              <Button className="bg-amber-500 hover:bg-amber-600 text-white">
+            <Link href="/client/proposals" className="sm:flex-shrink-0">
+              <Button className="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 text-white h-11">
                 Review Now <ArrowRight className="w-4 h-4 ml-1.5" />
               </Button>
             </Link>
@@ -165,9 +166,9 @@ export function ClientOverview({ enquiries, proposals, upcomingBookings, userNam
             "border-emerald-200 bg-emerald-50/30"
           }`}
         >
-          <div className="p-5 flex items-center gap-5 flex-wrap">
+          <div className="p-4 sm:p-5 flex items-center gap-4 sm:gap-5 flex-wrap">
             {/* Countdown block */}
-            <div className={`flex-shrink-0 text-center px-6 py-3 rounded-xl ${
+            <div className={`flex-shrink-0 text-center px-4 sm:px-6 py-3 rounded-xl ${
               daysLeft <= 3 ? "bg-red-100" :
               daysLeft <= 7 ? "bg-amber-100" :
               "bg-emerald-100"
@@ -234,7 +235,9 @@ export function ClientOverview({ enquiries, proposals, upcomingBookings, userNam
               animate={{ opacity: 1 }}
               className="rounded-2xl border-2 border-dashed border-muted p-8 text-center"
             >
-              <Sparkles className="w-10 h-10 mx-auto text-gold-400 mb-3" />
+              <div className="flex justify-center mb-3">
+                <BrandLogo size="sm" />
+              </div>
               <p className="font-semibold mb-1">No event plans yet</p>
               <p className="text-sm text-muted-foreground mb-4">Start planning your dream event today</p>
               <Link href="/enquiry">

@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency } from "@/lib/utils";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 
 /* ─── Data ────────────────────────────────────────────────── */
 const stats = [
@@ -102,6 +103,8 @@ function FeaturedArtists() {
       .from("artist_profiles")
       .select("id, bio, categories, cities, base_price, rating, total_bookings, is_verified, user:users!artist_profiles_user_id_fkey(name, avatar_url)")
       .eq("is_verified", true)
+      .eq("is_listed", true)
+      .eq("is_profile_complete", true)
       .order("rating", { ascending: false })
       .limit(4)
       .then(({ data }) => { if (data) setArtists(data); });
@@ -206,14 +209,7 @@ export default function LandingPage() {
       {/* ── Navbar ── */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-xl border-b border-gray-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-600 to-fuchsia-600 flex items-center justify-center shadow-lg shadow-violet-200">
-              <Star className="w-5 h-5 text-white fill-white" />
-            </div>
-            <div className="leading-tight">
-              <span className="font-display font-bold text-navy-900 text-base">BookMy<span className="text-violet-600">Event</span>Star</span>
-            </div>
-          </Link>
+          <BrandLogo href="/" size="md" priority className="shrink-0" />
 
           <div className="hidden md:flex items-center gap-8">
             {[["Browse Artists", "/artists"], ["How It Works", "#how-it-works"], ["Categories", "#categories"]].map(([label, href]) => (
@@ -535,8 +531,8 @@ export default function LandingPage() {
 
         <div className="relative max-w-4xl mx-auto px-4 sm:px-6 text-center">
           <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-gold-400 to-amber-500 mx-auto mb-6 shadow-xl shadow-gold-500/30">
-              <Sparkles className="w-8 h-8 text-navy-900" />
+            <div className="flex justify-center mb-6">
+              <BrandLogo href="/" size="xl" className="shadow-xl shadow-black/20" />
             </div>
             <h2 className="font-display text-3xl md:text-5xl font-bold text-white">
               Ready to Make Your Event{" "}
@@ -584,15 +580,12 @@ export default function LandingPage() {
       <footer className="bg-gray-950 text-white/50 py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-600 to-fuchsia-600 flex items-center justify-center">
-                <Star className="w-5 h-5 text-white fill-white" />
-              </div>
-              <div>
-                <span className="font-display font-bold text-white text-base block">BookMyEventStar</span>
-                <p className="text-xs text-white/30">© 2026 · India&apos;s Premier Artist Booking Platform</p>
-              </div>
-            </div>
+          <div className="flex flex-col items-center md:items-start gap-3">
+            <BrandLogo href="/" size="lg" frame={false} className="shrink-0" />
+            <p className="text-xs text-white/30 text-center md:text-left max-w-xs">
+              © 2026 · India&apos;s Premier Artist Booking Platform
+            </p>
+          </div>
             <div className="flex items-center gap-6 text-sm">
               {[["Browse Artists", "/artists"], ["Raise Enquiry", "/enquiry"], ["Login", "/login"], ["Register", "/register"]].map(([label, href]) => (
                 <Link key={label} href={href} className="hover:text-white transition-colors">{label}</Link>

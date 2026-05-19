@@ -88,10 +88,27 @@ export function ArtistBookingsClient({ bookings }: { bookings: BookingWithExtras
     const { error } = await supabase.from("bookings").update({ status }).eq("id", id);
     if (error) {
       toast.error("Failed to update booking");
-    } else {
-      toast.success(status === "confirmed" ? "Booking confirmed!" : "Booking declined");
-      router.refresh();
+      setUpdating(null);
+      return;
     }
+    toast.success(status === "confirmed" ? "Booking accepted!" : "Booking declined");
+    // Notify coordinator
+    const { data: booking } = await supabase
+      .from("bookings")
+      .select("coordinator_id, enquiry:enquiries(event_type)")
+      .eq("id", id)
+      .single();
+    if (booking?.coordinator_id) {
+      const eventType = (booking.enquiry as any)?.event_type ?? "event";
+      await supabase.from("notifications").insert({
+        user_id: booking.coordinator_id,
+        title: status === "confirmed" ? "Artist Confirmed Booking" : "Artist Declined Booking",
+        message: `Artist has ${status === "confirmed" ? "accepted" : "declined"} the booking for ${eventType}.`,
+        type: status === "confirmed" ? "success" : "warning",
+        link: "/coordinator/bookings",
+      });
+    }
+    router.refresh();
     setUpdating(null);
   };
 
@@ -197,14 +214,26 @@ export function ArtistBookingsClient({ bookings }: { bookings: BookingWithExtras
 
         <TabsContent value="upcoming" className="mt-6 space-y-4">
           {upcoming.length === 0 ? (
-            <p className="text-center py-12 text-muted-foreground text-sm">No upcoming bookings</p>
+            <div className="py-14 text-center">
+              <Calendar className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
+              <p className="font-semibold text-sm">No upcoming bookings</p>
+              <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">Your confirmed events will appear here.</p>
+            </div>
           ) : (
             upcoming.map((b) => <BookingCard key={b.id} b={b} />)
           )}
         </TabsContent>
 
         <TabsContent value="past" className="mt-6 space-y-4">
-          {past.map((b) => <BookingCard key={b.id} b={b} />)}
+          {past.length === 0 ? (
+            <div className="py-14 text-center">
+              <Clock className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
+              <p className="font-semibold text-sm">No past bookings yet</p>
+              <p className="text-xs text-muted-foreground mt-1">Completed events will appear here.</p>
+            </div>
+          ) : (
+            past.map((b) => <BookingCard key={b.id} b={b} />)
+          )}
         </TabsContent>
       </Tabs>
 

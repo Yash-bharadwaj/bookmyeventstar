@@ -37,6 +37,15 @@ export function ClientEnquiryDetail({ enquiry, proposals }: { enquiry: any; prop
     await supabase.from("proposals").update({ status: action }).eq("id", proposalId);
     if (action === "accepted") {
       await supabase.from("enquiries").update({ status: "confirmed" }).eq("id", enquiry.id);
+      if (enquiry.coordinator_id) {
+        await supabase.from("notifications").insert({
+          user_id: enquiry.coordinator_id,
+          title: "Proposal Accepted",
+          message: `Client has accepted the proposal for ${enquiry.event_type} in ${enquiry.city}. Create the booking now.`,
+          type: "success",
+          link: `/coordinator/enquiries/${enquiry.id}`,
+        });
+      }
       toast.success("Proposal accepted! Your coordinator will finalize the booking.");
     } else {
       toast.success("Proposal declined.");

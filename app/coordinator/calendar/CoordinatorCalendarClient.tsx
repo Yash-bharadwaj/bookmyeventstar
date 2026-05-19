@@ -11,7 +11,8 @@ import {
   subMonths,
   isToday,
 } from "date-fns";
-import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar, List, MapPin, ExternalLink } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +30,11 @@ interface BookingEvent {
 export function CoordinatorCalendarClient({ bookings }: { bookings: BookingEvent[] }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  const [view, setView] = useState<"calendar" | "list">("calendar");
+
+  const upcomingBookings = [...bookings]
+    .filter((b) => new Date(b.event_date) >= new Date(new Date().toDateString()))
+    .sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -47,7 +53,74 @@ export function CoordinatorCalendarClient({ bookings }: { bookings: BookingEvent
   };
 
   return (
-    <div className="p-4 md:p-6 max-w-5xl mx-auto">
+    <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-5">
+      {/* View toggle */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setView("calendar")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${view === "calendar" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-accent"}`}
+        >
+          <Calendar className="w-4 h-4" />Calendar
+        </button>
+        <button
+          onClick={() => setView("list")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${view === "list" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-accent"}`}
+        >
+          <List className="w-4 h-4" />List
+        </button>
+      </div>
+
+      {/* List/Agenda View */}
+      {view === "list" && (
+        <div className="space-y-4">
+          {upcomingBookings.length === 0 ? (
+            <div className="py-16 text-center">
+              <Calendar className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
+              <p className="font-semibold text-sm">No upcoming events</p>
+              <p className="text-xs text-muted-foreground mt-1">Events will appear here as bookings are confirmed.</p>
+            </div>
+          ) : (
+            (() => {
+              const groups: Record<string, BookingEvent[]> = {};
+              upcomingBookings.forEach((b) => {
+                const month = format(new Date(b.event_date), "MMMM yyyy");
+                if (!groups[month]) groups[month] = [];
+                groups[month].push(b);
+              });
+              return Object.entries(groups).map(([month, events]) => (
+                <div key={month}>
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-2">{month}</p>
+                  <div className="space-y-2">
+                    {events.map((e) => (
+                      <Link key={e.id} href={`/coordinator/bookings/${e.id}`}>
+                        <div className="flex items-center gap-4 p-4 rounded-xl border hover:border-blue-300 hover:shadow-sm transition-all bg-card">
+                          <div className="text-center min-w-[42px]">
+                            <p className="text-xl font-bold text-blue-600">{new Date(e.event_date).getDate()}</p>
+                            <p className="text-[10px] text-muted-foreground uppercase">{format(new Date(e.event_date), "EEE")}</p>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-sm truncate">{e.enquiry?.event_type ?? "Event"}</p>
+                            <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                              <MapPin className="w-3 h-3" />{e.venue}, {e.city}
+                            </p>
+                          </div>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold flex-shrink-0 ${getStatusColor(e.status)}`}>
+                            {getStatusLabel(e.status)}
+                          </span>
+                          <ExternalLink className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              ));
+            })()
+          )}
+        </div>
+      )}
+
+      {/* Calendar View */}
+      {view === "calendar" && (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Calendar */}
         <Card className="lg:col-span-2">
@@ -173,6 +246,7 @@ export function CoordinatorCalendarClient({ bookings }: { bookings: BookingEvent
           </Card>
         </div>
       </div>
+      )}
     </div>
   );
 }
