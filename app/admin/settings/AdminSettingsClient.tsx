@@ -2,7 +2,11 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Pencil, Trash2, Check, X, Loader2, Music2, MapPin } from "lucide-react";
+import {
+  Plus, Pencil, Trash2, Check, X, Loader2, Music2, MapPin,
+  Mic2, Music, Headphones, Users, Smile, Wand2, Tv2, Volume2,
+  Star, Award, Zap, Radio, Lightbulb, Mic, type LucideIcon,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +14,62 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Category, City } from "@/types";
 import { createClient } from "@/lib/supabase/client";
 import toast from "react-hot-toast";
+
+const ICON_OPTIONS: { key: string; Icon: LucideIcon; label: string }[] = [
+  { key: "Mic2",        Icon: Mic2,        label: "Singer"      },
+  { key: "Mic",         Icon: Mic,         label: "Vocalist"    },
+  { key: "Music",       Icon: Music,       label: "Music"       },
+  { key: "Headphones",  Icon: Headphones,  label: "DJ"          },
+  { key: "Radio",       Icon: Radio,       label: "Folk"        },
+  { key: "Volume2",     Icon: Volume2,     label: "Instrumentalist" },
+  { key: "Users",       Icon: Users,       label: "Band"        },
+  { key: "Smile",       Icon: Smile,       label: "Comedian"    },
+  { key: "Wand2",       Icon: Wand2,       label: "Magician"    },
+  { key: "Tv2",         Icon: Tv2,         label: "Anchor/Host" },
+  { key: "Lightbulb",   Icon: Lightbulb,   label: "Speaker"     },
+  { key: "Zap",         Icon: Zap,         label: "Performer"   },
+  { key: "Star",        Icon: Star,        label: "Celebrity"   },
+  { key: "Award",       Icon: Award,       label: "Award"       },
+  { key: "Music2",      Icon: Music2,      label: "Other"       },
+];
+
+const DEFAULT_ICON = "Mic2";
+
+function resolveIcon(key: string): LucideIcon {
+  return ICON_OPTIONS.find((o) => o.key === key)?.Icon ?? Mic2;
+}
+
+function CategoryIconDisplay({ iconKey }: { iconKey: string }) {
+  const Icon = resolveIcon(iconKey);
+  return (
+    <div className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center">
+      <Icon className="w-4 h-4 text-amber-600" />
+    </div>
+  );
+}
+
+function IconPicker({ value, onChange }: { value: string; onChange: (key: string) => void }) {
+  return (
+    <div className="grid grid-cols-5 gap-1.5">
+      {ICON_OPTIONS.map(({ key, Icon, label }) => (
+        <button
+          key={key}
+          type="button"
+          title={label}
+          onClick={() => onChange(key)}
+          className={`flex flex-col items-center gap-1 p-2 rounded-lg border text-xs transition-all ${
+            value === key
+              ? "border-amber-500 bg-amber-50 text-amber-700"
+              : "border-border hover:border-amber-300 hover:bg-accent/40 text-muted-foreground"
+          }`}
+        >
+          <Icon className="w-4 h-4" />
+          <span className="leading-none text-[9px]">{label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function AdminSettingsClient({
   categories: initialCategories,
@@ -23,12 +83,12 @@ export function AdminSettingsClient({
 
   // Category form state
   const [newCatName, setNewCatName] = useState("");
-  const [newCatIcon, setNewCatIcon] = useState("");
+  const [newCatIcon, setNewCatIcon] = useState(DEFAULT_ICON);
   const [newCatDesc, setNewCatDesc] = useState("");
   const [addingCat, setAddingCat] = useState(false);
   const [editingCat, setEditingCat] = useState<string | null>(null);
   const [editCatName, setEditCatName] = useState("");
-  const [editCatIcon, setEditCatIcon] = useState("");
+  const [editCatIcon, setEditCatIcon] = useState(DEFAULT_ICON);
   const [savingCat, setSavingCat] = useState(false);
   const [deletingCat, setDeletingCat] = useState<string | null>(null);
   const [showAddCat, setShowAddCat] = useState(false);
@@ -51,12 +111,12 @@ export function AdminSettingsClient({
     const supabase = createClient();
     const { data, error } = await supabase
       .from("categories")
-      .insert({ name: newCatName.trim(), icon: newCatIcon.trim() || "🎵", description: newCatDesc.trim() })
+      .insert({ name: newCatName.trim(), icon: newCatIcon, description: newCatDesc.trim() })
       .select().single();
     if (error) { toast.error("Failed to add category"); }
     else {
       setCategories((prev) => [...prev, data as Category]);
-      setNewCatName(""); setNewCatIcon(""); setNewCatDesc("");
+      setNewCatName(""); setNewCatIcon(DEFAULT_ICON); setNewCatDesc("");
       setShowAddCat(false);
       toast.success("Category added!");
     }
@@ -66,17 +126,17 @@ export function AdminSettingsClient({
   const startEditCat = (cat: Category) => {
     setEditingCat(cat.id);
     setEditCatName(cat.name);
-    setEditCatIcon(cat.icon);
+    setEditCatIcon(ICON_OPTIONS.find((o) => o.key === cat.icon) ? cat.icon : DEFAULT_ICON);
   };
 
   const saveEditCat = async (id: string) => {
     setSavingCat(true);
     const supabase = createClient();
     const { error } = await supabase
-      .from("categories").update({ name: editCatName.trim(), icon: editCatIcon.trim() }).eq("id", id);
+      .from("categories").update({ name: editCatName.trim(), icon: editCatIcon }).eq("id", id);
     if (error) { toast.error("Failed to update"); }
     else {
-      setCategories((prev) => prev.map((c) => c.id === id ? { ...c, name: editCatName.trim(), icon: editCatIcon.trim() } : c));
+      setCategories((prev) => prev.map((c) => c.id === id ? { ...c, name: editCatName.trim(), icon: editCatIcon } : c));
       setEditingCat(null);
       toast.success("Category updated!");
     }
@@ -177,21 +237,21 @@ export function AdminSettingsClient({
                 exit={{ height: 0, opacity: 0 }}
                 className="overflow-hidden"
               >
-                <div className="rounded-xl border p-4 bg-muted/20 space-y-3">
+                <div className="rounded-xl border p-4 bg-muted/20 space-y-4">
                   <p className="text-sm font-semibold">New Category</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
                       <Label className="text-xs">Name *</Label>
                       <Input placeholder="e.g. Beatboxer" value={newCatName} onChange={(e) => setNewCatName(e.target.value)} />
                     </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">Icon (emoji)</Label>
-                      <Input placeholder="e.g. 🎤" value={newCatIcon} onChange={(e) => setNewCatIcon(e.target.value)} />
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Description (optional)</Label>
+                      <Input placeholder="Short description" value={newCatDesc} onChange={(e) => setNewCatDesc(e.target.value)} />
                     </div>
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Description (optional)</Label>
-                    <Input placeholder="Short description" value={newCatDesc} onChange={(e) => setNewCatDesc(e.target.value)} />
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Icon</Label>
+                    <IconPicker value={newCatIcon} onChange={setNewCatIcon} />
                   </div>
                   <div className="flex gap-2 justify-end">
                     <Button size="sm" variant="outline" onClick={() => setShowAddCat(false)}>Cancel</Button>
@@ -221,10 +281,12 @@ export function AdminSettingsClient({
                     transition={{ delay: i * 0.03 }}
                     className="border-b last:border-0 hover:bg-accent/20"
                   >
-                    <td className="px-4 py-3 text-xl">
+                    <td className="px-4 py-3">
                       {editingCat === cat.id ? (
-                        <Input value={editCatIcon} onChange={(e) => setEditCatIcon(e.target.value)} className="w-16 text-center" />
-                      ) : cat.icon}
+                        <IconPicker value={editCatIcon} onChange={setEditCatIcon} />
+                      ) : (
+                        <CategoryIconDisplay iconKey={cat.icon} />
+                      )}
                     </td>
                     <td className="px-4 py-3 font-medium text-sm">
                       {editingCat === cat.id ? (

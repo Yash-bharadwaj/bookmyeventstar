@@ -152,3 +152,25 @@ html {
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-muted-foreground;
 }
+
+/* Print styles — hide shell, show only report content */
+@media print {
+  [data-sidebar],
+  nav,
+  header,
+  .bottom-nav,
+  aside {
+    display: none !important;
+  }
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+  body {
+    background: white !important;
+  }
+  .print\:hidden {
+    display: none !important;
+  }
+}

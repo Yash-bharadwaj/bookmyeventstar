@@ -16,8 +16,9 @@ import {
   Legend,
 } from "recharts";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/dashboard/StatCard";
-import { FileText, TrendingUp, DollarSign, Calendar, UserCog, Award } from "lucide-react";
+import { FileText, TrendingUp, DollarSign, Calendar, UserCog, Award, Printer, Download } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { format, subMonths, startOfMonth } from "date-fns";
@@ -40,6 +41,76 @@ interface ReportsProps {
 const COLORS = ["#f59e0b", "#3b82f6", "#10b981", "#8b5cf6", "#ef4444", "#ec4899"];
 
 export function AdminReportsClient({ enquiries, bookings, payments, coordinatorStats }: ReportsProps) {
+  const handlePrint = () => window.print();
+
+  const handleDownloadCSV = () => {
+    const today = format(new Date(), "yyyy-MM-dd");
+
+    const sections: string[] = [];
+
+    // Summary
+    const totalRevenue = payments.filter((p) => p.status === "paid").reduce((s, p) => s + p.amount, 0);
+    const completedBookings = bookings.filter((b) => b.status === "completed").length;
+    sections.push("SUMMARY");
+    sections.push(["Total Enquiries", "Total Revenue (₹)", "Completed Events", "Conversion Rate (%)"].join(","));
+    sections.push([
+      enquiries.length,
+      totalRevenue,
+      completedBookings,
+      enquiries.length ? Math.round((completedBookings / enquiries.length) * 100) : 0,
+    ].join(","));
+    sections.push("");
+
+    // Monthly data
+    const monthlyRows = Array.from({ length: 6 }, (_, i) => {
+      const month = subMonths(new Date(), 5 - i);
+      const label = format(month, "MMM yyyy");
+      const count = enquiries.filter((e) => {
+        const d = new Date(e.created_at);
+        return d.getMonth() === month.getMonth() && d.getFullYear() === month.getFullYear();
+      }).length;
+      const revenue = payments
+        .filter((p) => {
+          if (!p.paid_at) return false;
+          const d = new Date(p.paid_at);
+          return d.getMonth() === month.getMonth() && d.getFullYear() === month.getFullYear() && p.status === "paid";
+        })
+        .reduce((sum, p) => sum + p.amount, 0);
+      return [label, count, revenue].join(",");
+    });
+    sections.push("MONTHLY ENQUIRIES & REVENUE");
+    sections.push("Month,Enquiries,Revenue (₹)");
+    sections.push(...monthlyRows);
+    sections.push("");
+
+    // City breakdown
+    sections.push("TOP CITIES");
+    sections.push("City,Enquiries");
+    Array.from(
+      enquiries.reduce((acc, e) => { acc.set(e.city, (acc.get(e.city) ?? 0) + 1); return acc; }, new Map<string, number>())
+    ).sort((a, b) => b[1] - a[1]).slice(0, 10)
+      .forEach(([city, count]) => sections.push(`${city},${count}`));
+    sections.push("");
+
+    // Coordinator performance
+    if (coordinatorStats.length > 0) {
+      sections.push("COORDINATOR PERFORMANCE");
+      sections.push("Coordinator,Total Enquiries,Confirmed,Completed,Conversion Rate (%)");
+      coordinatorStats.forEach((c) =>
+        sections.push([c.name, c.total, c.confirmed, c.completed, c.conversion].join(","))
+      );
+    }
+
+    const csv = sections.join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `bookmyeventstar-report-${today}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   // Monthly enquiries (last 6 months)
   const monthlyData = Array.from({ length: 6 }, (_, i) => {
     const month = subMonths(new Date(), 5 - i);
@@ -80,7 +151,28 @@ export function AdminReportsClient({ enquiries, bookings, payments, coordinatorS
   const completedBookings = bookings.filter((b) => b.status === "completed").length;
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-6 print:p-0">
+      {/* Toolbar */}
+      <div className="flex items-center justify-between print:hidden">
+        <p className="text-sm text-muted-foreground">
+          Showing data for all time · Generated {format(new Date(), "dd MMM yyyy")}
+        </p>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleDownloadCSV}>
+            <Download className="w-4 h-4 mr-1.5" />Export CSV
+          </Button>
+          <Button variant="outline" size="sm" onClick={handlePrint}>
+            <Printer className="w-4 h-4 mr-1.5" />Print / PDF
+          </Button>
+        </div>
+      </div>
+
+      {/* Print header — only visible when printing */}
+      <div className="hidden print:block mb-6">
+        <h1 className="text-2xl font-bold">BookMyEventStar — Analytics Report</h1>
+        <p className="text-sm text-gray-500 mt-1">Generated on {format(new Date(), "dd MMMM yyyy")}</p>
+      </div>
+
       {/* Summary stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Total Enquiries" value={enquiries.length} icon={FileText} color="gold" index={0} />
