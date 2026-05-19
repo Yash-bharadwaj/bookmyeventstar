@@ -19,7 +19,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { ArtistProfile } from "@/types";
-import { formatCurrency, getInitials, ARTIST_CATEGORIES, INDIA_CITIES, EVENT_TYPES } from "@/lib/utils";
+import { formatCurrency, getInitials, INDIA_CITIES, EVENT_TYPES } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import toast from "react-hot-toast";
 import { z } from "zod";
@@ -34,6 +34,7 @@ interface Props {
   artists: Artist[];
   initialCategory?: string;
   initialCity?: string;
+  categories: string[];
 }
 
 /* ── Quick Enquiry Schema ────────────────────────────── */
@@ -359,7 +360,7 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
 }
 
 /* ── Main Component ──────────────────────────────────── */
-export function ArtistsPageClient({ artists, initialCategory, initialCity }: Props) {
+export function ArtistsPageClient({ artists, initialCategory, initialCity, categories }: Props) {
   const [search, setSearch]     = useState("");
   const [category, setCategory] = useState(initialCategory ?? "all");
   const [city, setCity]         = useState(initialCity ?? "all");
@@ -434,7 +435,7 @@ export function ArtistsPageClient({ artists, initialCategory, initialCity }: Pro
 
           {/* Row 2: Category chips — scrollable, all categories */}
           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-            {["all", ...ARTIST_CATEGORIES].map((c) => (
+            {["all", ...categories].map((c) => (
               <button
                 key={c}
                 onClick={() => setCategory(c)}

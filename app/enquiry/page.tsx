@@ -42,7 +42,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { EVENT_TYPES, ARTIST_CATEGORIES, INDIA_CITIES } from "@/lib/utils";
+import { EVENT_TYPES, INDIA_CITIES } from "@/lib/utils";
 
 const STEPS = [
   { title: "Your details", subtitle: "Who is booking this event?" },
@@ -107,6 +107,7 @@ export default function EnquiryPage() {
   const [step, setStep] = useState(0);
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [artistCategories, setArtistCategories] = useState<string[]>([]);
 
   const {
     register,
@@ -152,6 +153,12 @@ export default function EnquiryPage() {
     const t = setInterval(() => setResendIn((s) => Math.max(0, s - 1)), 1000);
     return () => clearInterval(t);
   }, [resendIn]);
+
+  useEffect(() => {
+    createClient().from("categories").select("name").order("name").then(({ data }) => {
+      if (data) setArtistCategories(data.map((c) => c.name));
+    });
+  }, []);
 
   const startResendCooldown = () => setResendIn(60);
 
@@ -731,7 +738,7 @@ export default function EnquiryPage() {
                           <SelectValue placeholder="Optional — category or mood" />
                         </SelectTrigger>
                         <SelectContent>
-                          {ARTIST_CATEGORIES.map((c) => (
+                          {artistCategories.map((c) => (
                             <SelectItem key={c} value={c}>
                               {c}
                             </SelectItem>

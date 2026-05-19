@@ -17,7 +17,7 @@ import { createClient } from "@/lib/supabase/client";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import { ArtistProfile, ArtistMedia, User } from "@/types";
-import { ARTIST_CATEGORIES, INDIA_CITIES, formatCurrency, getInitials } from "@/lib/utils";
+import { INDIA_CITIES, formatCurrency, getInitials } from "@/lib/utils";
 import { evaluateArtistProfile, type ArtistProfileCompletionInput } from "@/lib/artist-profile-completion";
 import { ProfileCompletionGauge } from "@/components/artist/ProfileCompletionGauge";
 
@@ -35,9 +35,10 @@ interface Props {
   user: User;
   artistProfile: ArtistProfile | null;
   media?: ArtistMedia[];
+  categories: string[];
 }
 
-export function ArtistProfileClient({ user, artistProfile, media: initialMedia = [] }: Props) {
+export function ArtistProfileClient({ user, artistProfile, media: initialMedia = [], categories }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -429,7 +430,7 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
           <CardHeader><CardTitle>Your Categories *</CardTitle></CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
-              {ARTIST_CATEGORIES.map((cat) => {
+              {categories.map((cat) => {
                 const selected = selectedCategories.includes(cat);
                 return (
                   <button

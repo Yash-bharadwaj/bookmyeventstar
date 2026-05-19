@@ -36,13 +36,19 @@ export default async function ArtistsPage({
     query = query.contains("cities", [searchParams.city]);
   }
 
-  const { data: rawArtists } = await query.limit(60);
+  const [{ data: rawArtists }, { data: categoriesData }] = await Promise.all([
+    query.limit(60),
+    supabase.from("categories").select("name").order("name"),
+  ]);
+
   const artists = (rawArtists ?? []).map((a: any) => ({
     ...a,
     pricing_details: a.pricing_details ?? {},
     user: Array.isArray(a.user) ? a.user[0] ?? null : a.user,
     media: a.media ?? [],
   }));
+
+  const categoryNames = (categoriesData ?? []).map((c) => c.name);
 
   return (
     <div className="min-h-screen bg-white">
@@ -67,6 +73,7 @@ export default async function ArtistsPage({
             artists={artists}
             initialCategory={searchParams.category}
             initialCity={searchParams.city}
+            categories={categoryNames}
           />
         </Suspense>
       </div>

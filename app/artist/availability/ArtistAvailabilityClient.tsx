@@ -16,6 +16,7 @@ import {
 import {
   ChevronLeft, ChevronRight, CalendarCheck, CalendarX,
   CalendarDays, Loader2, RotateCcw, Sunset, Briefcase,
+  CheckCircle2, XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -118,7 +119,6 @@ export function ArtistAvailabilityClient({ artistProfileId, availability }: Prop
   const startDay = monthStart.getDay();
   const today = new Date();
 
-  // Future days in the current month view (not past, not booked)
   const futureDaysInMonth = (filterFn: (d: Date) => boolean) =>
     days.filter(
       (d) =>
@@ -132,21 +132,34 @@ export function ArtistAvailabilityClient({ artistProfileId, availability }: Prop
 
     const dateStr = format(day, "yyyy-MM-dd");
     const current = availMap.get(dateStr);
-    const newStatus: AvailabilityStatus =
-      current === selectedStatus ? "available" : selectedStatus;
+    // If already set to the active mode → clear it. Otherwise → set it.
+    const shouldClear = current === selectedStatus;
 
     setSaving(dateStr);
     try {
       const supabase = createClient();
-      await supabase.from("availability").upsert(
-        { artist_id: artistProfileId, date: dateStr, status: newStatus },
-        { onConflict: "artist_id,date" }
-      );
-      setAvailMap((prev) => {
-        const next = new Map(prev);
-        next.set(dateStr, newStatus);
-        return next;
-      });
+      if (shouldClear) {
+        await supabase
+          .from("availability")
+          .delete()
+          .eq("artist_id", artistProfileId)
+          .eq("date", dateStr);
+        setAvailMap((prev) => {
+          const next = new Map(prev);
+          next.delete(dateStr);
+          return next;
+        });
+      } else {
+        await supabase.from("availability").upsert(
+          { artist_id: artistProfileId, date: dateStr, status: selectedStatus },
+          { onConflict: "artist_id,date" }
+        );
+        setAvailMap((prev) => {
+          const next = new Map(prev);
+          next.set(dateStr, selectedStatus);
+          return next;
+        });
+      }
     } catch {
       toast.error("Failed to update availability");
     } finally {
@@ -207,34 +220,136 @@ export function ArtistAvailabilityClient({ artistProfileId, availability }: Prop
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-3xl mx-auto">
 
-      {/* Status selector + summary */}
+      {/* Manage card — mode toggles + quick fill + summary */}
       <Card>
-        <CardHeader><CardTitle>Manage Your Availability</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CalendarDays className="w-5 h-5 text-gold-600" />
+            Manage Your Availability
+          </CardTitle>
           <p className="text-sm text-muted-foreground">
-            Click individual dates or use the quick-fill shortcuts below to set availability in bulk.
+            Pick a mode, then tap dates or use the quick-fill shortcuts.
           </p>
+        </CardHeader>
+        <CardContent className="space-y-5">
 
-          {/* Mark-as toggles */}
-          <div className="flex flex-wrap gap-3">
-            {(["available", "blocked"] as AvailabilityStatus[]).map((s) => {
-              const config = STATUS_CONFIG[s];
-              return (
-                <button
-                  key={s}
-                  onClick={() => setSelectedStatus(s)}
-                  className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-xl border-2 transition-all text-sm font-medium",
-                    selectedStatus === s
-                      ? `border-current ${config.textColor} ${config.bgColor}`
-                      : "border-border text-muted-foreground"
-                  )}
-                >
-                  <span className={cn("w-3 h-3 rounded-full", config.color)} />
-                  Mark as {config.label}
-                </button>
-              );
-            })}
+          {/* Mode toggles — Available / Blocked */}
+          <div className="grid grid-cols-2 gap-3">
+            {/* Available toggle */}
+            <button
+              onClick={() => setSelectedStatus("available")}
+              className={cn(
+                "flex items-center justify-center gap-2.5 px-4 py-3 rounded-2xl border-2 transition-all text-sm font-semibold",
+                selectedStatus === "available"
+                  ? "border-emerald-500 bg-emerald-500 text-white shadow-md shadow-emerald-200"
+                  : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-400"
+              )}
+            >
+              {selectedStatus === "available"
+                ? <CheckCircle2 className="w-4 h-4" />
+                : <span className="w-4 h-4 rounded-full border-2 border-emerald-400" />}
+              Mark Available
+            </button>
+
+            {/* Blocked toggle */}
+            <button
+              onClick={() => setSelectedStatus("blocked")}
+              className={cn(
+                "flex items-center justify-center gap-2.5 px-4 py-3 rounded-2xl border-2 transition-all text-sm font-semibold",
+                selectedStatus === "blocked"
+                  ? "border-gray-500 bg-gray-500 text-white shadow-md shadow-gray-200"
+                  : "border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-400"
+              )}
+            >
+              {selectedStatus === "blocked"
+                ? <XCircle className="w-4 h-4" />
+                : <span className="w-4 h-4 rounded-full border-2 border-gray-400" />}
+              Mark Blocked
+            </button>
+          </div>
+
+          {/* Quick Fill shortcuts */}
+          <div className="rounded-2xl border bg-muted/20 p-3.5 space-y-3">
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+              Quick fill — {format(currentDate, "MMMM yyyy")}
+            </p>
+
+            {/* Mark Available row */}
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wide flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3" /> Mark Available
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {QUICK_ACTIONS.filter((a) => a.status === "available").map((action) => {
+                  const Icon = action.icon;
+                  const isLoading = bulkSaving === action.id;
+                  return (
+                    <button
+                      key={action.id}
+                      onClick={() => handleBulkAction(action)}
+                      disabled={!!bulkSaving}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all disabled:opacity-50",
+                        action.color
+                      )}
+                    >
+                      {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Icon className="w-3 h-3" />}
+                      {action.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Block row */}
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1">
+                <XCircle className="w-3 h-3" /> Block / Unavailable
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {QUICK_ACTIONS.filter((a) => a.status === "blocked").map((action) => {
+                  const Icon = action.icon;
+                  const isLoading = bulkSaving === action.id;
+                  return (
+                    <button
+                      key={action.id}
+                      onClick={() => handleBulkAction(action)}
+                      disabled={!!bulkSaving}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all disabled:opacity-50",
+                        action.color
+                      )}
+                    >
+                      {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Icon className="w-3 h-3" />}
+                      {action.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Clear row */}
+            <div className="flex items-center justify-between pt-1 border-t border-border/40">
+              <p className="text-[10px] text-muted-foreground">Booked dates are never affected.</p>
+              {QUICK_ACTIONS.filter((a) => a.status === "clear").map((action) => {
+                const Icon = action.icon;
+                const isLoading = bulkSaving === action.id;
+                return (
+                  <button
+                    key={action.id}
+                    onClick={() => handleBulkAction(action)}
+                    disabled={!!bulkSaving}
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all disabled:opacity-50",
+                      action.color
+                    )}
+                  >
+                    {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Icon className="w-3 h-3" />}
+                    {action.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Summary counters */}
@@ -252,7 +367,7 @@ export function ArtistAvailabilityClient({ artistProfileId, availability }: Prop
         </CardContent>
       </Card>
 
-      {/* Calendar */}
+      {/* Calendar card */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -266,91 +381,15 @@ export function ArtistAvailabilityClient({ artistProfileId, availability }: Prop
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-4">
-          {/* Quick Actions */}
-          <div className="rounded-xl border bg-muted/20 p-3 space-y-2">
-            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
-              Quick fill — {format(currentDate, "MMMM")}
-            </p>
-
-            {/* Available row */}
-            <div className="space-y-1.5">
-              <p className="text-[10px] font-medium text-emerald-600 uppercase tracking-wide">Mark Available</p>
-              <div className="flex flex-wrap gap-1.5">
-                {QUICK_ACTIONS.filter((a) => a.status === "available").map((action) => {
-                  const Icon = action.icon;
-                  const isLoading = bulkSaving === action.id;
-                  return (
-                    <button
-                      key={action.id}
-                      onClick={() => handleBulkAction(action)}
-                      disabled={!!bulkSaving}
-                      className={cn(
-                        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all disabled:opacity-50",
-                        action.color
-                      )}
-                    >
-                      {isLoading
-                        ? <Loader2 className="w-3 h-3 animate-spin" />
-                        : <Icon className="w-3 h-3" />}
-                      {action.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Block row */}
-            <div className="space-y-1.5">
-              <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">Block / Unavailable</p>
-              <div className="flex flex-wrap gap-1.5">
-                {QUICK_ACTIONS.filter((a) => a.status === "blocked").map((action) => {
-                  const Icon = action.icon;
-                  const isLoading = bulkSaving === action.id;
-                  return (
-                    <button
-                      key={action.id}
-                      onClick={() => handleBulkAction(action)}
-                      disabled={!!bulkSaving}
-                      className={cn(
-                        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all disabled:opacity-50",
-                        action.color
-                      )}
-                    >
-                      {isLoading
-                        ? <Loader2 className="w-3 h-3 animate-spin" />
-                        : <Icon className="w-3 h-3" />}
-                      {action.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Clear row */}
-            <div className="flex items-center justify-between pt-1 border-t border-border/50">
-              <p className="text-[10px] text-muted-foreground">Booked dates are never affected by bulk actions.</p>
-              {QUICK_ACTIONS.filter((a) => a.status === "clear").map((action) => {
-                const Icon = action.icon;
-                const isLoading = bulkSaving === action.id;
-                return (
-                  <button
-                    key={action.id}
-                    onClick={() => handleBulkAction(action)}
-                    disabled={!!bulkSaving}
-                    className={cn(
-                      "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all disabled:opacity-50",
-                      action.color
-                    )}
-                  >
-                    {isLoading
-                      ? <Loader2 className="w-3 h-3 animate-spin" />
-                      : <Icon className="w-3 h-3" />}
-                    {action.label}
-                  </button>
-                );
-              })}
-            </div>
+        <CardContent className="space-y-3">
+          {/* Active mode pill hint */}
+          <div className={cn(
+            "flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium",
+            selectedStatus === "available" ? "bg-emerald-50 text-emerald-700" : "bg-gray-50 text-gray-600"
+          )}>
+            <span className={cn("w-2 h-2 rounded-full flex-shrink-0", STATUS_CONFIG[selectedStatus].color)} />
+            Tap a date to mark as <strong className="ml-0.5">{STATUS_CONFIG[selectedStatus].label}</strong>
+            <span className="text-muted-foreground ml-0.5">— tap again to clear.</span>
           </div>
 
           {/* Weekday headers */}
@@ -388,8 +427,10 @@ export function ArtistAvailabilityClient({ artistProfileId, availability }: Prop
                     (isSaving || !!bulkSaving) && "opacity-50"
                   )}
                 >
-                  {day.getDate()}
-                  {status && (
+                  {isSaving
+                    ? <Loader2 className="w-3 h-3 animate-spin" />
+                    : day.getDate()}
+                  {status && !isSaving && (
                     <span className={cn(
                       "absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full",
                       STATUS_CONFIG[status].color

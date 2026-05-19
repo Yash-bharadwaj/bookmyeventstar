@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { formatCurrency, getInitials, formatDate, ARTIST_CATEGORIES } from "@/lib/utils";
+import { formatCurrency, getInitials, formatDate } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 
 interface Artist {
@@ -29,7 +29,7 @@ interface EnquiryCtx {
   client?: { name: string } | null;
 }
 
-interface Props { artists: Artist[]; enquiries: EnquiryCtx[]; }
+interface Props { artists: Artist[]; enquiries: EnquiryCtx[]; allCategories: string[]; }
 
 type SortKey = "rating" | "price_asc" | "price_desc" | "bookings";
 
@@ -47,7 +47,7 @@ function uniqueCities(artists: Artist[]) {
   return Array.from(s).sort();
 }
 
-export function ArtistSearchClient({ artists, enquiries }: Props) {
+export function ArtistSearchClient({ artists, enquiries, allCategories }: Props) {
   const router = useRouter();
 
   // ── Enquiry context ──
@@ -246,7 +246,7 @@ export function ArtistSearchClient({ artists, enquiries }: Props) {
               <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2.5">Category</p>
                 <div className="flex flex-wrap gap-2">
-                  {ARTIST_CATEGORIES.map((c) => (
+                  {allCategories.map((c) => (
                     <button
                       key={c}
                       onClick={() => toggleCategory(c)}

@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArtistProfile } from "@/types";
-import { formatCurrency, getInitials, ARTIST_CATEGORIES } from "@/lib/utils";
+import { formatCurrency, getInitials } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
@@ -35,7 +35,7 @@ function isListedProfile(a: ArtistWithUser) {
   return a.is_listed !== false;
 }
 
-export function AdminArtistsClient({ artists }: { artists: ArtistWithUser[] }) {
+export function AdminArtistsClient({ artists, categories }: { artists: ArtistWithUser[]; categories: string[] }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [verifyTab, setVerifyTab] = useState("all");
@@ -191,7 +191,7 @@ export function AdminArtistsClient({ artists }: { artists: ArtistWithUser[] }) {
             className="overflow-hidden"
           >
             <div className="flex flex-wrap gap-2 p-3 rounded-xl bg-muted/20 border">
-              {ARTIST_CATEGORIES.map((cat) => (
+              {categories.map((cat) => (
                 <button
                   key={cat}
                   onClick={() => {

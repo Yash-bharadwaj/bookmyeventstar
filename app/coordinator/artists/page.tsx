@@ -10,7 +10,7 @@ export default async function CoordinatorArtistsPage() {
   const { data: profile } = await supabase.from("users").select("*").eq("id", user.id).single();
   if (!profile || profile.role !== "coordinator") redirect("/login");
 
-  const [{ data: artists }, { data: enquiries }] = await Promise.all([
+  const [{ data: artists }, { data: enquiries }, { data: categoriesData }] = await Promise.all([
     supabase
       .from("artist_profiles")
       .select("*, user:users(name,email,phone,avatar_url), media:artist_media(url,is_primary,type)")
@@ -25,6 +25,8 @@ export default async function CoordinatorArtistsPage() {
       .eq("coordinator_id", user.id)
       .in("status", ["assigned", "requirement_gathering", "shortlisting"])
       .order("event_date"),
+
+    supabase.from("categories").select("name").order("name"),
   ]);
 
   const mappedEnquiries = (enquiries ?? []).map((e: any) => ({
@@ -38,9 +40,11 @@ export default async function CoordinatorArtistsPage() {
     media: Array.isArray(a.media) ? a.media : [],
   }));
 
+  const categoryNames = (categoriesData ?? []).map((c) => c.name);
+
   return (
     <DashboardLayout user={profile} title="Artist Search">
-      <ArtistSearchClient artists={mappedArtists} enquiries={mappedEnquiries} />
+      <ArtistSearchClient artists={mappedArtists} enquiries={mappedEnquiries} allCategories={categoryNames} />
     </DashboardLayout>
   );
 }
