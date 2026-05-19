@@ -35,54 +35,38 @@ export default function RegisterPage() {
   const onSubmit = async (data: RegisterFormData) => {
     setLoading(true);
     try {
-      const supabase = createClient();
-
-      const { data: authData, error: signUpError } = await supabase.auth.signUp({
-        email: data.email,
-        password: data.password,
-        options: {
-          data: { name: data.name, phone: data.phone, role: data.role },
-        },
-      });
-
-      if (signUpError) throw signUpError;
-
-      if (authData.user) {
-        const { error: profileError } = await supabase.from("users").insert({
-          id: authData.user.id,
+      // Step 1: Create user via server-side API (uses service role, no email rate limit)
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           name: data.name,
           email: data.email,
-          phone: "+91" + data.phone,
+          phone: data.phone,
+          password: data.password,
           role: data.role,
-          is_active: true,
-        });
+        }),
+      });
 
-        if (profileError) throw profileError;
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error ?? "Registration failed");
 
-        if (data.role === "artist") {
-          await supabase.from("artist_profiles").insert({
-            user_id: authData.user.id,
-            bio: "",
-            categories: [],
-            cities: [],
-            base_price: 0,
-            pricing_details: {},
-            rating: 0,
-            total_bookings: 0,
-            is_verified: false,
-            is_listed: false,
-            is_profile_complete: false,
-            social_links: {},
-          });
-        }
+      // Step 2: Sign in to establish the session
+      const supabase = createClient();
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: data.email,
+        password: data.password,
+      });
 
-        toast.success(
-          data.role === "artist"
-            ? "Account created! Complete your profile to get listed."
-            : "Account created! Welcome to BookMyEventStar."
-        );
-        router.push(`/${data.role}`);
-      }
+      if (signInError) throw signInError;
+
+      toast.success(
+        data.role === "artist"
+          ? "Account created! Complete your profile to get listed."
+          : "Account created! Welcome to BookMyEventStar."
+      );
+      router.push(`/${data.role}`);
+      router.refresh();
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Registration failed. Please try again.";
       toast.error(message);
