@@ -29,6 +29,7 @@ import {
   sendPhoneOtp,
   verifyPhoneOtp,
   toE164India,
+  ensureClientUserAfterOtp,
 } from "@/lib/enquiry-phone";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -163,23 +164,23 @@ export default function EnquiryPage() {
   const startResendCooldown = () => setResendIn(60);
 
   const handleSendOtp = async () => {
-    let e164: string;
-    try {
-      e164 = toE164India(phoneDigits);
-    } catch {
-      toast.error("Enter a valid 10-digit mobile number");
+    const d = phoneDigits.replace(/\D/g, "");
+    if (!d) {
+      toast.error("Enter a mobile number");
       return;
     }
     setOtpBusy(true);
     try {
-      const { error } = await sendPhoneOtp(e164);
+      const supabase = createClient();
+      const { data, error } = await supabase.auth.signInAnonymously();
       if (error) throw error;
-      toast.success("OTP sent to your mobile");
-      setOtpScreen("code");
-      startResendCooldown();
-      setOtpCode("");
+      if (data.session) await ensureClientUserAfterOtp(data.session);
+      setVerifiedPhonePreview(`+91 ${d}`);
+      toast.success("Phone accepted — fill in your event details");
+      setPhase("form");
+      setStep(0);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not send OTP");
+      toast.error(e instanceof Error ? e.message : "Could not proceed");
     } finally {
       setOtpBusy(false);
     }
@@ -246,8 +247,8 @@ export default function EnquiryPage() {
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      if (!session?.user?.phone) {
-        toast.error("Your session expired — please verify your mobile again.");
+      if (!session?.user?.id) {
+        toast.error("Your session expired — please enter your mobile again.");
         setPhase("otp");
         return;
       }
@@ -271,7 +272,7 @@ export default function EnquiryPage() {
         .update({
           name: data.name.trim(),
           email: data.email.trim().toLowerCase(),
-          phone: session.user.phone ?? null,
+          phone: phoneDigits.replace(/\D/g, "") ? `+91${phoneDigits.replace(/\D/g, "")}` : null,
         })
         .eq("id", clientId);
       if (profileErr) {

@@ -1,12 +1,10 @@
 import { createClient } from "@/lib/supabase/client";
 import type { Session } from "@supabase/supabase-js";
 
-/** India mobile 10 digits → E.164 */
+/** Any phone digits → E.164-style. Strict validation deferred until OTP is live. */
 export function toE164India(digits: string): string {
-  const d = digits.replace(/\D/g, "").slice(-10);
-  if (!/^[6-9]\d{9}$/.test(d)) {
-    throw new Error("Invalid mobile number");
-  }
+  const d = digits.replace(/\D/g, "");
+  if (!d) throw new Error("Enter a mobile number");
   return `+91${d}`;
 }
 
