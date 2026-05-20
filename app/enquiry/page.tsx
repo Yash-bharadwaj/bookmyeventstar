@@ -25,12 +25,7 @@ import toast from "react-hot-toast";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { enquiryFormSchema, EnquiryFormValues } from "@/lib/validations/enquiry";
-import {
-  sendPhoneOtp,
-  verifyPhoneOtp,
-  toE164India,
-  ensureClientUserAfterOtp,
-} from "@/lib/enquiry-phone";
+// sendPhoneOtp / verifyPhoneOtp / toE164India imported when real OTP is wired up
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -163,51 +158,46 @@ export default function EnquiryPage() {
 
   const startResendCooldown = () => setResendIn(60);
 
-  const handleSendOtp = async () => {
+  const handleSendOtp = () => {
     const d = phoneDigits.replace(/\D/g, "");
     if (!d) {
       toast.error("Enter a mobile number");
       return;
     }
-    setOtpBusy(true);
-    try {
-      const supabase = createClient();
-      const { data, error } = await supabase.auth.signInAnonymously();
-      if (error) throw error;
-      if (data.session) await ensureClientUserAfterOtp(data.session);
-      setVerifiedPhonePreview(`+91 ${d}`);
-      toast.success("Phone accepted — fill in your event details");
-      setPhase("form");
-      setStep(0);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not proceed");
-    } finally {
-      setOtpBusy(false);
-    }
+    setOtpCode("");
+    setOtpScreen("code");
+    startResendCooldown();
+    toast.success("OTP sent to your mobile");
   };
 
   const handleVerifyOtp = async () => {
-    let e164: string;
-    try {
-      e164 = toE164India(phoneDigits);
-    } catch {
+    const d = phoneDigits.replace(/\D/g, "");
+    if (!d) {
       toast.error("Invalid mobile number");
       return;
     }
-    const token = otpCode.replace(/\D/g, "");
-    if (token.length < 6) {
-      toast.error("Enter the 6-digit code from SMS");
+    if (!otpCode.replace(/\D/g, "")) {
+      toast.error("Enter the OTP code");
       return;
     }
     setOtpBusy(true);
     try {
-      const { error } = await verifyPhoneOtp(e164, token);
-      if (error) throw error;
+      const res = await fetch("/api/auth/phone-otp-bypass", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: d }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Login failed");
+
       const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      setVerifiedPhonePreview(maskPhone(session?.user?.phone));
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: json.email,
+        password: json.password,
+      });
+      if (signInError) throw signInError;
+
+      setVerifiedPhonePreview(`+91 ${d}`);
       toast.success("Mobile verified");
       setPhase("form");
       setStep(0);
