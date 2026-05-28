@@ -4,12 +4,10 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2, XCircle, ChevronDown, ChevronUp, Star, ExternalLink,
-  IndianRupee, Calendar, MapPin, Timer, Sparkles,
-  Mic2, Clock, Shield, ThumbsUp, UserCheck, MessageSquare,
+  Calendar, MapPin, Timer, Sparkles,
+  Mic2, Clock, Shield, ThumbsUp, UserCheck,
 } from "lucide-react";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { Proposal } from "@/types";
 import { formatDate, formatCurrency } from "@/lib/utils";
@@ -47,41 +45,17 @@ export function ClientProposalsClient({ proposals }: Props) {
     return () => clearInterval(id);
   }, []);
 
-  // Track client's artist choice per proposal (pre-fill from existing DB value)
+  // Optional artist preference — not a gate, just a hint for the coordinator
   const [chosenArtist, setChosenArtist] = useState<Record<string, string>>(() =>
     Object.fromEntries(proposals.filter((p) => p.client_chosen_artist_id).map((p) => [p.id, p.client_chosen_artist_id!]))
   );
-  // Revision request state
-  const [revisionOpen, setRevisionOpen] = useState<string | null>(null);
-  const [revisionNotes, setRevisionNotes] = useState("");
-  const [sendingRevision, setSendingRevision] = useState(false);
 
   const selectArtist = async (proposalId: string, artistId: string) => {
-    setChosenArtist((prev) => ({ ...prev, [proposalId]: artistId }));
+    // Toggle off if already chosen
+    const newChoice = chosenArtist[proposalId] === artistId ? "" : artistId;
+    setChosenArtist((prev) => ({ ...prev, [proposalId]: newChoice }));
     const supabase = createClient();
-    await supabase.from("proposals").update({ client_chosen_artist_id: artistId }).eq("id", proposalId);
-  };
-
-  const sendRevisionRequest = async (proposalId: string) => {
-    if (!revisionNotes.trim()) { toast.error("Please describe what you'd like changed"); return; }
-    setSendingRevision(true);
-    const supabase = createClient();
-    const proposal = proposals.find((p) => p.id === proposalId);
-    await supabase.from("proposals").update({ status: "rejected", client_revision_notes: revisionNotes.trim() }).eq("id", proposalId);
-    if (proposal?.coordinator_id) {
-      await supabase.from("notifications").insert({
-        user_id: proposal.coordinator_id,
-        title: "Client Requested Revision",
-        message: `Client wants changes to the proposal for ${proposal.enquiry?.event_type ?? "event"}: "${revisionNotes.trim()}"`,
-        type: "warning",
-        link: `/coordinator/proposals`,
-      });
-    }
-    toast.success("Revision request sent. Your coordinator will send an updated proposal.");
-    setRevisionOpen(null);
-    setRevisionNotes("");
-    setSendingRevision(false);
-    router.refresh();
+    await supabase.from("proposals").update({ client_chosen_artist_id: newChoice || null }).eq("id", proposalId);
   };
 
   const acceptProposal = async (proposalId: string, enquiryId: string) => {
@@ -97,39 +71,32 @@ export function ClientProposalsClient({ proposals }: Props) {
       }
     }
 
-    // Require artist selection when multiple options exist
-    if (artists.length > 1 && !chosenArtist[proposalId]) {
-      toast.error("Please select which artist you'd like before confirming.");
-      setExpanded(proposalId); // ensure expanded so they see the selection
-      return;
-    }
-
     setAccepting(proposalId);
     try {
       const supabase = createClient();
-      const chosen = chosenArtist[proposalId] ?? artists[0]?.artist_id ?? null;
-      const chosenName = artists.find((a: any) => a.artist_id === chosen)?.name
-        ?? (artists.length === 1 ? artists[0]?.name : null);
+      // Save preference if client indicated one, otherwise coordinator picks best fit
+      const preferredArtistId = chosenArtist[proposalId] ?? null;
+      const preferredName = artists.find((a: any) => a.artist_id === preferredArtistId)?.name;
 
       await supabase.from("proposals").update({
         status: "accepted",
-        client_chosen_artist_id: chosen,
+        client_chosen_artist_id: preferredArtistId,
       }).eq("id", proposalId);
       await supabase.from("enquiries").update({ status: "confirmed" }).eq("id", enquiryId);
 
       if (proposal?.coordinator_id) {
         await supabase.from("notifications").insert({
           user_id: proposal.coordinator_id,
-          title: "Proposal Accepted",
-          message: `Client accepted the proposal for ${proposal.enquiry?.event_type ?? "event"}${chosenName ? ` and chose ${chosenName}` : ""}. Please create the booking now.`,
+          title: "🎉 Proposal Accepted — Create Booking",
+          message: `${proposal.enquiry?.event_type ?? "Event"} booking confirmed${preferredName ? `. Client prefers ${preferredName}` : ""}. Please create the booking now.`,
           type: "success",
           link: `/coordinator/proposals`,
         });
       }
-      toast.success("Booking confirmed! Our coordinator will be in touch shortly.", { duration: 5000 });
+      toast.success("Booking confirmed! Our coordinator will call you shortly.", { duration: 5000 });
       router.refresh();
     } catch {
-      toast.error("Failed to accept proposal");
+      toast.error("Something went wrong. Please try again.");
     } finally {
       setAccepting(null);
     }
@@ -299,16 +266,11 @@ export function ClientProposalsClient({ proposals }: Props) {
                     <div>
                       <div className="flex items-center justify-between mb-3">
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                          {artists.length === 1 ? "Your Artist" : `Choose Your Artist (${artists.length} options)`}
+                          {artists.length === 1 ? "Your Artist" : `Artist Options (${artists.length})`}
                         </p>
-                        {isPending && artists.length > 1 && !chosenArtist[proposal.id] && (
-                          <span className="text-[10px] text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full font-medium">
-                            Select one to confirm booking
-                          </span>
-                        )}
-                        {chosenArtist[proposal.id] && (
-                          <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
-                            <CheckCircle2 className="w-3 h-3" />Artist selected
+                        {artists.length > 1 && (
+                          <span className="text-[10px] text-muted-foreground">
+                            {chosenArtist[proposal.id] ? "Preference saved ✓" : "Tap to indicate preference"}
                           </span>
                         )}
                       </div>
@@ -439,50 +401,29 @@ export function ClientProposalsClient({ proposals }: Props) {
                 </motion.div>
               ) : (
                 <div className="space-y-3">
-                  {/* Artist selection reminder */}
-                  {artists.length > 1 && !chosenArtist[proposal.id] && (
-                    <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-700">
-                      <UserCheck className="w-4 h-4 shrink-0" />
-                      Scroll up and select which artist you&apos;d like — then you can confirm.
-                    </div>
-                  )}
-
-                  {/* Primary CTA */}
+                  {/* One big button — always enabled */}
                   <Button
-                    className="w-full h-14 sm:h-14 text-base font-bold bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-lg shadow-emerald-200 rounded-2xl active:scale-[0.98] transition-transform disabled:opacity-50"
+                    className="w-full h-14 text-base font-bold bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-lg shadow-emerald-200 rounded-2xl active:scale-[0.98] transition-transform"
                     loading={accepting === proposal.id}
-                    disabled={artists.length > 1 && !chosenArtist[proposal.id]}
                     onClick={() => acceptProposal(proposal.id, proposal.enquiry_id)}
                   >
                     <ThumbsUp className="w-5 h-5 mr-2 flex-shrink-0" />
-                    {artists.length > 1 && chosenArtist[proposal.id]
-                      ? `Confirm — ${artists.find((a: any) => a.artist_id === chosenArtist[proposal.id])?.name ?? "Selected Artist"}`
-                      : artists.length === 1
-                      ? `Confirm — ${artists[0]?.name ?? "Booking"}`
-                      : "Select an artist above to confirm"}
-                    {(artists.length === 1 || chosenArtist[proposal.id]) && <ArrowRight className="w-4 h-4 ml-2 flex-shrink-0" />}
+                    Confirm This Booking
+                    <ArrowRight className="w-4 h-4 ml-2 flex-shrink-0" />
                   </Button>
 
                   <p className="text-center text-xs text-muted-foreground flex items-center justify-center gap-1.5">
                     <Shield className="w-3 h-3" />
-                    Secure · No payment charged until you confirm with coordinator
+                    No payment now — coordinator will call you to finalise
                   </p>
 
-                  {/* Two secondary actions */}
-                  <div className="grid grid-cols-2 gap-2">
+                  {/* Decline buried at the bottom, low visual weight */}
+                  <div className="text-center pt-1">
                     <button
-                      className="flex items-center justify-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 hover:bg-amber-100 transition-colors"
-                      onClick={() => { setRevisionOpen(proposal.id); setRevisionNotes(""); }}
-                    >
-                      <MessageSquare className="w-3.5 h-3.5" />
-                      Request Changes
-                    </button>
-                    <button
-                      className="flex items-center justify-center gap-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2 hover:bg-red-100 transition-colors"
+                      className="text-xs text-muted-foreground hover:text-red-500 transition-colors"
                       onClick={() => { setExpanded(proposal.id); setConfirmDecline(proposal.id); }}
                     >
-                      <XCircle className="w-3.5 h-3.5" />
-                      Decline
+                      This doesn&apos;t work for me
                     </button>
                   </div>
                 </div>
@@ -522,18 +463,12 @@ export function ClientProposalsClient({ proposals }: Props) {
             </h2>
           </div>
 
-          {/* Decision guidance */}
-          <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-100 flex items-start gap-3">
-            <Sparkles className="w-5 h-5 text-indigo-500 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-semibold text-indigo-900">How it works</p>
-              <ol className="text-xs text-indigo-700 mt-1 leading-relaxed space-y-0.5 list-decimal list-inside">
-                <li>Expand the proposal to see your artist options</li>
-                <li>Click <strong>Choose</strong> on the artist you prefer</li>
-                <li>Hit <strong>Confirm Booking</strong> — your coordinator gets notified instantly</li>
-                <li>Need changes? Use <strong>Request Changes</strong> to tell us what to adjust</li>
-              </ol>
-            </div>
+          {/* One-line guidance */}
+          <div className="flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-indigo-50 border border-indigo-100">
+            <Sparkles className="w-4 h-4 text-indigo-500 shrink-0" />
+            <p className="text-sm text-indigo-800">
+              Review the proposal, optionally tap an artist you prefer, then hit <strong>Confirm</strong>. Our coordinator handles the rest.
+            </p>
           </div>
 
           {pendingProposals.map((p) => <ProposalCard key={p.id} proposal={p} isPending />)}
@@ -548,35 +483,6 @@ export function ClientProposalsClient({ proposals }: Props) {
         </div>
       )}
 
-      {/* Revision request dialog */}
-      <Dialog open={!!revisionOpen} onOpenChange={(o) => { if (!o) setRevisionOpen(null); }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Request Changes</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 pt-2">
-            <p className="text-sm text-muted-foreground">
-              Tell your coordinator exactly what you&apos;d like changed — budget, artist category, dates, or anything else.
-            </p>
-            <Textarea
-              placeholder="e.g. Can you find someone in a lower price range? Or do you have a Sufi singer available for this date?"
-              value={revisionNotes}
-              onChange={(e) => setRevisionNotes(e.target.value)}
-              rows={4}
-            />
-            <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => setRevisionOpen(null)}>Cancel</Button>
-              <Button
-                className="flex-1"
-                disabled={!revisionNotes.trim() || sendingRevision}
-                onClick={() => revisionOpen && sendRevisionRequest(revisionOpen)}
-              >
-                {sendingRevision ? "Sending…" : "Send Request"}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
