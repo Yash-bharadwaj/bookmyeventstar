@@ -47,6 +47,30 @@ export function AdminArtistsClient({ artists, categories }: { artists: ArtistWit
 
   const unverifiedCount = artists.filter((a) => !a.is_verified).length;
   const hiddenCount = artists.filter((a) => a.is_listed === false).length;
+  const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
+  const [bulkAction, setBulkAction] = useState<"verify" | "list" | "">("");
+  const [bulkProcessing, setBulkProcessing] = useState(false);
+
+  const toggleBulkSelect = (id: string) =>
+    setBulkSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  const confirmBulkAction = async () => {
+    if (!bulkAction || bulkSelected.size === 0) return;
+    setBulkProcessing(true);
+    const supabase = createClient();
+    const ids = Array.from(bulkSelected);
+    if (bulkAction === "verify") {
+      await supabase.from("artist_profiles").update({ is_verified: true }).in("user_id", ids);
+      toast.success(`${ids.length} artist${ids.length > 1 ? "s" : ""} verified`);
+    } else {
+      await supabase.from("artist_profiles").update({ is_listed: true }).in("user_id", ids);
+      toast.success(`${ids.length} artist${ids.length > 1 ? "s" : ""} listed`);
+    }
+    setBulkSelected(new Set());
+    setBulkAction("");
+    setBulkProcessing(false);
+    router.refresh();
+  };
 
   const filtered = artists.filter((a) => {
     const matchesSearch =
@@ -223,19 +247,47 @@ export function AdminArtistsClient({ artists, categories }: { artists: ArtistWit
           <p>No artists match your filters</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <>
+          {/* Bulk action bar */}
+          {bulkSelected.size > 0 && (
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-indigo-50 border border-indigo-200">
+              <span className="text-sm font-medium text-indigo-800">{bulkSelected.size} artist{bulkSelected.size > 1 ? "s" : ""} selected</span>
+              <select
+                value={bulkAction}
+                onChange={(e) => setBulkAction(e.target.value as "verify" | "list" | "")}
+                className="flex-1 max-w-[180px] h-8 rounded-lg border border-indigo-200 text-sm px-2 bg-white text-indigo-900"
+              >
+                <option value="">Choose action…</option>
+                <option value="verify">Verify all</option>
+                <option value="list">List all (show on browse)</option>
+              </select>
+              <Button size="sm" disabled={!bulkAction || bulkProcessing} onClick={confirmBulkAction} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+                {bulkProcessing ? "Processing…" : "Apply"}
+              </Button>
+              <button onClick={() => setBulkSelected(new Set())} className="text-xs text-indigo-500 underline hover:text-indigo-700">Clear</button>
+            </div>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map((artist, i) => (
             <motion.div
               key={artist.id}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.04 }}
-              className={`rounded-2xl border p-4 hover:shadow-md transition-all ${
-                !artist.is_verified ? "border-amber-200 bg-amber-50/20" : ""
+              className={`rounded-2xl border p-4 hover:shadow-md transition-all relative ${
+                bulkSelected.has(artist.user_id) ? "ring-2 ring-indigo-400" : ""
+              } ${!artist.is_verified ? "border-amber-200 bg-amber-50/20" : ""
               } ${!isListedProfile(artist) ? "border-dashed border-slate-300 bg-slate-50/50" : ""}`}
             >
+              {/* Bulk checkbox */}
+              <input
+                type="checkbox"
+                checked={bulkSelected.has(artist.user_id)}
+                onChange={() => toggleBulkSelect(artist.user_id)}
+                className="absolute top-3 left-3 w-4 h-4 rounded border-gray-300 text-indigo-600 cursor-pointer z-10"
+              />
               {/* Header */}
-              <div className="flex items-start justify-between gap-3 mb-3">
+              <div className="flex items-start justify-between gap-3 mb-3 pl-6">
                 <div className="flex items-center gap-3">
                   <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-sm flex-shrink-0 ${
                     artist.is_verified ? "gold-gradient text-navy-900" : "bg-muted text-muted-foreground"
@@ -355,6 +407,7 @@ export function AdminArtistsClient({ artists, categories }: { artists: ArtistWit
             </motion.div>
           ))}
         </div>
+        </>
       )}
     </div>
   );

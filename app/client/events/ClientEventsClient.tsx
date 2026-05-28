@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Star, Calendar, MapPin, CheckCircle2, MessageSquare,
@@ -58,8 +58,63 @@ export function ClientEventsClient({ bookings, clientId }: { bookings: BookingWi
   const [selectedBooking, setSelectedBooking] = useState<BookingWithExtras | null>(null);
   const [rating, setRating] = useState(5);
   const [hoverRating, setHoverRating] = useState(0);
-  const [comment, setComment] = useState("");
+  const [comment, setComment] = useState(() => {
+    // Restore draft on mount
+    if (typeof window !== "undefined") return localStorage.getItem("feedback_draft_comment") ?? "";
+    return "";
+  });
   const [submitting, setSubmitting] = useState(false);
+
+  // Persist feedback comment draft to localStorage
+  useEffect(() => {
+    if (comment) localStorage.setItem("feedback_draft_comment", comment);
+    else localStorage.removeItem("feedback_draft_comment");
+  }, [comment]);
+
+  // Cancellation state
+  const [cancelBooking, setCancelBooking] = useState<BookingWithExtras | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelling, setCancelling] = useState(false);
+
+  const requestCancellation = async () => {
+    if (!cancelBooking || !cancelReason.trim()) {
+      toast.error("Please provide a reason for cancellation.");
+      return;
+    }
+    setCancelling(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("bookings")
+        .update({ status: "cancelled", cancellation_reason: cancelReason.trim() })
+        .eq("id", cancelBooking.id);
+      if (error) throw error;
+
+      // Notify coordinator
+      const { data: coord } = await supabase
+        .from("enquiries")
+        .select("coordinator_id")
+        .eq("id", cancelBooking.enquiry_id)
+        .maybeSingle();
+      if (coord?.coordinator_id) {
+        await supabase.from("notifications").insert({
+          user_id: coord.coordinator_id,
+          title: "Booking Cancellation Requested",
+          message: `Client requested cancellation for ${cancelBooking.enquiry?.event_type ?? "event"} on ${formatDate(cancelBooking.event_date)}. Reason: ${cancelReason.trim()}`,
+          type: "warning",
+        });
+      }
+
+      toast.success("Cancellation request sent. Our coordinator will contact you shortly.");
+      setCancelBooking(null);
+      setCancelReason("");
+      router.refresh();
+    } catch {
+      toast.error("Could not process cancellation. Please contact your coordinator directly.");
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   const upcoming  = bookings.filter((b) => b.event_date >= today && b.status !== "cancelled");
   const past      = bookings.filter((b) => b.event_date < today || b.status === "completed");
@@ -73,6 +128,7 @@ export function ClientEventsClient({ bookings, clientId }: { bookings: BookingWi
     toast.success("Thank you for your review!");
     setFeedbackOpen(false);
     setComment(""); setRating(5); setHoverRating(0);
+    localStorage.removeItem("feedback_draft_comment");
     router.refresh();
     setSubmitting(false);
   };
@@ -128,8 +184,20 @@ export function ClientEventsClient({ bookings, clientId }: { bookings: BookingWi
                 </div>
               </div>
             ) : (
-              <div className="mt-4 p-3 rounded-xl bg-muted/30 border flex items-center gap-2 text-sm text-muted-foreground">
-                <Mic2 className="w-4 h-4" />Artist will be confirmed soon
+              <div className="mt-4 p-3 rounded-xl bg-muted/30 border space-y-1.5">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Mic2 className="w-4 h-4 shrink-0" />
+                  <span>Artist being finalised by coordinator</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <div className="flex gap-0.5">
+                    {["Proposal accepted", "Artist contacted", "Artist confirmed"].map((step, i) => (
+                      <span key={step} className={`px-2 py-0.5 rounded-full border text-[10px] font-medium ${
+                        i === 0 ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-muted text-muted-foreground border-border"
+                      }`}>{step}</span>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
 
@@ -139,6 +207,16 @@ export function ClientEventsClient({ bookings, clientId }: { bookings: BookingWi
                 {days === 0 ? "Your event is TODAY! Wishing you an amazing celebration." : `Only ${days} day${days === 1 ? "" : "s"} to go! Confirm final arrangements with your coordinator.`}
               </div>
             )}
+
+            <div className="mt-3 flex justify-end">
+              <button
+                type="button"
+                onClick={() => { setCancelBooking(booking); setCancelReason(""); }}
+                className="text-xs text-muted-foreground hover:text-destructive transition-colors underline underline-offset-2"
+              >
+                Request cancellation
+              </button>
+            </div>
           </div>
         </div>
       </motion.div>
@@ -305,7 +383,10 @@ export function ClientEventsClient({ bookings, clientId }: { bookings: BookingWi
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">Tell us more (optional)</label>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">Tell us more (optional)</label>
+                {comment && <span className="text-[10px] text-muted-foreground">Draft saved</span>}
+              </div>
               <Textarea
                 placeholder="How was the artist's performance? Was the coordination smooth? Any suggestions for us?"
                 value={comment}
@@ -326,6 +407,48 @@ export function ClientEventsClient({ bookings, clientId }: { bookings: BookingWi
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancellation Dialog */}
+      <Dialog open={!!cancelBooking} onOpenChange={(o) => { if (!o) setCancelBooking(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display">Request Cancellation</DialogTitle>
+          </DialogHeader>
+          {cancelBooking && (
+            <div className="space-y-4 pt-2">
+              <div className="p-3 rounded-xl bg-muted/50 border text-sm space-y-1">
+                <p className="font-semibold">{cancelBooking.enquiry?.event_type ?? "Event"}</p>
+                <p className="text-muted-foreground">{formatDate(cancelBooking.event_date)} · {cancelBooking.venue}, {cancelBooking.city}</p>
+              </div>
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-700">
+                ⚠️ Cancellations within 7 days of the event may incur charges as per our policy. Our coordinator will contact you to confirm and process your request.
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Reason for cancellation <span className="text-destructive">*</span></label>
+                <Textarea
+                  placeholder="Please explain why you need to cancel…"
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  rows={3}
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <Button variant="outline" className="flex-1" onClick={() => setCancelBooking(null)}>
+                  Keep my booking
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="flex-1"
+                  disabled={!cancelReason.trim() || cancelling}
+                  onClick={requestCancellation}
+                >
+                  {cancelling ? "Sending…" : "Request Cancellation"}
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

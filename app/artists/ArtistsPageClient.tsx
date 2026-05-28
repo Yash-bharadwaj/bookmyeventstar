@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -83,15 +83,46 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
   const activeMedia = allMedia[activeMediaIdx];
   const hasMedia = allMedia.length > 0;
 
+  const [sessionUser, setSessionUser] = useState<{ id: string; name: string; email: string; phone: string } | null>(null);
+
   const { register, handleSubmit, setValue, formState: { errors } } = useForm<QuickForm>({
     resolver: zodResolver(quickSchema),
   });
+
+  // Pre-fill from session on open
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session?.user?.id) return;
+      const { data: profile } = await supabase
+        .from("users")
+        .select("name, email, phone")
+        .eq("id", session.user.id)
+        .maybeSingle();
+      if (!profile) return;
+      const digits = (profile.phone ?? "").replace(/\D/g, "").slice(-10);
+      setSessionUser({ id: session.user.id, name: profile.name ?? "", email: profile.email ?? "", phone: digits });
+      if (profile.name)  setValue("name",  profile.name);
+      if (profile.email) setValue("email", profile.email);
+      if (digits)        setValue("phone", digits);
+    });
+  }, [setValue]);
 
   const onSubmit = async (data: QuickForm) => {
     setLoading(true);
     try {
       const supabase = createClient();
+
+      // Require login — redirect to enquiry page for unauthenticated users
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user?.id) {
+        toast("Please verify your mobile first to send an enquiry.", { icon: "ℹ️" });
+        window.location.href = `/enquiry`;
+        return;
+      }
+
       const { error } = await supabase.from("enquiries").insert({
+        client_id:          session.user.id,
         event_type:         data.event_type,
         event_date:         data.event_date,
         location:           data.city,
@@ -102,15 +133,22 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
         other_requirements: data.message || null,
         status:             "new",
         source:             "website",
+        submitter_type:     "personal",
       });
       if (error) throw error;
 
-      await supabase.from("notifications").insert({
-        user_id: "00000001-0000-0000-0000-000000000001",
-        title:   "New Enquiry Received",
-        message: `${data.name} wants to book ${artist.user.name} for ${data.event_type} in ${data.city}.`,
-        type:    "info",
-      });
+      // Notify all admins — non-fatal
+      const { data: admins } = await supabase.from("users").select("id").eq("role", "admin");
+      if (admins?.length) {
+        await supabase.from("notifications").insert(
+          admins.map((a) => ({
+            user_id: a.id,
+            title:   "New Enquiry Received",
+            message: `${data.name} wants to book ${artist.user.name} for ${data.event_type} in ${data.city}.`,
+            type:    "info",
+          }))
+        );
+      }
 
       setSubmitted(true);
       toast.success("Enquiry submitted! We'll call you within 2 hours.", { duration: 5000 });
@@ -375,37 +413,50 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
               </div>
 
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold text-gray-600">Your Name <span className="text-rose-500">*</span></Label>
-                    <Input
-                      placeholder="Rahul Sharma"
-                      icon={<User className="w-4 h-4" />}
-                      error={errors.name?.message}
-                      {...register("name")}
-                    />
+                {/* Contact info — collapsed to a pill when logged in */}
+                {sessionUser ? (
+                  <div className="flex items-center gap-2.5 rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-emerald-900 truncate">{sessionUser.name}</p>
+                      <p className="text-xs text-emerald-700 truncate">{sessionUser.email} · +91 {sessionUser.phone}</p>
+                    </div>
+                    <a href="/client" className="text-xs text-emerald-600 hover:underline shrink-0">My account</a>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold text-gray-600">Mobile Number <span className="text-rose-500">*</span></Label>
-                    <Input
-                      placeholder="9999999999"
-                      icon={<Phone className="w-4 h-4" />}
-                      error={errors.phone?.message}
-                      {...register("phone")}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-gray-600">Email Address <span className="text-rose-500">*</span></Label>
-                  <Input
-                    type="email"
-                    placeholder="you@example.com"
-                    icon={<Mail className="w-4 h-4" />}
-                    error={errors.email?.message}
-                    {...register("email")}
-                  />
-                </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold text-gray-600">Your Name <span className="text-rose-500">*</span></Label>
+                        <Input
+                          placeholder="Rahul Sharma"
+                          icon={<User className="w-4 h-4" />}
+                          error={errors.name?.message}
+                          {...register("name")}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold text-gray-600">Mobile Number <span className="text-rose-500">*</span></Label>
+                        <Input
+                          placeholder="9999999999"
+                          icon={<Phone className="w-4 h-4" />}
+                          error={errors.phone?.message}
+                          {...register("phone")}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold text-gray-600">Email Address <span className="text-rose-500">*</span></Label>
+                      <Input
+                        type="email"
+                        placeholder="you@example.com"
+                        icon={<Mail className="w-4 h-4" />}
+                        error={errors.email?.message}
+                        {...register("email")}
+                      />
+                    </div>
+                  </>
+                )}
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
@@ -486,7 +537,11 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
 
 /* ── Main Component ──────────────────────────────────── */
 export function ArtistsPageClient({ artists, initialCategory, initialCity, categories }: Props) {
-  const [search, setSearch]     = useState("");
+  // Pre-seed search from ?search= URL param (used by "View profile" links from proposals)
+  const initialSearch = typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search).get("search") ?? ""
+    : "";
+  const [search, setSearch]     = useState(initialSearch);
   const [category, setCategory] = useState(initialCategory ?? "all");
   const [city, setCity]         = useState(initialCity ?? "all");
   const [sortBy, setSortBy]     = useState("rating");

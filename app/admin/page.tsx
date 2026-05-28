@@ -17,6 +17,10 @@ export default async function AdminPage() {
 
   if (!profile || profile.role !== "admin") redirect("/login");
 
+  const now = new Date();
+  const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
+
   const [
     { count: totalEnquiries },
     { count: activeBookings },
@@ -27,6 +31,10 @@ export default async function AdminPage() {
     { count: assignedCount },
     { count: proposalCount },
     { count: confirmedCount },
+    { count: thisMonthEnquiries },
+    { count: lastMonthEnquiries },
+    { count: thisMonthBookings },
+    { count: lastMonthBookings },
   ] = await Promise.all([
     supabase.from("enquiries").select("*", { count: "exact", head: true }),
     supabase.from("bookings").select("*", { count: "exact", head: true }).in("status", ["confirmed", "in_progress"]),
@@ -40,7 +48,18 @@ export default async function AdminPage() {
     supabase.from("enquiries").select("*", { count: "exact", head: true }).eq("status", "assigned"),
     supabase.from("enquiries").select("*", { count: "exact", head: true }).eq("status", "proposal_sent"),
     supabase.from("enquiries").select("*", { count: "exact", head: true }).eq("status", "confirmed"),
+    supabase.from("enquiries").select("*", { count: "exact", head: true }).gte("created_at", thisMonthStart),
+    supabase.from("enquiries").select("*", { count: "exact", head: true }).gte("created_at", lastMonthStart).lt("created_at", thisMonthStart),
+    supabase.from("bookings").select("*", { count: "exact", head: true }).gte("created_at", thisMonthStart).in("status", ["confirmed", "in_progress"]),
+    supabase.from("bookings").select("*", { count: "exact", head: true }).gte("created_at", lastMonthStart).lt("created_at", thisMonthStart).in("status", ["confirmed", "in_progress"]),
   ]);
+
+  const enqTrend = lastMonthEnquiries && lastMonthEnquiries > 0
+    ? Math.round(((thisMonthEnquiries ?? 0) - lastMonthEnquiries) / lastMonthEnquiries * 100)
+    : null;
+  const bkTrend = lastMonthBookings && lastMonthBookings > 0
+    ? Math.round(((thisMonthBookings ?? 0) - lastMonthBookings) / lastMonthBookings * 100)
+    : null;
 
   return (
     <DashboardLayout user={profile} title="Admin Dashboard">
@@ -50,6 +69,8 @@ export default async function AdminPage() {
           active_bookings: activeBookings ?? 0,
           artists_count: artistsCount ?? 0,
           coordinators_count: coordinators?.length ?? 0,
+          enq_trend: enqTrend,
+          bk_trend: bkTrend,
         }}
         pipelineCounts={{
           new: newCount ?? 0,

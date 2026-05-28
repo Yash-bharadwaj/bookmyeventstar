@@ -126,6 +126,24 @@ export function CoordinatorBookingsClient({ bookings }: { bookings: BookingWithE
           </div>
         </div>
 
+        {/* Cancellation reason + re-propose CTA */}
+        {booking.status === "cancelled" && (
+          <div className="px-4 py-3 bg-red-50 border-b border-red-100 space-y-2">
+            {booking.cancellation_reason && (
+              <div className="flex items-start gap-2 text-sm text-red-700">
+                <span className="shrink-0 font-medium">Reason:</span>
+                <span>{booking.cancellation_reason}</span>
+              </div>
+            )}
+            <a
+              href={`/coordinator/proposals?enquiry=${booking.enquiry_id}`}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 hover:bg-amber-100 transition-colors"
+            >
+              ↺ Propose a replacement artist for this booking
+            </a>
+          </div>
+        )}
+
         <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Artist info */}
           <div>

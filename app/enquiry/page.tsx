@@ -85,6 +85,7 @@ export default function EnquiryPage() {
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [artistCategories, setArtistCategories] = useState<string[]>([]);
+  const [dailyCount, setDailyCount] = useState<number | null>(null);
 
   const {
     register,
@@ -98,6 +99,22 @@ export default function EnquiryPage() {
     resolver: zodResolver(enquiryFormSchema),
     defaultValues: { source: "website", submitter_type: "personal" },
   });
+
+  const checkDailyLimit = useCallback(async () => {
+    try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user?.id) return;
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const { count } = await supabase
+        .from("enquiries")
+        .select("id", { count: "exact", head: true })
+        .eq("client_id", session.user.id)
+        .gte("created_at", todayStart.toISOString());
+      setDailyCount(count ?? 0);
+    } catch { /* non-fatal */ }
+  }, []);
 
   const syncFromSession = useCallback(async () => {
     try {
@@ -120,6 +137,7 @@ export default function EnquiryPage() {
           });
           setPhase("form");
           setSessionReady(true);
+          checkDailyLimit();
           return;
         }
       }
@@ -307,6 +325,7 @@ export default function EnquiryPage() {
   };
 
   const onSubmit: SubmitHandler<EnquiryFormValues> = async (raw) => {
+    if (loading) return; // prevent double-submit
     const parsed = enquiryFormSchema.safeParse(raw);
     if (!parsed.success) return;
     const data = parsed.data;
@@ -485,7 +504,7 @@ export default function EnquiryPage() {
               <Button
                 variant="outline"
                 className="w-full h-12 font-medium gap-2"
-                onClick={() => setPhase("form")}
+                onClick={() => { setPhase("form"); checkDailyLimit(); }}
               >
                 <MessageSquare className="w-4 h-4" />
                 Submit an Enquiry Now
@@ -871,6 +890,23 @@ export default function EnquiryPage() {
           </button>
         </div>
 
+        {/* Daily limit banner */}
+        {dailyCount !== null && dailyCount >= DAILY_ENQUIRY_LIMIT && (
+          <div className="rounded-2xl border border-red-400/40 bg-red-500/20 px-4 py-3 mb-4 flex items-center gap-3 text-sm text-red-200">
+            <span className="text-base">🚫</span>
+            <span>
+              You&apos;ve used all <strong>{DAILY_ENQUIRY_LIMIT} enquiries</strong> for today. Come back tomorrow, or{" "}
+              <a href="https://wa.me/919999999999" className="underline font-medium">WhatsApp us</a> directly.
+            </span>
+          </div>
+        )}
+        {dailyCount !== null && dailyCount === DAILY_ENQUIRY_LIMIT - 1 && (
+          <div className="rounded-2xl border border-amber-400/40 bg-amber-500/15 px-4 py-3 mb-4 flex items-center gap-3 text-sm text-amber-200">
+            <span className="text-base">⚠️</span>
+            <span>You have <strong>1 enquiry left</strong> for today — make it count!</span>
+          </div>
+        )}
+
         {/* Step indicators */}
         <div className="flex items-center justify-center gap-3 mb-8">
           {ENQUIRY_STEPS.map((s, i) => (
@@ -1131,9 +1167,12 @@ export default function EnquiryPage() {
                   type="submit"
                   className="h-11 sm:h-9 flex-1 sm:flex-none font-semibold"
                   loading={loading}
+                  disabled={loading || (dailyCount !== null && dailyCount >= DAILY_ENQUIRY_LIMIT)}
                 >
                   <Sparkles className="w-4 h-4 mr-2" />
-                  Submit enquiry
+                  {dailyCount !== null && dailyCount >= DAILY_ENQUIRY_LIMIT
+                    ? "Daily limit reached"
+                    : "Submit enquiry"}
                 </Button>
               )}
             </div>

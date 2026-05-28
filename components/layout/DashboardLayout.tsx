@@ -14,7 +14,7 @@ interface DashboardLayoutProps {
 export function DashboardLayout({ user, children, title }: DashboardLayoutProps) {
   return (
     <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar role={user.role as UserRole} userName={user.name} avatarUrl={user.avatar_url} />
+      <Sidebar role={user.role as UserRole} userName={user.name} avatarUrl={user.avatar_url} userId={user.id} />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <TopBar user={user} title={title} />

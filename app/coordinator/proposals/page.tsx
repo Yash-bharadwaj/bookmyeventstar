@@ -13,7 +13,7 @@ export default async function CoordinatorProposalsPage() {
   const [{ data: rawProposals }, { data: rawEnquiries }, { data: rawArtists }, { data: cities }] = await Promise.all([
     supabase
       .from("proposals")
-      .select("*, enquiry:enquiries(event_type, event_date, city, client:users!enquiries_client_id_fkey(name))")
+      .select("*, enquiry:enquiries(event_type, event_date, city, other_requirements, client:users!enquiries_client_id_fkey(name))")
       .eq("coordinator_id", user.id)
       .order("created_at", { ascending: false }),
 

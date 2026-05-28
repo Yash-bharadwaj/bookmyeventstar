@@ -19,7 +19,7 @@ export default async function ClientProposalsPage() {
     .from("proposals")
     .select(`
       *,
-      enquiry:enquiries(event_type, event_date, city, location)
+      enquiry:enquiries(event_type, event_date, city, location, other_requirements)
     `)
     .in("enquiry_id", enquiryIds?.map((e) => e.id) ?? [])
     .order("created_at", { ascending: false });

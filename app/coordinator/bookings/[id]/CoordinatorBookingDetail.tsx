@@ -262,8 +262,8 @@ export function CoordinatorBookingDetail({ booking }: { booking: any }) {
         )}
       </div>
 
-      {/* Artist Settlement */}
-      {(booking.status === "completed" || booking.status === "in_progress") && (
+      {/* Artist Settlement — always shown so coordinator can record at any stage */}
+      {(
         <div className="rounded-2xl border p-5 space-y-4">
           <h2 className="font-semibold text-sm flex items-center gap-2">
             <Wallet className="w-4 h-4 text-emerald-500" />Artist Settlement

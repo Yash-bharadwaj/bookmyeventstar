@@ -18,7 +18,9 @@ import {
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/dashboard/StatCard";
-import { FileText, TrendingUp, DollarSign, Calendar, UserCog, Award, Printer, Download } from "lucide-react";
+import { FileText, TrendingUp, DollarSign, Calendar, UserCog, Award, Printer, Download, Filter } from "lucide-react";
+import { useState } from "react";
+import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { format, subMonths, startOfMonth } from "date-fns";
@@ -41,6 +43,27 @@ interface ReportsProps {
 const COLORS = ["#f59e0b", "#3b82f6", "#10b981", "#8b5cf6", "#ef4444", "#ec4899"];
 
 export function AdminReportsClient({ enquiries, bookings, payments, coordinatorStats }: ReportsProps) {
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+
+  // Apply date range filter to source data
+  const filteredEnquiries = enquiries.filter((e) => {
+    if (dateFrom && e.created_at < dateFrom) return false;
+    if (dateTo && e.created_at > dateTo + "T23:59:59") return false;
+    return true;
+  });
+  const filteredBookings = bookings.filter((b) => {
+    if (dateFrom && b.event_date < dateFrom) return false;
+    if (dateTo && b.event_date > dateTo) return false;
+    return true;
+  });
+  const filteredPayments = payments.filter((p) => {
+    const d = p.paid_at ?? "";
+    if (dateFrom && d && d < dateFrom) return false;
+    if (dateTo && d && d > dateTo + "T23:59:59") return false;
+    return true;
+  });
+
   const handlePrint = () => window.print();
 
   const handleDownloadCSV = () => {
@@ -153,9 +176,23 @@ export function AdminReportsClient({ enquiries, bookings, payments, coordinatorS
   return (
     <div className="p-4 md:p-6 space-y-6 print:p-0">
       {/* Toolbar */}
-      <div className="flex items-center justify-between print:hidden">
-        <p className="text-sm text-muted-foreground">
-          Showing data for all time · Generated {format(new Date(), "dd MMM yyyy")}
+      <div className="flex flex-wrap items-center gap-3 print:hidden">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
+          <span className="text-sm text-muted-foreground shrink-0">From</span>
+          <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-8 w-36 text-sm" />
+          <span className="text-sm text-muted-foreground shrink-0">to</span>
+          <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-8 w-36 text-sm" />
+          {(dateFrom || dateTo) && (
+            <button onClick={() => { setDateFrom(""); setDateTo(""); }} className="text-xs text-muted-foreground underline hover:text-foreground">
+              Clear
+            </button>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {dateFrom || dateTo
+            ? `${filteredEnquiries.length} enquiries in range`
+            : `All time · ${filteredEnquiries.length} enquiries`}
         </p>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={handleDownloadCSV}>

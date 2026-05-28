@@ -25,8 +25,16 @@ const profileSchema = z.object({
   bio: z.string().min(20, "Bio must be at least 20 characters"),
   base_price: z.number().min(1000, "Minimum price is ₹1,000"),
   rider_notes: z.string().optional(),
-  instagram: z.string().optional(),
-  youtube: z.string().optional(),
+  instagram: z.string()
+    .optional()
+    .refine((v) => !v || /^https?:\/\//i.test(v.trim()), {
+      message: "Enter a full URL starting with https://",
+    }),
+  youtube: z.string()
+    .optional()
+    .refine((v) => !v || /^https?:\/\//i.test(v.trim()), {
+      message: "Enter a full URL starting with https://",
+    }),
 });
 
 type ProfileFormData = z.infer<typeof profileSchema>;
@@ -54,6 +62,8 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
   const [selectedCities, setSelectedCities] = useState<string[]>(
     artistProfile?.cities ?? []
   );
+  const [citySearch, setCitySearch] = useState("");
+  const [catSearch, setCatSearch] = useState("");
 
   const { register, handleSubmit, watch, getValues, formState: { errors } } = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
@@ -428,28 +438,38 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
         {/* Categories */}
         <Card>
           <CardHeader><CardTitle>Your Categories *</CardTitle></CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
+            {categories.length > 6 && (
+              <Input
+                placeholder="Search categories…"
+                value={catSearch}
+                onChange={(e) => setCatSearch(e.target.value)}
+                className="h-8 text-sm"
+              />
+            )}
             <div className="flex flex-wrap gap-2">
-              {categories.map((cat) => {
-                const selected = selectedCategories.includes(cat);
-                return (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => toggleCategory(cat)}
-                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                      selected
-                        ? "gold-gradient text-navy-900 shadow-sm"
-                        : "border border-border hover:border-gold-400 text-muted-foreground"
-                    }`}
-                  >
-                    {cat}
-                  </button>
-                );
+              {categories
+                .filter((c) => c.toLowerCase().includes(catSearch.toLowerCase()))
+                .map((cat) => {
+                  const selected = selectedCategories.includes(cat);
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => toggleCategory(cat)}
+                      className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                        selected
+                          ? "gold-gradient text-navy-900 shadow-sm"
+                          : "border border-border hover:border-gold-400 text-muted-foreground"
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  );
               })}
             </div>
             {selectedCategories.length === 0 && (
-              <p className="mt-3 text-xs text-destructive">Select at least one category</p>
+              <p className="text-xs text-destructive">Select at least one category</p>
             )}
           </CardContent>
         </Card>
@@ -457,25 +477,40 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
         {/* Cities */}
         <Card>
           <CardHeader><CardTitle>Cities You Perform In *</CardTitle></CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {INDIA_CITIES.map((city) => {
-                const selected = selectedCities.includes(city.name);
-                return (
+          <CardContent className="space-y-3">
+            <Input
+              placeholder="Search cities…"
+              value={citySearch}
+              onChange={(e) => setCitySearch(e.target.value)}
+              className="h-8 text-sm"
+            />
+            {selectedCities.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {selectedCities.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => toggleCity(c)}
+                    className="px-2.5 py-1 rounded-full text-xs font-medium bg-navy-900 text-white flex items-center gap-1"
+                  >
+                    {c} <span className="text-white/60">×</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
+              {INDIA_CITIES
+                .filter((city) => city.name.toLowerCase().includes(citySearch.toLowerCase()) && !selectedCities.includes(city.name))
+                .map((city) => (
                   <button
                     key={city.name}
                     type="button"
                     onClick={() => toggleCity(city.name)}
-                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                      selected
-                        ? "bg-navy-900 text-white shadow-sm"
-                        : "border border-border hover:border-navy-400 text-muted-foreground"
-                    }`}
+                    className="px-3 py-1.5 rounded-full text-sm font-medium transition-all border border-border hover:border-navy-400 text-muted-foreground"
                   >
                     {city.name}
                   </button>
-                );
-              })}
+                ))}
             </div>
           </CardContent>
         </Card>
@@ -487,10 +522,12 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
             <div className="space-y-1.5">
               <Label>Instagram Profile URL</Label>
               <Input placeholder="https://instagram.com/yourprofile" {...register("instagram")} />
+              {errors.instagram && <p className="text-xs text-destructive">{errors.instagram.message}</p>}
             </div>
             <div className="space-y-1.5">
               <Label>YouTube Channel URL</Label>
               <Input placeholder="https://youtube.com/@yourchannel" {...register("youtube")} />
+              {errors.youtube && <p className="text-xs text-destructive">{errors.youtube.message}</p>}
             </div>
           </CardContent>
         </Card>

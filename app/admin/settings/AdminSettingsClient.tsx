@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Category, City } from "@/types";
+import { Settings } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import toast from "react-hot-toast";
 
@@ -143,17 +144,32 @@ export function AdminSettingsClient({
     setSavingCat(false);
   };
 
-  const deleteCategory = async (id: string) => {
-    if (!confirm("Delete this category?")) return;
-    setDeletingCat(id);
-    const supabase = createClient();
-    const { error } = await supabase.from("categories").delete().eq("id", id);
-    if (error) { toast.error("Failed to delete"); }
-    else {
-      setCategories((prev) => prev.filter((c) => c.id !== id));
-      toast.success("Category deleted");
-    }
-    setDeletingCat(null);
+  const deleteCategory = (id: string) => {
+    const target = categories.find((c) => c.id === id);
+    if (!target) return;
+    // Optimistic remove
+    setCategories((prev) => prev.filter((c) => c.id !== id));
+    let cancelled = false;
+    const tid = window.setTimeout(async () => {
+      if (cancelled) return;
+      const supabase = createClient();
+      const { error } = await supabase.from("categories").delete().eq("id", id);
+      if (error) { toast.error("Failed to delete category"); setCategories((prev) => [...prev, target].sort((a, b) => a.name.localeCompare(b.name))); }
+    }, 5000);
+    toast(
+      (t) => (
+        <span className="flex items-center gap-3 text-sm">
+          &ldquo;{target.name}&rdquo; deleted
+          <button
+            className="font-semibold text-indigo-600 underline"
+            onClick={() => { cancelled = true; clearTimeout(tid); toast.dismiss(t.id); setCategories((prev) => [...prev, target].sort((a, b) => a.name.localeCompare(b.name))); }}
+          >
+            Undo
+          </button>
+        </span>
+      ),
+      { duration: 5000 }
+    );
   };
 
   // --- Cities ---
@@ -195,17 +211,60 @@ export function AdminSettingsClient({
     setSavingCity(false);
   };
 
-  const deleteCity = async (id: string) => {
-    if (!confirm("Delete this city?")) return;
-    setDeletingCity(id);
-    const supabase = createClient();
-    const { error } = await supabase.from("cities").delete().eq("id", id);
-    if (error) { toast.error("Failed to delete"); }
-    else {
-      setCities((prev) => prev.filter((c) => c.id !== id));
-      toast.success("City deleted");
+  const deleteCity = (id: string) => {
+    const target = cities.find((c) => c.id === id);
+    if (!target) return;
+    setCities((prev) => prev.filter((c) => c.id !== id));
+    let cancelled = false;
+    const tid = window.setTimeout(async () => {
+      if (cancelled) return;
+      const supabase = createClient();
+      const { error } = await supabase.from("cities").delete().eq("id", id);
+      if (error) { toast.error("Failed to delete city"); setCities((prev) => [...prev, target].sort((a, b) => a.name.localeCompare(b.name))); }
+    }, 5000);
+    toast(
+      (t) => (
+        <span className="flex items-center gap-3 text-sm">
+          &ldquo;{target.name}&rdquo; deleted
+          <button
+            className="font-semibold text-indigo-600 underline"
+            onClick={() => { cancelled = true; clearTimeout(tid); toast.dismiss(t.id); setCities((prev) => [...prev, target].sort((a, b) => a.name.localeCompare(b.name))); }}
+          >
+            Undo
+          </button>
+        </span>
+      ),
+      { duration: 5000 }
+    );
+  };
+
+  const [artistShare, setArtistShare] = useState(70);
+  const [workloadMax, setWorkloadMax] = useState(8);
+  const [advancePct, setAdvancePct] = useState(30);
+  const [savingPlatform, setSavingPlatform] = useState(false);
+
+  const platformShare = 100 - artistShare;
+
+  const savePlatformSettings = async () => {
+    setSavingPlatform(true);
+    // Store in Supabase settings table (or just localStorage as a best-effort for now)
+    try {
+      const supabase = createClient();
+      await Promise.all([
+        supabase.from("app_settings").upsert({ key: "artist_share_pct", value: String(artistShare) }, { onConflict: "key" }),
+        supabase.from("app_settings").upsert({ key: "coordinator_workload_max", value: String(workloadMax) }, { onConflict: "key" }),
+        supabase.from("app_settings").upsert({ key: "advance_payment_pct", value: String(advancePct) }, { onConflict: "key" }),
+      ]);
+      toast.success("Platform settings saved");
+    } catch {
+      // Fallback: save to localStorage so other components can read
+      localStorage.setItem("bmes_artist_share_pct", String(artistShare));
+      localStorage.setItem("bmes_workload_max", String(workloadMax));
+      localStorage.setItem("bmes_advance_pct", String(advancePct));
+      toast.success("Platform settings saved (locally)");
+    } finally {
+      setSavingPlatform(false);
     }
-    setDeletingCity(null);
   };
 
   return (
@@ -217,6 +276,9 @@ export function AdminSettingsClient({
           </TabsTrigger>
           <TabsTrigger value="cities">
             <MapPin className="w-4 h-4 mr-1.5" />Cities ({cities.length})
+          </TabsTrigger>
+          <TabsTrigger value="platform">
+            <Settings className="w-4 h-4 mr-1.5" />Platform
           </TabsTrigger>
         </TabsList>
 
@@ -424,6 +486,56 @@ export function AdminSettingsClient({
               </tbody>
             </table>
           </div>
+        </TabsContent>
+
+        {/* Platform Tab */}
+        <TabsContent value="platform" className="mt-6 space-y-6 max-w-md">
+          <div className="rounded-2xl border p-5 space-y-5">
+            <h3 className="font-semibold text-sm">Revenue Split</h3>
+            <div className="space-y-2">
+              <Label>Artist share (%)</Label>
+              <div className="flex items-center gap-3">
+                <Input
+                  type="number" min={50} max={95} value={artistShare}
+                  onChange={(e) => setArtistShare(Number(e.target.value))}
+                  className="w-24"
+                />
+                <span className="text-sm text-muted-foreground">
+                  Platform keeps <strong>{platformShare}%</strong> · Artist gets <strong>{artistShare}%</strong>
+                </span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Advance payment (%)</Label>
+              <div className="flex items-center gap-3">
+                <Input
+                  type="number" min={10} max={80} value={advancePct}
+                  onChange={(e) => setAdvancePct(Number(e.target.value))}
+                  className="w-24"
+                />
+                <span className="text-sm text-muted-foreground">of total booking amount</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border p-5 space-y-4">
+            <h3 className="font-semibold text-sm">Coordinator Workload</h3>
+            <div className="space-y-2">
+              <Label>Max recommended active enquiries per coordinator</Label>
+              <div className="flex items-center gap-3">
+                <Input
+                  type="number" min={1} max={30} value={workloadMax}
+                  onChange={(e) => setWorkloadMax(Number(e.target.value))}
+                  className="w-24"
+                />
+                <span className="text-sm text-muted-foreground">Above this = shown as "Overloaded"</span>
+              </div>
+            </div>
+          </div>
+
+          <Button onClick={savePlatformSettings} disabled={savingPlatform}>
+            {savingPlatform ? "Saving…" : "Save Platform Settings"}
+          </Button>
         </TabsContent>
       </Tabs>
     </div>

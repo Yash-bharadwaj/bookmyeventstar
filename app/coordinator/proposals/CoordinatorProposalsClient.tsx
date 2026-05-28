@@ -79,6 +79,8 @@ export function CoordinatorProposalsClient({
   const [selectedArtists, setSelectedArtists] = useState<SelectedArtist[]>([
     { artistId: "", name: "", price: 0, notes: "" },
   ]);
+  // Artist date conflict map: artistId → true if booked on event date
+  const [conflictMap, setConflictMap] = useState<Record<string, boolean>>({});
 
   // ── Booking form ──
   const [venue, setVenue] = useState("");
@@ -123,6 +125,19 @@ export function CoordinatorProposalsClient({
           : s
       )
     );
+    // Check availability on event date
+    const eventDate = enquiries.find((e) => e.id === selectedEnquiryId)?.event_date;
+    if (artistId && eventDate && !(artistId in conflictMap)) {
+      createClient()
+        .from("bookings")
+        .select("id", { count: "exact", head: true })
+        .eq("artist_id", (a as any)?.user_id ?? artistId)
+        .eq("event_date", eventDate)
+        .not("status", "in", "(cancelled)")
+        .then(({ count }) => {
+          setConflictMap((prev) => ({ ...prev, [artistId]: (count ?? 0) > 0 }));
+        });
+    }
   };
 
   const updateArtistField = (i: number, field: keyof SelectedArtist, value: string | number) =>
@@ -145,16 +160,28 @@ export function CoordinatorProposalsClient({
     setSelectedArtists([{ artistId: "", name: "", price: 0, notes: "" }]);
   };
 
-  // Read sessionStorage on mount (coming from shortlist page)
+  // Read localStorage on mount (coming from shortlist page) OR URL param (coming from re-propose flow)
   useEffect(() => {
-    const storedArtistIds: string[] = JSON.parse(sessionStorage.getItem("shortlisted_artists") ?? "[]");
-    const storedEnquiryId: string = sessionStorage.getItem("shortlisted_enquiry") ?? "";
+    // URL param: ?enquiry=ID (from re-propose button on cancelled bookings)
+    const urlEnquiryId = typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("enquiry") ?? ""
+      : "";
+    if (urlEnquiryId && !showCreate) {
+      const enq = enquiries.find((e) => e.id === urlEnquiryId);
+      if (enq) {
+        setSelectedEnquiryId(urlEnquiryId);
+        setShowCreate(true);
+      }
+    }
+
+    const storedArtistIds: string[] = JSON.parse(localStorage.getItem("shortlisted_artists") ?? "[]");
+    const storedEnquiryId: string = localStorage.getItem("shortlisted_enquiry") ?? "";
 
     if (storedArtistIds.length === 0 && !storedEnquiryId) return;
 
     // Clear so re-navigating doesn't re-trigger
-    sessionStorage.removeItem("shortlisted_artists");
-    sessionStorage.removeItem("shortlisted_enquiry");
+    localStorage.removeItem("shortlisted_artists");
+    localStorage.removeItem("shortlisted_enquiry");
 
     // Pre-fill enquiry
     if (storedEnquiryId) {
@@ -264,7 +291,8 @@ export function CoordinatorProposalsClient({
         total_amount: Number(totalAmount),
         advance_amount: Number(advanceAmount),
         status: "pending",
-        special_requirements: proposal.content,
+        // Use client's actual event requirements (other_requirements from enquiry), not the coordinator's proposal message
+        special_requirements: (proposal as any).enquiry?.other_requirements ?? null,
       }).select("id").single();
       if (error) throw error;
       await supabase.from("enquiries").update({ status: "confirmed" }).eq("id", proposal.enquiry_id);
@@ -361,10 +389,20 @@ export function CoordinatorProposalsClient({
                   setBookingCity(p.enquiry?.city ?? "");
                   setTotalAmount(String(p.quoted_price));
                   setAdvanceAmount(String(Math.round(p.quoted_price * 0.3)));
-                  // Auto-select if only one artist proposed
                   const list = (p.artists_proposed as any[]) ?? [];
-                  if (list.length === 1) setSelectedBookingArtistId(list[0].artist_id);
+                  // Pre-fill with client's chosen artist (if set), else single artist, else empty
+                  const clientChoice = (p as any).client_chosen_artist_id;
+                  if (clientChoice) setSelectedBookingArtistId(clientChoice);
+                  else if (list.length === 1) setSelectedBookingArtistId(list[0].artist_id);
                   else setSelectedBookingArtistId("");
+                  // Pre-fill quoted price of chosen artist
+                  if (clientChoice) {
+                    const chosen = list.find((a: any) => a.artist_id === clientChoice);
+                    if (chosen?.quoted_price) {
+                      setTotalAmount(String(chosen.quoted_price));
+                      setAdvanceAmount(String(Math.round(chosen.quoted_price * 0.3)));
+                    }
+                  }
                 }}>
                 <Building2 className="w-3.5 h-3.5 mr-1.5" />Create Booking
               </Button>
@@ -373,13 +411,24 @@ export function CoordinatorProposalsClient({
         </div>
         {artists_list.length > 0 && (
           <div className="px-4 py-3 flex flex-wrap gap-2">
-            {artists_list.map((a: any, i: number) => (
-              <div key={i} className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-muted/40 border text-xs">
-                <Mic2 className="w-3 h-3 text-muted-foreground" />
-                <span className="font-medium">{a.name ?? `Option ${i + 1}`}</span>
-                <span className="text-indigo-600 font-semibold">{formatCurrency(a.quoted_price)}</span>
-              </div>
-            ))}
+            {artists_list.map((a: any, i: number) => {
+              const isClientChoice = a.artist_id === (p as any).client_chosen_artist_id;
+              return (
+                <div key={i} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs ${isClientChoice ? "bg-emerald-50 border-emerald-300" : "bg-muted/40 border-border"}`}>
+                  <Mic2 className="w-3 h-3 text-muted-foreground" />
+                  <span className={`font-medium ${isClientChoice ? "text-emerald-800" : ""}`}>{a.name ?? `Option ${i + 1}`}</span>
+                  {isClientChoice && <span className="text-[9px] bg-emerald-600 text-white px-1.5 py-0.5 rounded-full font-bold">Client picked</span>}
+                  <span className={`font-semibold ${isClientChoice ? "text-emerald-700" : "text-indigo-600"}`}>{formatCurrency(a.quoted_price)}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {/* Client revision request banner */}
+        {(p as any).client_revision_notes && p.status === "rejected" && (
+          <div className="mx-4 mb-3 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800">
+            <span className="font-semibold">Client requested changes: </span>
+            {(p as any).client_revision_notes}
           </div>
         )}
       </motion.div>
@@ -775,6 +824,16 @@ export function CoordinatorProposalsClient({
                         <span className="text-[10px] text-muted-foreground flex items-center gap-1">
                           <CheckCircle className="w-3 h-3 text-emerald-500" />Verified · {pickedArtist.total_bookings} bookings
                         </span>
+                        {conflictMap[slot.artistId] === true && (
+                          <span className="text-[10px] text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
+                            ⚠️ Already booked on this date
+                          </span>
+                        )}
+                        {conflictMap[slot.artistId] === false && (
+                          <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
+                            ✓ Available on event date
+                          </span>
+                        )}
                       </div>
                     )}
 
@@ -909,7 +968,26 @@ export function CoordinatorProposalsClient({
               {showBooking && (showBooking.artists_proposed as any[])?.length > 0 && (
                 <div className="space-y-1.5">
                   <Label>Confirmed Artist <span className="text-destructive">*</span></Label>
-                  <Select value={selectedBookingArtistId} onValueChange={setSelectedBookingArtistId}>
+                  {/* Client's choice indicator */}
+                  {(showBooking as any).client_chosen_artist_id && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-700 font-medium">
+                      <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+                      Client chose:{" "}
+                      <span className="font-bold">
+                        {(showBooking.artists_proposed as any[]).find((a: any) => a.artist_id === (showBooking as any).client_chosen_artist_id)?.name ?? "Selected artist"}
+                      </span>
+                      {" "}— pre-filled below
+                    </div>
+                  )}
+                  <Select value={selectedBookingArtistId} onValueChange={(v) => {
+                    setSelectedBookingArtistId(v);
+                    // Update price to match selected artist
+                    const artist = (showBooking.artists_proposed as any[]).find((a: any) => a.artist_id === v);
+                    if (artist?.quoted_price) {
+                      setTotalAmount(String(artist.quoted_price));
+                      setAdvanceAmount(String(Math.round(artist.quoted_price * 0.3)));
+                    }
+                  }}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select the artist being booked…" />
                     </SelectTrigger>
@@ -919,6 +997,9 @@ export function CoordinatorProposalsClient({
                           <div className="flex items-center gap-2">
                             <Mic2 className="w-3.5 h-3.5 text-muted-foreground" />
                             <span className="font-medium">{a.name}</span>
+                            {a.artist_id === (showBooking as any).client_chosen_artist_id && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-bold">Client's choice</span>
+                            )}
                             <span className="text-muted-foreground text-xs">·</span>
                             <span className="text-xs font-semibold text-indigo-600">{formatCurrency(a.quoted_price)}</span>
                           </div>
@@ -969,14 +1050,26 @@ export function CoordinatorProposalsClient({
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Advance (₹) <span className="text-destructive">*</span>
-                    <span className="ml-1 text-[10px] text-muted-foreground font-normal">auto 30%</span>
-                  </Label>
+                  <Label>Advance (₹) <span className="text-destructive">*</span></Label>
                   <div className="relative">
                     <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                     <Input type="number" className="pl-8" value={advanceAmount}
                       onChange={(e) => setAdvanceAmount(e.target.value)} />
                   </div>
+                  {totalAmount && (
+                    <div className="flex gap-1.5">
+                      {[25, 30, 40, 50].map((pct) => (
+                        <button
+                          key={pct}
+                          type="button"
+                          onClick={() => setAdvanceAmount(String(Math.round(Number(totalAmount) * pct / 100)))}
+                          className="text-[10px] px-2 py-0.5 rounded border bg-muted hover:bg-indigo-50 hover:border-indigo-300 text-muted-foreground hover:text-indigo-700 transition-colors"
+                        >
+                          {pct}%
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 

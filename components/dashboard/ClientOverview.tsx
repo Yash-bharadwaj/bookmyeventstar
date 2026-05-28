@@ -235,13 +235,20 @@ export function ClientOverview({ enquiries, proposals, upcomingBookings, userNam
               animate={{ opacity: 1 }}
               className="rounded-2xl border-2 border-dashed border-muted p-8 text-center"
             >
-              <div className="flex justify-center mb-3">
-                <BrandLogo size="sm" />
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 mx-auto mb-4 flex items-center justify-center">
+                <Sparkles className="w-7 h-7 text-white" />
               </div>
-              <p className="font-semibold mb-1">No event plans yet</p>
-              <p className="text-sm text-muted-foreground mb-4">Start planning your dream event today</p>
+              <p className="font-display font-semibold text-lg mb-1">Plan your first event</p>
+              <p className="text-sm text-muted-foreground mb-2 max-w-xs mx-auto">
+                Tell us what you&apos;re planning — we&apos;ll match you with the right artists within 2 hours.
+              </p>
+              <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground mb-4">
+                <span className="flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />Free</span>
+                <span className="flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />2-hr response</span>
+                <span className="flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />No commitment</span>
+              </div>
               <Link href="/enquiry">
-                <Button size="sm"><Sparkles className="w-4 h-4 mr-2" />Get Started</Button>
+                <Button><Sparkles className="w-4 h-4 mr-2" />Submit an Enquiry</Button>
               </Link>
             </motion.div>
           ) : (
@@ -295,9 +302,29 @@ export function ClientOverview({ enquiries, proposals, upcomingBookings, userNam
                     </div>
                   </div>
                 ) : (
-                  <div className="mt-3 pt-3 border-t flex items-center gap-2 text-xs text-muted-foreground">
-                    <Clock className="w-3.5 h-3.5" />
-                    A coordinator will be assigned to you shortly
+                  <div className="mt-3 pt-3 border-t space-y-2">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Clock className="w-3.5 h-3.5 shrink-0" />
+                      {(() => {
+                        const hoursElapsed = enquiry.created_at
+                          ? (Date.now() - new Date(enquiry.created_at).getTime()) / 3_600_000
+                          : 0;
+                        return hoursElapsed < 2
+                          ? `Coordinator being assigned — expect a call within ${Math.ceil(2 - hoursElapsed)} hour${Math.ceil(2 - hoursElapsed) === 1 ? "" : "s"}`
+                          : "Taking a bit longer than usual — our team will reach you very soon";
+                      })()}
+                    </div>
+                    {enquiry.created_at && (Date.now() - new Date(enquiry.created_at).getTime()) > 2 * 3_600_000 && (
+                      <a
+                        href="https://wa.me/919999999999"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1.5 hover:bg-emerald-100 transition-colors"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        WhatsApp us now
+                      </a>
+                    )}
                   </div>
                 )}
               </motion.div>

@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard,
@@ -23,7 +25,6 @@ import {
 import { cn } from "@/lib/utils";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { UserRole } from "@/types";
-import { useState } from "react";
 
 const navConfig: Record<UserRole, { label: string; href: string; icon: React.ElementType }[]> = {
   admin: [
@@ -93,12 +94,27 @@ interface SidebarProps {
   role: UserRole;
   userName: string;
   avatarUrl?: string | null;
+  userId?: string;
 }
 
-export function Sidebar({ role, userName }: SidebarProps) {
+export function Sidebar({ role, userName, userId }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const [unreadMessages, setUnreadMessages] = useState(0);
   const navItems = navConfig[role];
+
+  useEffect(() => {
+    if (!userId) return;
+    const supabase = createClient();
+    const since = new Date(Date.now() - 24 * 3600_000).toISOString();
+    // Count messages in last 24h not sent by current user, on their enquiries
+    supabase
+      .from("messages")
+      .select("id", { count: "exact", head: true })
+      .neq("sender_id", userId)
+      .gte("created_at", since)
+      .then(({ count }) => setUnreadMessages(count ?? 0));
+  }, [userId]);
 
   return (
     <motion.aside
@@ -152,16 +168,28 @@ export function Sidebar({ role, userName }: SidebarProps) {
                     : "text-white/60 hover:text-white hover:bg-white/10"
                 )}
               >
-                <Icon className="w-5 h-5 flex-shrink-0" />
+                <div className="relative flex-shrink-0">
+                  <Icon className="w-5 h-5" />
+                  {item.label === "Messages" && unreadMessages > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
+                      {unreadMessages > 9 ? "9+" : unreadMessages}
+                    </span>
+                  )}
+                </div>
                 <AnimatePresence>
                   {!collapsed && (
                     <motion.span
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
-                      className="text-sm font-medium truncate"
+                      className="text-sm font-medium truncate flex-1"
                     >
                       {item.label}
+                      {item.label === "Messages" && unreadMessages > 0 && !collapsed && (
+                        <span className="ml-auto inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white text-[9px] font-bold">
+                          {unreadMessages > 9 ? "9+" : unreadMessages}
+                        </span>
+                      )}
                     </motion.span>
                   )}
                 </AnimatePresence>

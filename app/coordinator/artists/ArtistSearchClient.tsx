@@ -135,9 +135,9 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
 
   const goToCreateProposal = () => {
     if (!enquiryId) { alert("Please select an enquiry first"); return; }
-    // Store shortlisted IDs in sessionStorage so the proposals page can pre-fill
-    sessionStorage.setItem("shortlisted_artists", JSON.stringify(Array.from(shortlisted)));
-    sessionStorage.setItem("shortlisted_enquiry", enquiryId);
+    // Store shortlisted IDs in localStorage so the proposals page can pre-fill
+    localStorage.setItem("shortlisted_artists", JSON.stringify(Array.from(shortlisted)));
+    localStorage.setItem("shortlisted_enquiry", enquiryId);
     router.push("/coordinator/proposals");
   };
 

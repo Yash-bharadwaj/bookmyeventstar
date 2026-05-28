@@ -82,10 +82,16 @@ export function ArtistBookingsClient({ bookings }: { bookings: BookingWithExtras
     setSavingReq(false);
   };
 
-  const updateBooking = async (id: string, status: "confirmed" | "cancelled") => {
+  const [declineOpen, setDeclineOpen] = useState<string | null>(null);
+  const [declineReason, setDeclineReason] = useState("");
+  const [declining, setDeclining] = useState(false);
+
+  const updateBooking = async (id: string, status: "confirmed" | "cancelled", reason?: string) => {
     setUpdating(id);
     const supabase = createClient();
-    const { error } = await supabase.from("bookings").update({ status }).eq("id", id);
+    const updatePayload: Record<string, unknown> = { status };
+    if (reason) updatePayload.cancellation_reason = reason;
+    const { error } = await supabase.from("bookings").update(updatePayload).eq("id", id);
     if (error) {
       toast.error("Failed to update booking");
       setUpdating(null);
@@ -103,13 +109,23 @@ export function ArtistBookingsClient({ bookings }: { bookings: BookingWithExtras
       await supabase.from("notifications").insert({
         user_id: booking.coordinator_id,
         title: status === "confirmed" ? "Artist Confirmed Booking" : "Artist Declined Booking",
-        message: `Artist has ${status === "confirmed" ? "accepted" : "declined"} the booking for ${eventType}.`,
+        message: `Artist has ${status === "confirmed" ? "accepted" : "declined"} the booking for ${eventType}${reason ? `: "${reason}"` : ""}. ${status === "cancelled" ? "Please propose a replacement artist." : ""}`,
         type: status === "confirmed" ? "success" : "warning",
         link: "/coordinator/bookings",
       });
     }
     router.refresh();
     setUpdating(null);
+  };
+
+  const confirmDecline = async () => {
+    if (!declineOpen) return;
+    if (!declineReason.trim()) { toast.error("Please provide a reason for declining"); return; }
+    setDeclining(true);
+    await updateBooking(declineOpen, "cancelled", declineReason.trim());
+    setDeclineOpen(null);
+    setDeclineReason("");
+    setDeclining(false);
   };
 
   const BookingCard = ({ b, showActions }: { b: BookingWithExtras; showActions?: boolean }) => (
@@ -150,25 +166,45 @@ export function ArtistBookingsClient({ bookings }: { bookings: BookingWithExtras
       </div>
 
       {showActions && (
-        <div className="mt-4 flex gap-3 pt-3 border-t border-amber-200">
-          <Button
-            size="sm"
-            variant="outline"
-            className="flex-1 border-red-300 text-red-600 hover:bg-red-50"
-            loading={updating === b.id}
-            onClick={() => updateBooking(b.id, "cancelled")}
-          >
-            <XCircle className="w-4 h-4 mr-1.5" />Decline
-          </Button>
-          <Button
-            size="sm"
-            className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
-            loading={updating === b.id}
-            onClick={() => updateBooking(b.id, "confirmed")}
-          >
-            <CheckCircle className="w-4 h-4 mr-1.5" />Accept
-          </Button>
-        </div>
+        <>
+          {/* Urgency indicator */}
+          {b.created_at && (() => {
+            const hoursElapsed = (Date.now() - new Date(b.created_at).getTime()) / 3_600_000;
+            const hoursLeft = Math.max(0, 48 - hoursElapsed);
+            const isUrgent = hoursLeft < 12;
+            return (
+              <div className={`mt-3 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium ${
+                isUrgent ? "bg-red-50 text-red-700 border border-red-200" : "bg-amber-50 text-amber-700 border border-amber-100"
+              }`}>
+                <Clock className="w-3.5 h-3.5 shrink-0" />
+                {hoursLeft <= 0
+                  ? "This request has expired — client will be notified."
+                  : isUrgent
+                  ? `⚡ Respond within ${Math.ceil(hoursLeft)} hours — this request expires soon!`
+                  : `Please respond within ${Math.ceil(hoursLeft)} hours`}
+              </div>
+            );
+          })()}
+          <div className="mt-3 flex gap-3 pt-3 border-t border-amber-200">
+            <Button
+              size="sm"
+              variant="outline"
+              className="flex-1 border-red-300 text-red-600 hover:bg-red-50"
+              disabled={updating === b.id}
+              onClick={() => { setDeclineOpen(b.id); setDeclineReason(""); }}
+            >
+              <XCircle className="w-4 h-4 mr-1.5" />Decline
+            </Button>
+            <Button
+              size="sm"
+              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+              loading={updating === b.id}
+              onClick={() => updateBooking(b.id, "confirmed")}
+            >
+              <CheckCircle className="w-4 h-4 mr-1.5" />Accept
+            </Button>
+          </div>
+        </>
       )}
 
       {(b.status === "confirmed" || b.status === "in_progress") && (
@@ -280,6 +316,35 @@ export function ArtistBookingsClient({ bookings }: { bookings: BookingWithExtras
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Decline reason dialog */}
+      <Dialog open={!!declineOpen} onOpenChange={(o) => { if (!o) setDeclineOpen(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Decline Booking</DialogTitle></DialogHeader>
+          <div className="space-y-4 pt-2">
+            <p className="text-sm text-muted-foreground">
+              Please let the coordinator know why — they need to find an alternative artist quickly.
+            </p>
+            <Textarea
+              placeholder="e.g. Already have a booking on this date / Not available in this city / Budget too low"
+              value={declineReason}
+              onChange={(e) => setDeclineReason(e.target.value)}
+              rows={3}
+            />
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setDeclineOpen(null)}>Back</Button>
+              <Button
+                variant="destructive"
+                className="flex-1"
+                disabled={!declineReason.trim() || declining}
+                onClick={confirmDecline}
+              >
+                {declining ? "Declining…" : "Confirm Decline"}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

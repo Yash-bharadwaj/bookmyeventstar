@@ -43,6 +43,7 @@ export function CoordinatorMessagesClient({ enquiries, currentUserId, currentUse
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
+  const [convSearch, setConvSearch] = useState("");
   // track which enquiry IDs have unread messages (new since page load)
   const [unreadIds, setUnreadIds] = useState<Set<string>>(new Set());
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -186,9 +187,14 @@ export function CoordinatorMessagesClient({ enquiries, currentUserId, currentUse
             transition={{ duration: 0.2 }}
             className="flex-shrink-0 border-r bg-card flex flex-col overflow-hidden md:max-w-[260px]"
           >
-            <div className="p-4 border-b flex-shrink-0">
+            <div className="p-4 border-b flex-shrink-0 space-y-2">
               <h2 className="font-semibold text-sm text-foreground">Client Conversations</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">{enquiries.length} active enquiries</p>
+              <Input
+                placeholder="Search by name or event…"
+                value={convSearch}
+                onChange={(e) => setConvSearch(e.target.value)}
+                className="h-7 text-xs"
+              />
             </div>
 
             <div className="flex-1 overflow-y-auto">
@@ -198,7 +204,12 @@ export function CoordinatorMessagesClient({ enquiries, currentUserId, currentUse
                   <p className="text-sm text-muted-foreground">No assigned enquiries yet</p>
                 </div>
               ) : (
-                enquiries.map((e) => {
+                enquiries
+                .filter((e) => {
+                  const q = convSearch.toLowerCase();
+                  return !q || (e.client?.name ?? "").toLowerCase().includes(q) || e.event_type.toLowerCase().includes(q);
+                })
+                .map((e) => {
                   const isSelected = selectedEnquiryId === e.id;
                   const hasUnread = unreadIds.has(e.id);
                   return (
@@ -341,8 +352,27 @@ export function CoordinatorMessagesClient({ enquiries, currentUserId, currentUse
               )}
             </div>
 
+            {/* Quick templates */}
+            <div className="px-3 pt-2 border-t flex-shrink-0 flex gap-1.5 flex-wrap">
+              {[
+                "Hi! I've reviewed your enquiry and will share artist options shortly.",
+                "Your proposal is ready — please check it in your dashboard.",
+                "Could you confirm the exact venue address and expected guest count?",
+                "We've shortlisted 3 artists for your event — proposal coming in 2 hours.",
+                "Your booking is confirmed! We'll send artist details shortly.",
+              ].map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setNewMessage(t)}
+                  className="text-[10px] px-2 py-1 rounded-lg border bg-muted hover:bg-indigo-50 hover:border-indigo-300 text-muted-foreground hover:text-indigo-700 transition-colors truncate max-w-[160px]"
+                  title={t}
+                >
+                  {t.slice(0, 28)}…
+                </button>
+              ))}
+            </div>
             {/* Input bar */}
-            <div className="p-3 border-t flex gap-2 flex-shrink-0 bg-card">
+            <div className="p-3 flex gap-2 flex-shrink-0 bg-card">
               <Input
                 ref={inputRef}
                 placeholder={`Message ${selectedEnquiry.client?.name ?? "client"}…`}

@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  CheckCircle2, XCircle, ChevronDown, ChevronUp, Star,
+  CheckCircle2, XCircle, ChevronDown, ChevronUp, Star, ExternalLink,
   IndianRupee, Calendar, MapPin, Timer, Sparkles,
-  Mic2, Clock, Shield, ThumbsUp,
+  Mic2, Clock, Shield, ThumbsUp, UserCheck, MessageSquare,
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { Proposal } from "@/types";
 import { formatDate, formatCurrency } from "@/lib/utils";
@@ -15,10 +17,14 @@ import { createClient } from "@/lib/supabase/client";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 
+type ProposalWithExtras = Proposal & {
+  enquiry?: { event_type: string; event_date: string; city: string; location: string; other_requirements?: string };
+  client_chosen_artist_id?: string | null;
+  client_revision_notes?: string | null;
+};
+
 interface Props {
-  proposals: (Proposal & {
-    enquiry?: { event_type: string; event_date: string; city: string; location: string };
-  })[];
+  proposals: ProposalWithExtras[];
   clientId: string;
 }
 
@@ -34,21 +40,90 @@ export function ClientProposalsClient({ proposals }: Props) {
   const [accepting, setAccepting] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState<string | null>(null);
   const [confirmDecline, setConfirmDecline] = useState<string | null>(null);
+  // Re-render every minute so validity countdowns never show a stale value
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Track client's artist choice per proposal (pre-fill from existing DB value)
+  const [chosenArtist, setChosenArtist] = useState<Record<string, string>>(() =>
+    Object.fromEntries(proposals.filter((p) => p.client_chosen_artist_id).map((p) => [p.id, p.client_chosen_artist_id!]))
+  );
+  // Revision request state
+  const [revisionOpen, setRevisionOpen] = useState<string | null>(null);
+  const [revisionNotes, setRevisionNotes] = useState("");
+  const [sendingRevision, setSendingRevision] = useState(false);
+
+  const selectArtist = async (proposalId: string, artistId: string) => {
+    setChosenArtist((prev) => ({ ...prev, [proposalId]: artistId }));
+    const supabase = createClient();
+    await supabase.from("proposals").update({ client_chosen_artist_id: artistId }).eq("id", proposalId);
+  };
+
+  const sendRevisionRequest = async (proposalId: string) => {
+    if (!revisionNotes.trim()) { toast.error("Please describe what you'd like changed"); return; }
+    setSendingRevision(true);
+    const supabase = createClient();
+    const proposal = proposals.find((p) => p.id === proposalId);
+    await supabase.from("proposals").update({ status: "rejected", client_revision_notes: revisionNotes.trim() }).eq("id", proposalId);
+    if (proposal?.coordinator_id) {
+      await supabase.from("notifications").insert({
+        user_id: proposal.coordinator_id,
+        title: "Client Requested Revision",
+        message: `Client wants changes to the proposal for ${proposal.enquiry?.event_type ?? "event"}: "${revisionNotes.trim()}"`,
+        type: "warning",
+        link: `/coordinator/proposals`,
+      });
+    }
+    toast.success("Revision request sent. Your coordinator will send an updated proposal.");
+    setRevisionOpen(null);
+    setRevisionNotes("");
+    setSendingRevision(false);
+    router.refresh();
+  };
 
   const acceptProposal = async (proposalId: string, enquiryId: string) => {
+    const proposal = proposals.find((p) => p.id === proposalId);
+    const artists = (proposal?.artists_proposed as any[]) ?? [];
+
+    // Enforce expiry
+    if (proposal?.validity_date) {
+      const days = daysUntilValidity(proposal.validity_date);
+      if (days < 0) {
+        toast.error("This proposal has expired. Please ask your coordinator for a new one.");
+        return;
+      }
+    }
+
+    // Require artist selection when multiple options exist
+    if (artists.length > 1 && !chosenArtist[proposalId]) {
+      toast.error("Please select which artist you'd like before confirming.");
+      setExpanded(proposalId); // ensure expanded so they see the selection
+      return;
+    }
+
     setAccepting(proposalId);
     try {
       const supabase = createClient();
-      const proposal = proposals.find((p) => p.id === proposalId);
-      await supabase.from("proposals").update({ status: "accepted" }).eq("id", proposalId);
+      const chosen = chosenArtist[proposalId] ?? artists[0]?.artist_id ?? null;
+      const chosenName = artists.find((a: any) => a.artist_id === chosen)?.name
+        ?? (artists.length === 1 ? artists[0]?.name : null);
+
+      await supabase.from("proposals").update({
+        status: "accepted",
+        client_chosen_artist_id: chosen,
+      }).eq("id", proposalId);
       await supabase.from("enquiries").update({ status: "confirmed" }).eq("id", enquiryId);
+
       if (proposal?.coordinator_id) {
         await supabase.from("notifications").insert({
           user_id: proposal.coordinator_id,
           title: "Proposal Accepted",
-          message: `Client has accepted the proposal for ${proposal.enquiry?.event_type ?? "the event"}. Create the booking now.`,
+          message: `Client accepted the proposal for ${proposal.enquiry?.event_type ?? "event"}${chosenName ? ` and chose ${chosenName}` : ""}. Please create the booking now.`,
           type: "success",
-          link: `/coordinator/enquiries/${enquiryId}`,
+          link: `/coordinator/proposals`,
         });
       }
       toast.success("Booking confirmed! Our coordinator will be in touch shortly.", { duration: 5000 });
@@ -65,9 +140,30 @@ export function ClientProposalsClient({ proposals }: Props) {
     try {
       const supabase = createClient();
       await supabase.from("proposals").update({ status: "rejected" }).eq("id", proposalId);
-      toast.success("Proposal declined. Your coordinator will send a revised proposal.");
       setConfirmDecline(null);
-      router.refresh();
+      let undone = false;
+      const tid = window.setTimeout(() => { if (!undone) router.refresh(); }, 6000);
+      toast(
+        (t) => (
+          <span className="flex items-center gap-3 text-sm">
+            Proposal declined
+            <button
+              className="font-semibold text-indigo-600 underline"
+              onClick={async () => {
+                undone = true;
+                clearTimeout(tid);
+                toast.dismiss(t.id);
+                await supabase.from("proposals").update({ status: "sent" }).eq("id", proposalId);
+                router.refresh();
+                toast.success("Decline undone — proposal is active again.");
+              }}
+            >
+              Undo
+            </button>
+          </span>
+        ),
+        { duration: 6000 }
+      );
     } catch {
       toast.error("Failed to decline proposal");
     } finally {
@@ -201,25 +297,98 @@ export function ClientProposalsClient({ proposals }: Props) {
                   {/* Artist options */}
                   {artists.length > 0 && (
                     <div>
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Artist Options</p>
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                          {artists.length === 1 ? "Your Artist" : `Choose Your Artist (${artists.length} options)`}
+                        </p>
+                        {isPending && artists.length > 1 && !chosenArtist[proposal.id] && (
+                          <span className="text-[10px] text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full font-medium">
+                            Select one to confirm booking
+                          </span>
+                        )}
+                        {chosenArtist[proposal.id] && (
+                          <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" />Artist selected
+                          </span>
+                        )}
+                      </div>
                       <div className="space-y-3">
-                        {artists.map((a, i) => (
-                          <div key={i} className="flex items-start justify-between gap-3 p-4 rounded-2xl bg-card border hover:border-indigo-200 transition-colors">
-                            <div className="flex items-start gap-3">
-                              <div className="w-11 h-11 rounded-xl gold-gradient flex items-center justify-center text-navy-900 font-bold flex-shrink-0">
-                                <Mic2 className="w-5 h-5" />
+                        {artists.map((a, i) => {
+                          const isChosen = chosenArtist[proposal.id] === a.artist_id;
+                          const anyChosen = !!chosenArtist[proposal.id];
+                          return (
+                            <div
+                              key={i}
+                              className={`p-4 rounded-2xl border transition-all ${
+                                isChosen
+                                  ? "border-emerald-400 bg-emerald-50/50 ring-1 ring-emerald-300"
+                                  : anyChosen
+                                  ? "border-border bg-card opacity-60"
+                                  : "border-border bg-card hover:border-indigo-200"
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex items-start gap-3">
+                                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-navy-900 font-bold flex-shrink-0 ${
+                                    isChosen ? "bg-emerald-200" : "gold-gradient"
+                                  }`}>
+                                    {isChosen ? <UserCheck className="w-5 h-5 text-emerald-700" /> : <Mic2 className="w-5 h-5" />}
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <p className="font-semibold text-sm">{a.name ?? `Artist Option ${i + 1}`}</p>
+                                      {isChosen && (
+                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-bold">Your choice</span>
+                                      )}
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                      {a.artist?.categories?.slice(0, 2).map((c: string) => (
+                                        <span key={c} className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-medium">{c}</span>
+                                      ))}
+                                      {a.artist?.rating ? (
+                                        <span className="flex items-center gap-0.5 text-[10px] text-amber-600 font-semibold">
+                                          <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                                          {a.artist.rating.toFixed(1)}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                    {a.notes && <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">{a.notes}</p>}
+                                  </div>
+                                </div>
+                                <div className="text-right flex-shrink-0 space-y-2">
+                                  <div>
+                                    <p className="font-bold text-base text-indigo-700">{formatCurrency(a.quoted_price)}</p>
+                                    <p className="text-[10px] text-muted-foreground">for your event</p>
+                                  </div>
+                                  {/* Choose button — only when pending + multiple options */}
+                                  {isPending && artists.length > 1 && a.artist_id && (
+                                    <button
+                                      onClick={() => selectArtist(proposal.id, a.artist_id!)}
+                                      className={`text-xs px-3 py-1.5 rounded-xl font-semibold border transition-all ${
+                                        isChosen
+                                          ? "bg-emerald-600 text-white border-emerald-600"
+                                          : "border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+                                      }`}
+                                    >
+                                      {isChosen ? "✓ Selected" : "Choose"}
+                                    </button>
+                                  )}
+                                </div>
                               </div>
-                              <div>
-                                <p className="font-semibold text-sm">{a.name ?? `Artist Option ${i + 1}`}</p>
-                                {a.notes && <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{a.notes}</p>}
-                              </div>
+                              {a.name && (
+                                <a
+                                  href={`/artists?search=${encodeURIComponent(a.name)}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="mt-3 flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+                                >
+                                  <ExternalLink className="w-3 h-3" />
+                                  View full profile & portfolio
+                                </a>
+                              )}
                             </div>
-                            <div className="text-right flex-shrink-0">
-                              <p className="font-bold text-base text-indigo-700">{formatCurrency(a.quoted_price)}</p>
-                              <p className="text-[10px] text-muted-foreground">quoted</p>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -270,15 +439,28 @@ export function ClientProposalsClient({ proposals }: Props) {
                 </motion.div>
               ) : (
                 <div className="space-y-3">
+                  {/* Artist selection reminder */}
+                  {artists.length > 1 && !chosenArtist[proposal.id] && (
+                    <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-700">
+                      <UserCheck className="w-4 h-4 shrink-0" />
+                      Scroll up and select which artist you&apos;d like — then you can confirm.
+                    </div>
+                  )}
+
                   {/* Primary CTA */}
                   <Button
-                    className="w-full h-14 sm:h-14 text-base font-bold bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-lg shadow-emerald-200 rounded-2xl active:scale-[0.98] transition-transform"
+                    className="w-full h-14 sm:h-14 text-base font-bold bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-lg shadow-emerald-200 rounded-2xl active:scale-[0.98] transition-transform disabled:opacity-50"
                     loading={accepting === proposal.id}
+                    disabled={artists.length > 1 && !chosenArtist[proposal.id]}
                     onClick={() => acceptProposal(proposal.id, proposal.enquiry_id)}
                   >
                     <ThumbsUp className="w-5 h-5 mr-2 flex-shrink-0" />
-                    Accept & Confirm Booking
-                    <ArrowRight className="w-4 h-4 ml-2 flex-shrink-0" />
+                    {artists.length > 1 && chosenArtist[proposal.id]
+                      ? `Confirm — ${artists.find((a: any) => a.artist_id === chosenArtist[proposal.id])?.name ?? "Selected Artist"}`
+                      : artists.length === 1
+                      ? `Confirm — ${artists[0]?.name ?? "Booking"}`
+                      : "Select an artist above to confirm"}
+                    {(artists.length === 1 || chosenArtist[proposal.id]) && <ArrowRight className="w-4 h-4 ml-2 flex-shrink-0" />}
                   </Button>
 
                   <p className="text-center text-xs text-muted-foreground flex items-center justify-center gap-1.5">
@@ -286,12 +468,23 @@ export function ClientProposalsClient({ proposals }: Props) {
                     Secure · No payment charged until you confirm with coordinator
                   </p>
 
-                  <button
-                    className="w-full text-xs text-muted-foreground hover:text-red-500 transition-colors py-1"
-                    onClick={() => { setExpanded(proposal.id); setConfirmDecline(proposal.id); }}
-                  >
-                    Not quite right? Decline and request revision
-                  </button>
+                  {/* Two secondary actions */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      className="flex items-center justify-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 hover:bg-amber-100 transition-colors"
+                      onClick={() => { setRevisionOpen(proposal.id); setRevisionNotes(""); }}
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      Request Changes
+                    </button>
+                    <button
+                      className="flex items-center justify-center gap-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2 hover:bg-red-100 transition-colors"
+                      onClick={() => { setExpanded(proposal.id); setConfirmDecline(proposal.id); }}
+                    >
+                      <XCircle className="w-3.5 h-3.5" />
+                      Decline
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -333,10 +526,13 @@ export function ClientProposalsClient({ proposals }: Props) {
           <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-100 flex items-start gap-3">
             <Sparkles className="w-5 h-5 text-indigo-500 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-semibold text-indigo-900">How to choose</p>
-              <p className="text-xs text-indigo-700 mt-0.5 leading-relaxed">
-                Review each artist option's quoted price and notes. Once you accept, your coordinator will finalise the booking and collect the advance payment.
-              </p>
+              <p className="text-sm font-semibold text-indigo-900">How it works</p>
+              <ol className="text-xs text-indigo-700 mt-1 leading-relaxed space-y-0.5 list-decimal list-inside">
+                <li>Expand the proposal to see your artist options</li>
+                <li>Click <strong>Choose</strong> on the artist you prefer</li>
+                <li>Hit <strong>Confirm Booking</strong> — your coordinator gets notified instantly</li>
+                <li>Need changes? Use <strong>Request Changes</strong> to tell us what to adjust</li>
+              </ol>
             </div>
           </div>
 
@@ -351,6 +547,36 @@ export function ClientProposalsClient({ proposals }: Props) {
           {otherProposals.map((p) => <ProposalCard key={p.id} proposal={p} isPending={false} />)}
         </div>
       )}
+
+      {/* Revision request dialog */}
+      <Dialog open={!!revisionOpen} onOpenChange={(o) => { if (!o) setRevisionOpen(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Request Changes</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <p className="text-sm text-muted-foreground">
+              Tell your coordinator exactly what you&apos;d like changed — budget, artist category, dates, or anything else.
+            </p>
+            <Textarea
+              placeholder="e.g. Can you find someone in a lower price range? Or do you have a Sufi singer available for this date?"
+              value={revisionNotes}
+              onChange={(e) => setRevisionNotes(e.target.value)}
+              rows={4}
+            />
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setRevisionOpen(null)}>Cancel</Button>
+              <Button
+                className="flex-1"
+                disabled={!revisionNotes.trim() || sendingRevision}
+                onClick={() => revisionOpen && sendRevisionRequest(revisionOpen)}
+              >
+                {sendingRevision ? "Sending…" : "Send Request"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

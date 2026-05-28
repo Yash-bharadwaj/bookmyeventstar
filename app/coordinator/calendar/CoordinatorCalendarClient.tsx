@@ -200,20 +200,27 @@ export function CoordinatorCalendarClient({ bookings }: { bookings: BookingEvent
               </Card>
             ) : (
               selectedEvents.map((e) => (
-                <Card key={e.id}>
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="font-semibold text-sm">{e.enquiry?.event_type ?? "Event"}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{e.venue}</p>
-                        <p className="text-xs text-muted-foreground">{e.city}</p>
+                <Link key={e.id} href={`/coordinator/bookings/${e.id}`}>
+                  <Card className="hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer">
+                    <CardContent className="p-4 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="font-semibold text-sm">{e.enquiry?.event_type ?? "Event"}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{e.venue}, {e.city}</p>
+                        </div>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold shrink-0 ${getStatusColor(e.status)}`}>
+                          {getStatusLabel(e.status)}
+                        </span>
                       </div>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${getStatusColor(e.status)}`}>
-                        {getStatusLabel(e.status)}
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground border-t pt-2">
+                        <span>{(e as any).artist?.user?.name ?? "Artist TBC"}</span>
+                        <span className="font-semibold text-foreground">
+                          {(e as any).total_amount ? `₹${Number((e as any).total_amount).toLocaleString("en-IN")}` : "—"}
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
               ))
             )
           ) : (

@@ -27,6 +27,8 @@ interface AdminOverviewProps {
     active_bookings: number;
     artists_count: number;
     coordinators_count: number;
+    enq_trend?: number | null;
+    bk_trend?: number | null;
   };
   pipelineCounts: {
     new: number;
@@ -136,8 +138,8 @@ export function AdminOverview({ stats, pipelineCounts: globalCounts, recentEnqui
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total Enquiries" value={stats.total_enquiries} icon={FileText}  color="indigo"  trend={{ value: 12, label: "vs last month" }} index={0} />
-        <StatCard title="Active Bookings" value={stats.active_bookings} icon={CheckCircle} color="green"  trend={{ value: 8,  label: "vs last month" }} index={1} />
+        <StatCard title="Total Enquiries" value={stats.total_enquiries} icon={FileText}  color="indigo"  trend={stats.enq_trend != null ? { value: stats.enq_trend, label: "vs last month" } : undefined} index={0} />
+        <StatCard title="Active Bookings" value={stats.active_bookings} icon={CheckCircle} color="green"  trend={stats.bk_trend != null ? { value: stats.bk_trend, label: "vs last month" } : undefined} index={1} />
         <StatCard title="Artists Listed"  value={stats.artists_count}   icon={Music}      color="purple" index={2} />
         <StatCard title="Coordinators"    value={stats.coordinators_count} icon={Users}   color="blue"   index={3} />
       </div>

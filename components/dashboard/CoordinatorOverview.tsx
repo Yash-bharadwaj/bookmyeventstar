@@ -97,45 +97,61 @@ export function CoordinatorOverview({
         </motion.div>
       )}
 
-      {/* Today's Follow-ups */}
-      {followUpEnquiries.length > 0 && (
-        <Card className="border-violet-200 bg-violet-50/30">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Bell className="w-4 h-4 text-violet-500" />
-              Today&apos;s Follow-ups ({followUpEnquiries.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {followUpEnquiries.map((e, i) => (
-              <motion.div
-                key={e.id}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.06 }}
-              >
-                <Link href={`/coordinator/enquiries/${e.id}`}>
-                  <div className="flex items-center justify-between p-3 rounded-xl border bg-white hover:border-violet-300 hover:shadow-sm transition-all">
-                    <div>
-                      <p className="font-semibold text-sm">{e.event_type}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{e.client?.name} · {e.city}</p>
-                      {e.follow_up_notes && (
-                        <p className="text-xs text-violet-600 mt-0.5 truncate max-w-xs">{e.follow_up_notes}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${getStatusColor(e.status)}`}>
-                        {getStatusLabel(e.status)}
-                      </span>
-                      <ArrowRight className="w-4 h-4 text-muted-foreground" />
-                    </div>
-                  </div>
-                </Link>
-              </motion.div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
+      {/* Today's Follow-ups (includes overdue) */}
+      {followUpEnquiries.length > 0 && (() => {
+        const today = new Date().toISOString().split("T")[0];
+        const overdue = followUpEnquiries.filter((e) => e.follow_up_date < today);
+        return (
+          <Card className={overdue.length > 0 ? "border-red-300 bg-red-50/30" : "border-violet-200 bg-violet-50/30"}>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Bell className={`w-4 h-4 ${overdue.length > 0 ? "text-red-500" : "text-violet-500"}`} />
+                {overdue.length > 0
+                  ? `⚠️ ${overdue.length} Overdue Follow-up${overdue.length > 1 ? "s" : ""} + ${followUpEnquiries.length - overdue.length} due today`
+                  : `Today's Follow-ups (${followUpEnquiries.length})`}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {followUpEnquiries.map((e, i) => {
+                const isOverdue = e.follow_up_date < today;
+                return (
+                  <motion.div
+                    key={e.id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.06 }}
+                  >
+                    <Link href={`/coordinator/enquiries/${e.id}`}>
+                      <div className={`flex items-center justify-between p-3 rounded-xl border bg-white transition-all hover:shadow-sm ${
+                        isOverdue ? "border-red-200 hover:border-red-400" : "hover:border-violet-300"
+                      }`}>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold text-sm">{e.event_type}</p>
+                            {isOverdue && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-red-100 text-red-700">OVERDUE</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5">{e.client?.name} · {e.city}</p>
+                          {e.follow_up_notes && (
+                            <p className="text-xs text-violet-600 mt-0.5 truncate max-w-xs">{e.follow_up_notes}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${getStatusColor(e.status)}`}>
+                            {getStatusLabel(e.status)}
+                          </span>
+                          <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                        </div>
+                      </div>
+                    </Link>
+                  </motion.div>
+                );
+              })}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Pending Tasks */}

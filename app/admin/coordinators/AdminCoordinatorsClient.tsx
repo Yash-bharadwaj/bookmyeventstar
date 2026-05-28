@@ -4,7 +4,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import {
   UserPlus, ToggleLeft, ToggleRight, X, Phone, Mail,
-  Briefcase, CheckCircle, AlertCircle, TrendingUp,
+  Briefcase, CheckCircle, AlertCircle, TrendingUp, Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +36,22 @@ export function AdminCoordinatorsClient({ coordinators, enquiries }: Props) {
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", phone: "", password: "" });
   const [toggling, setToggling] = useState<string | null>(null);
+  // Edit coordinator
+  const [editCoord, setEditCoord] = useState<{ id: string; name: string; phone: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const saveEdit = async () => {
+    if (!editCoord?.name.trim() || !editCoord?.phone.trim()) {
+      toast.error("Name and phone are required");
+      return;
+    }
+    setSaving(true);
+    const supabase = createClient();
+    const { error } = await supabase.from("users").update({ name: editCoord.name.trim(), phone: editCoord.phone.trim() }).eq("id", editCoord.id);
+    if (error) { toast.error("Failed to save changes"); }
+    else { toast.success("Coordinator updated"); setEditCoord(null); router.refresh(); }
+    setSaving(false);
+  };
 
   const toggleStatus = async (id: string, current: boolean) => {
     setToggling(id);
@@ -159,17 +175,24 @@ export function AdminCoordinatorsClient({ coordinators, enquiries }: Props) {
                     </span>
                   </div>
                 </div>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="flex-shrink-0"
-                  disabled={toggling === c.id}
-                  onClick={() => toggleStatus(c.id, c.is_active)}
-                >
-                  {c.is_active
-                    ? <ToggleRight className="w-5 h-5 text-emerald-600" />
-                    : <ToggleLeft className="w-5 h-5 text-muted-foreground" />}
-                </Button>
+                <div className="flex gap-1 flex-shrink-0">
+                  <Button
+                    size="sm" variant="ghost"
+                    onClick={() => setEditCoord({ id: c.id, name: c.name, phone: c.phone })}
+                  >
+                    <Pencil className="w-4 h-4 text-muted-foreground" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={toggling === c.id}
+                    onClick={() => toggleStatus(c.id, c.is_active)}
+                  >
+                    {c.is_active
+                      ? <ToggleRight className="w-5 h-5 text-emerald-600" />
+                      : <ToggleLeft className="w-5 h-5 text-muted-foreground" />}
+                  </Button>
+                </div>
               </div>
 
               {/* Contact */}
@@ -262,6 +285,31 @@ export function AdminCoordinatorsClient({ coordinators, enquiries }: Props) {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Coordinator Dialog */}
+      <Dialog open={!!editCoord} onOpenChange={(o) => { if (!o) setEditCoord(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Edit Coordinator</DialogTitle></DialogHeader>
+          {editCoord && (
+            <div className="space-y-4 pt-2">
+              <div className="space-y-1.5">
+                <Label>Full name</Label>
+                <Input value={editCoord.name} onChange={(e) => setEditCoord({ ...editCoord, name: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Phone</Label>
+                <Input value={editCoord.phone} onChange={(e) => setEditCoord({ ...editCoord, phone: e.target.value })} />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <Button variant="outline" className="flex-1" onClick={() => setEditCoord(null)}>Cancel</Button>
+                <Button className="flex-1" disabled={saving} onClick={saveEdit}>
+                  {saving ? "Saving…" : "Save Changes"}
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

@@ -49,6 +49,33 @@ export function AdminEnquiriesClient({ enquiries, coordinators }: Props) {
   const [selectedCoordinator, setSelectedCoordinator] = useState("");
   const [assigning, setAssigning] = useState(false);
   const [search, setSearch] = useState("");
+  // Bulk assign
+  const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
+  const [bulkAssignCoord, setBulkAssignCoord] = useState("");
+  const [bulkAssigning, setBulkAssigning] = useState(false);
+
+  const toggleBulkSelect = (id: string) =>
+    setBulkSelected((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+
+  const confirmBulkAssign = async () => {
+    if (!bulkAssignCoord || bulkSelected.size === 0) return;
+    setBulkAssigning(true);
+    const supabase = createClient();
+    const ids = Array.from(bulkSelected);
+    await supabase.from("enquiries").update({ coordinator_id: bulkAssignCoord, status: "assigned" }).in("id", ids);
+    const coord = coordinators.find((c) => c.id === bulkAssignCoord);
+    await supabase.from("notifications").insert(
+      ids.map((id) => {
+        const enq = enquiries.find((e) => e.id === id);
+        return { user_id: bulkAssignCoord, title: "Enquiry Assigned", message: `Assigned: ${enq?.event_type ?? "Event"} in ${enq?.city ?? ""}`, type: "info" };
+      })
+    );
+    toast.success(`${ids.length} ${ids.length === 1 ? "enquiry" : "enquiries"} assigned to ${coord?.name ?? "coordinator"}`);
+    setBulkSelected(new Set());
+    setBulkAssignCoord("");
+    setBulkAssigning(false);
+    router.refresh();
+  };
 
   const handleAssign = (enquiry: Enquiry) => {
     setSelectedEnquiry(enquiry);
@@ -86,16 +113,27 @@ export function AdminEnquiriesClient({ enquiries, coordinators }: Props) {
 
   const EnquiryRow = ({ e }: { e: Enquiry }) => {
     const urgency = urgencyLevel(e.created_at, e.status);
+    const isSelected = bulkSelected.has(e.id);
     return (
       <motion.div
         key={e.id}
         initial={{ opacity: 0, y: 4 }}
         animate={{ opacity: 1, y: 0 }}
         className={`flex items-center gap-3 p-3 border-b last:border-0 hover:bg-accent/20 transition-colors ${
+          isSelected ? "bg-indigo-50/60" :
           urgency === "high" ? "bg-red-50/40" :
           urgency === "medium" ? "bg-amber-50/30" : ""
         }`}
       >
+        {/* Bulk select checkbox (only for new/unassigned) */}
+        {e.status === "new" && (
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => toggleBulkSelect(e.id)}
+            className="w-4 h-4 rounded border-gray-300 text-indigo-600 flex-shrink-0 cursor-pointer"
+          />
+        )}
         {/* Urgency indicator */}
         <div className="flex-shrink-0">
           {urgency === "high" ? (
@@ -175,6 +213,32 @@ export function AdminEnquiriesClient({ enquiries, coordinators }: Props) {
           className="pl-9"
         />
       </div>
+
+      {/* Bulk action bar */}
+      {bulkSelected.size > 0 && (
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-indigo-50 border border-indigo-200">
+          <span className="text-sm font-medium text-indigo-800">{bulkSelected.size} enquir{bulkSelected.size === 1 ? "y" : "ies"} selected</span>
+          <select
+            value={bulkAssignCoord}
+            onChange={(e) => setBulkAssignCoord(e.target.value)}
+            className="flex-1 max-w-xs h-8 rounded-lg border border-indigo-200 text-sm px-2 bg-white text-indigo-900"
+          >
+            <option value="">Select coordinator…</option>
+            {coordinators.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <Button
+            size="sm"
+            disabled={!bulkAssignCoord || bulkAssigning}
+            onClick={confirmBulkAssign}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white"
+          >
+            {bulkAssigning ? "Assigning…" : "Assign All"}
+          </Button>
+          <button onClick={() => setBulkSelected(new Set())} className="text-xs text-indigo-500 hover:text-indigo-700 underline">
+            Clear
+          </button>
+        </div>
+      )}
 
       <Tabs defaultValue="all">
         <div className="overflow-x-auto pb-1">
