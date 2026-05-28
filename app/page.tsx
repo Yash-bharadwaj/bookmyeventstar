@@ -20,7 +20,7 @@ import { BrandLogo } from "@/components/brand/BrandLogo";
 const stats = [
   { label: "Events Managed", value: "2,400+", icon: Calendar, color: "from-violet-500 to-purple-600" },
   { label: "Artists Listed",  value: "850+",  icon: Music,    color: "from-pink-500 to-rose-600" },
-  { label: "Happy Clients",   value: "1,200+",icon: Heart,    color: "from-amber-500 to-orange-500" },
+  { label: "Happy Customers", value: "1,200+",icon: Heart,    color: "from-amber-500 to-orange-500" },
   { label: "Cities Covered",  value: "50+",   icon: Globe,    color: "from-teal-500 to-cyan-600" },
 ];
 
@@ -208,7 +208,7 @@ export default function LandingPage() {
 
       {/* ── Navbar ── */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-xl border-b border-gray-100 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
           <BrandLogo href="/" size="md" priority className="shrink-0" />
 
           <div className="hidden md:flex items-center gap-8">

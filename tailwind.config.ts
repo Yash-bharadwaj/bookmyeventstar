@@ -82,7 +82,7 @@ const config: Config = {
       },
       fontFamily: {
         sans: ["var(--font-inter)", ...fontFamily.sans],
-        display: ["var(--font-playfair)", ...fontFamily.serif],
+        display: ["var(--font-outfit)", ...fontFamily.sans],
       },
       keyframes: {
         "accordion-down": {

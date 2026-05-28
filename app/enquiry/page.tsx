@@ -10,6 +10,7 @@ import {
   DollarSign,
   User,
   Mail,
+  Lock,
   Sparkles,
   CheckCircle2,
   ChevronRight,
@@ -17,15 +18,17 @@ import {
   MessageSquare,
   Smartphone,
   ShieldCheck,
-  Building2,
+  Eye,
+  EyeOff,
   Briefcase,
-  Heart,
+  AtSign,
+  Globe,
+  Building2,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { enquiryFormSchema, EnquiryFormValues } from "@/lib/validations/enquiry";
-// sendPhoneOtp / verifyPhoneOtp / toE164India imported when real OTP is wired up
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,58 +43,22 @@ import {
 } from "@/components/ui/select";
 import { EVENT_TYPES, INDIA_CITIES } from "@/lib/utils";
 
-const STEPS = [
+const ENQUIRY_STEPS = [
   { title: "Your details", subtitle: "Who is booking this event?" },
   { title: "Event details", subtitle: "When and where" },
   { title: "Budget & artists", subtitle: "So we can match the right talent" },
 ];
 
-const SOURCE_OPTIONS = [
-  { value: "website", label: "Website" },
-  { value: "whatsapp", label: "WhatsApp" },
-  { value: "email", label: "Email" },
-  { value: "instagram", label: "Instagram" },
-  { value: "referral", label: "Referral" },
-  { value: "walk_in", label: "Walk-in" },
-];
-
-const SUBMITTER_OPTIONS: {
-  value: EnquiryFormValues["submitter_type"];
-  label: string;
-  hint: string;
-  icon: typeof Heart;
-}[] = [
-  {
-    value: "personal",
-    label: "Personal / home",
-    hint: "Wedding, birthday, private party, etc.",
-    icon: Heart,
-  },
-  {
-    value: "company",
-    label: "Company / brand",
-    hint: "Corporate show, product launch, annual day…",
-    icon: Building2,
-  },
-  {
-    value: "planner",
-    label: "Event planner / agency",
-    hint: "You’re booking on behalf of a client.",
-    icon: Briefcase,
-  },
-];
-
 const DAILY_ENQUIRY_LIMIT = 5;
 
-function maskPhone(e164: string | undefined): string {
-  if (!e164) return "";
-  const d = e164.replace(/\D/g, "").slice(-10);
-  if (d.length < 10) return e164;
-  return `+91 •••••${d.slice(-4)}`;
+function maskPhone(digits: string): string {
+  const d = digits.replace(/\D/g, "").slice(-10);
+  return d.length < 10 ? `+91 ${digits}` : `+91 •••••${d.slice(-4)}`;
 }
 
 export default function EnquiryPage() {
-  const [phase, setPhase] = useState<"otp" | "form">("otp");
+  // Phase: otp → profile → form
+  const [phase, setPhase] = useState<"otp" | "profile" | "success" | "form">("otp");
   const [otpScreen, setOtpScreen] = useState<"phone" | "code">("phone");
   const [phoneDigits, setPhoneDigits] = useState("");
   const [otpCode, setOtpCode] = useState("");
@@ -100,6 +67,20 @@ export default function EnquiryPage() {
   const [sessionReady, setSessionReady] = useState(false);
   const [verifiedPhonePreview, setVerifiedPhonePreview] = useState("");
 
+  // Profile setup state
+  const [verifyToken, setVerifyToken] = useState("");
+  const [profileName, setProfileName] = useState("");
+  const [profileEmail, setProfileEmail] = useState("");
+  const [profilePassword, setProfilePassword] = useState("");
+  const [profileConfirm, setProfileConfirm] = useState("");
+  const [isEventManager, setIsEventManager] = useState(false);
+  const [companyName, setCompanyName] = useState("");
+  const [instagramHandle, setInstagramHandle] = useState("");
+  const [websiteUrl, setWebsiteUrl] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [profileBusy, setProfileBusy] = useState(false);
+
+  // Enquiry form state
   const [step, setStep] = useState(0);
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -119,30 +100,37 @@ export default function EnquiryPage() {
   });
 
   const syncFromSession = useCallback(async () => {
-    const supabase = createClient();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (session?.user?.phone) {
-      setVerifiedPhonePreview(maskPhone(session.user.phone));
-      setPhase("form");
-      const meta = session.user.user_metadata as { name?: string } | undefined;
-      reset({
-        source: "website",
-        submitter_type: "personal",
-        name: meta?.name?.trim() || "",
-        email: "",
-      });
-    } else {
-      setPhase("otp");
-      setOtpScreen("phone");
+    try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        // Select only stable columns — avoids crash if migration hasn't run yet
+        const { data: profile } = await supabase
+          .from("users")
+          .select("name, email, phone")
+          .eq("id", session.user.id)
+          .maybeSingle();
+        if (profile?.phone) {
+          setVerifiedPhonePreview(maskPhone(profile.phone));
+          reset({
+            source: "website",
+            submitter_type: "personal",
+            name: profile.name?.trim() || "",
+            email: profile.email || "",
+          });
+          setPhase("form");
+          setSessionReady(true);
+          return;
+        }
+      }
+    } catch {
+      // session check failed — fall through to OTP
     }
+    setPhase("otp");
     setSessionReady(true);
   }, [reset]);
 
-  useEffect(() => {
-    syncFromSession();
-  }, [syncFromSession]);
+  useEffect(() => { syncFromSession(); }, [syncFromSession]);
 
   useEffect(() => {
     if (resendIn <= 0) return;
@@ -156,67 +144,158 @@ export default function EnquiryPage() {
     });
   }, []);
 
-  const startResendCooldown = () => setResendIn(60);
-
-  const handleSendOtp = () => {
+  const handleSendOtp = async () => {
     const d = phoneDigits.replace(/\D/g, "");
-    if (!d) {
-      toast.error("Enter a mobile number");
-      return;
-    }
-    setOtpCode("");
-    setOtpScreen("code");
-    startResendCooldown();
-    toast.success("OTP sent to your mobile");
-  };
-
-  const handleVerifyOtp = async () => {
-    const d = phoneDigits.replace(/\D/g, "");
-    if (!d) {
-      toast.error("Invalid mobile number");
-      return;
-    }
-    if (!otpCode.replace(/\D/g, "")) {
-      toast.error("Enter the OTP code");
+    if (!/^[6-9]\d{9}$/.test(d)) {
+      toast.error("Enter a valid 10-digit mobile number");
       return;
     }
     setOtpBusy(true);
     try {
-      const res = await fetch("/api/auth/phone-otp-bypass", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: d }),
-      });
+      let res: Response;
+      try {
+        res = await fetch("/api/auth/otp/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone: d }),
+        });
+      } catch {
+        toast.error("No internet connection — please check and try again.");
+        return;
+      }
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Login failed");
-
-      const supabase = createClient();
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: json.email,
-        password: json.password,
-      });
-      if (signInError) throw signInError;
-
-      setVerifiedPhonePreview(`+91 ${d}`);
-      toast.success("Mobile verified");
-      setPhase("form");
-      setStep(0);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Invalid code — try again");
+      if (!res.ok) {
+        toast.error(json.error ?? "Failed to send OTP — please try again.");
+        return;
+      }
+      setOtpCode("");
+      setOtpScreen("code");
+      setResendIn(60);
+      toast.success("OTP sent to your mobile");
     } finally {
       setOtpBusy(false);
     }
   };
 
-  const handleChangeNumber = async () => {
+  const handleVerifyOtp = async () => {
+    const d = phoneDigits.replace(/\D/g, "");
+    if (!d || !otpCode.replace(/\D/g, "")) {
+      toast.error("Enter the OTP code");
+      return;
+    }
+    setOtpBusy(true);
+    try {
+      let res: Response;
+      try {
+        res = await fetch("/api/auth/otp/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone: d, code: otpCode }),
+        });
+      } catch {
+        toast.error("No internet connection — please check and try again.");
+        return;
+      }
+
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error(json.error ?? "Incorrect OTP — please try again.");
+        return;
+      }
+
+      if (!json.isNewUser) {
+        toast("You already have an account. Redirecting to login…", { icon: "ℹ️" });
+        window.location.href = `/login?phone=${d}`;
+        return;
+      }
+
+      setVerifyToken(json.token);
+      setVerifiedPhonePreview(maskPhone(d));
+      if (json.name) setProfileName(json.name);
+      if (json.email) setProfileEmail(json.email);
+      setPhase("profile");
+    } finally {
+      setOtpBusy(false);
+    }
+  };
+
+  const handleCompleteProfile = async () => {
+    if (!profileName.trim()) { toast.error("Enter your name"); return; }
+    if (!profileEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profileEmail.trim())) {
+      toast.error("Enter a valid email address"); return;
+    }
+    if (profilePassword.length < 8) { toast.error("Password must be at least 8 characters"); return; }
+    if (profilePassword !== profileConfirm) { toast.error("Passwords do not match"); return; }
+    if (isEventManager) {
+      if (!companyName.trim()) { toast.error("Enter your company / agency name"); return; }
+      if (!instagramHandle.trim()) { toast.error("Instagram handle is required"); return; }
+    }
+
+    setProfileBusy(true);
+    try {
+      let res: Response;
+      try {
+        res = await fetch("/api/auth/otp/complete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            token: verifyToken,
+            name: profileName,
+            email: profileEmail,
+            password: profilePassword,
+            isEventManager,
+            companyName:     isEventManager ? companyName     : undefined,
+            instagramHandle: isEventManager ? instagramHandle : undefined,
+            websiteUrl:      isEventManager && websiteUrl.trim() ? websiteUrl : undefined,
+          }),
+        });
+      } catch {
+        toast.error("No internet connection — please check and try again.");
+        return;
+      }
+
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error(json.error ?? "Could not create your account — please try again.");
+        return;
+      }
+
+      // Sign in immediately after account creation
+      const supabase = createClient();
+      const { error: signInErr } = await supabase.auth.signInWithPassword({
+        email: json.email,
+        password: json.password,
+      });
+
+      if (signInErr) {
+        // Account was created but sign-in failed — send them to login with phone pre-filled
+        console.error("[profile] signIn after create failed:", signInErr.message);
+        toast.success("Account created! Redirecting you to sign in…");
+        window.location.href = `/login?phone=${phoneDigits}`;
+        return;
+      }
+
+      reset({
+        source: "website",
+        submitter_type: isEventManager ? "planner" : "personal",
+        name: profileName.trim(),
+        email: profileEmail.trim().toLowerCase(),
+      });
+      setPhase("success");
+    } finally {
+      setProfileBusy(false);
+    }
+  };
+
+  const handleStartOver = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
     setPhase("otp");
     setOtpScreen("phone");
     setPhoneDigits("");
     setOtpCode("");
+    setVerifyToken("");
     setVerifiedPhonePreview("");
-    toast.success("Signed out — enter another number");
   };
 
   const nextStep = async () => {
@@ -234,15 +313,14 @@ export default function EnquiryPage() {
     setLoading(true);
     try {
       const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user?.id) {
-        toast.error("Your session expired — please enter your mobile again.");
+        toast.error("Session expired — please verify your mobile again.");
         setPhase("otp");
         return;
       }
       const clientId = session.user.id;
+
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
       const { count } = await supabase
@@ -251,9 +329,7 @@ export default function EnquiryPage() {
         .eq("client_id", clientId)
         .gte("created_at", todayStart.toISOString());
       if ((count ?? 0) >= DAILY_ENQUIRY_LIMIT) {
-        toast.error(
-          `You’ve reached today’s enquiry limit (${DAILY_ENQUIRY_LIMIT}). Please try again tomorrow or WhatsApp us.`
-        );
+        toast.error(`Daily enquiry limit reached (${DAILY_ENQUIRY_LIMIT}). Try again tomorrow or WhatsApp us.`);
         return;
       }
 
@@ -262,7 +338,6 @@ export default function EnquiryPage() {
         .update({
           name: data.name.trim(),
           email: data.email.trim().toLowerCase(),
-          phone: phoneDigits.replace(/\D/g, "") ? `+91${phoneDigits.replace(/\D/g, "")}` : null,
         })
         .eq("id", clientId);
       if (profileErr) {
@@ -274,7 +349,8 @@ export default function EnquiryPage() {
         return;
       }
 
-      const budgetMax = data.budget_max && data.budget_max >= data.budget_min ? data.budget_max : data.budget_min;
+      const budgetMax =
+        data.budget_max && data.budget_max >= data.budget_min ? data.budget_max : data.budget_min;
 
       const { error: insErr } = await supabase.from("enquiries").insert({
         client_id: clientId,
@@ -295,7 +371,7 @@ export default function EnquiryPage() {
 
       setSubmitted(true);
     } catch {
-      toast.error("Failed to submit enquiry. Please try again.");
+      toast.error("Failed to submit enquiry — please try again.");
     } finally {
       setLoading(false);
     }
@@ -324,9 +400,10 @@ export default function EnquiryPage() {
           <div className="w-20 h-20 rounded-full bg-emerald-100 mx-auto mb-6 flex items-center justify-center">
             <CheckCircle2 className="w-10 h-10 text-emerald-600" />
           </div>
-          <h2 className="font-display text-2xl font-bold text-navy-900">Enquiry received</h2>
+          <h2 className="font-display text-2xl font-bold text-navy-900">Enquiry received!</h2>
           <p className="text-muted-foreground mt-3">
-            Our coordinator will reach you within <strong className="text-navy-900">2 hours</strong> on{" "}
+            Our coordinator will reach you within{" "}
+            <strong className="text-navy-900">2 hours</strong> on{" "}
             {verifiedPhonePreview || "your mobile"} and email.
           </p>
           <div className="mt-6 p-4 rounded-xl bg-gold-50 border border-gold-200 text-sm text-gold-800">
@@ -353,6 +430,77 @@ export default function EnquiryPage() {
     );
   }
 
+  // ─── Phase: Success / booking magnet ─────────────────────────────────────
+  if (phase === "success") {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-navy-900 via-navy-800 to-navy-950 flex items-center justify-center p-4">
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full bg-gold-500/8 blur-3xl pointer-events-none" />
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: "spring", duration: 0.5 }}
+          className="relative w-full max-w-md"
+        >
+          <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="gold-gradient px-6 py-8 text-center">
+              <div className="w-16 h-16 rounded-full bg-white/20 mx-auto mb-4 flex items-center justify-center">
+                <CheckCircle2 className="w-8 h-8 text-white" />
+              </div>
+              <h2 className="font-display text-2xl font-bold text-navy-900">
+                You&apos;re in, {profileName.split(" ")[0]}!
+              </h2>
+              <p className="text-navy-800/70 text-sm mt-1">
+                Account created · Mobile verified
+              </p>
+            </div>
+
+            <div className="p-6 space-y-3">
+              <p className="text-center text-sm text-muted-foreground mb-4">
+                What would you like to do next?
+              </p>
+
+              {/* Primary CTA */}
+              <Link href="/artists">
+                <Button className="w-full h-14 text-base font-semibold gap-2">
+                  <Sparkles className="w-5 h-5" />
+                  Browse Artists
+                  <ChevronRight className="w-4 h-4 ml-auto" />
+                </Button>
+              </Link>
+              <p className="text-center text-xs text-muted-foreground -mt-1">
+                See singers, DJs, comedians & more — then enquire directly
+              </p>
+
+              <div className="relative my-4">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs text-muted-foreground">
+                  <span className="bg-white px-3">or</span>
+                </div>
+              </div>
+
+              {/* Secondary CTA */}
+              <Button
+                variant="outline"
+                className="w-full h-12 font-medium gap-2"
+                onClick={() => setPhase("form")}
+              >
+                <MessageSquare className="w-4 h-4" />
+                Submit an Enquiry Now
+              </Button>
+              <p className="text-center text-xs text-muted-foreground -mt-1">
+                Tell us your event details and we&apos;ll match you with the right artists
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // ─── Phase: OTP ───────────────────────────────────────────────────────────
   if (phase === "otp") {
     return (
       <div className="min-h-screen bg-gradient-to-br from-navy-900 via-navy-800 to-navy-950 flex items-center justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
@@ -360,13 +508,13 @@ export default function EnquiryPage() {
         <div className="relative w-full max-w-md">
           <div className="text-center mb-6">
             <div className="flex justify-center mb-6">
-              <BrandLogo href="/" size="lg" priority />
+              <BrandLogo href="/" size="xl" priority />
             </div>
             <h1 className="font-display text-xl md:text-2xl font-bold text-white">
               Verify your mobile first
             </h1>
             <p className="text-white/65 mt-2 text-sm leading-relaxed px-2">
-              One quick OTP protects real clients from spam enquiries — then you can share your event details. No password.
+              One quick OTP protects real clients from spam enquiries.
             </p>
           </div>
 
@@ -381,7 +529,7 @@ export default function EnquiryPage() {
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {otpScreen === "phone"
-                    ? "We’ll send a 6-digit code by SMS (standard charges may apply)."
+                    ? "We'll send a 6-digit code by SMS."
                     : `Code sent to +91 •••••${phoneDigits.slice(-4)}`}
                 </p>
               </div>
@@ -403,7 +551,10 @@ export default function EnquiryPage() {
                         placeholder="9876543210"
                         className="text-lg tracking-wide"
                         value={phoneDigits}
-                        onChange={(e) => setPhoneDigits(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                        onChange={(e) =>
+                          setPhoneDigits(e.target.value.replace(/\D/g, "").slice(0, 10))
+                        }
+                        onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
                       />
                     </div>
                   </div>
@@ -427,9 +578,12 @@ export default function EnquiryPage() {
                       autoComplete="one-time-code"
                       placeholder="• • • • • •"
                       className="text-center text-2xl tracking-[0.4em] font-semibold h-14"
-                      maxLength={8}
+                      maxLength={6}
                       value={otpCode}
-                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      onChange={(e) =>
+                        setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                      }
+                      onKeyDown={(e) => e.key === "Enter" && handleVerifyOtp()}
                     />
                   </div>
                   <Button
@@ -440,19 +594,20 @@ export default function EnquiryPage() {
                   >
                     Verify & continue
                   </Button>
-                  <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between text-sm">
+                  <div className="flex items-center justify-between text-sm">
                     <button
                       type="button"
                       className="text-indigo-600 font-medium disabled:text-muted-foreground"
                       disabled={resendIn > 0 || otpBusy}
                       onClick={handleSendOtp}
                     >
-                      {resendIn > 0 ? `Resend SMS in ${resendIn}s` : "Resend SMS"}
+                      {resendIn > 0 ? `Resend in ${resendIn}s` : "Resend SMS"}
                     </button>
-                    <button type="button" className="text-muted-foreground hover:text-navy-900" onClick={() => {
-                      setOtpScreen("phone");
-                      setOtpCode("");
-                    }}>
+                    <button
+                      type="button"
+                      className="text-muted-foreground hover:text-navy-900 text-xs"
+                      onClick={() => { setOtpScreen("phone"); setOtpCode(""); }}
+                    >
                       Edit number
                     </button>
                   </div>
@@ -461,7 +616,7 @@ export default function EnquiryPage() {
             </div>
 
             <div className="px-6 pb-6">
-              <Link href="/" className="block text-center">
+              <Link href="/">
                 <Button type="button" variant="outline" className="w-full h-11">
                   Back to home
                 </Button>
@@ -473,6 +628,215 @@ export default function EnquiryPage() {
     );
   }
 
+  // ─── Phase: Profile setup ─────────────────────────────────────────────────
+  if (phase === "profile") {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-navy-900 via-navy-800 to-navy-950 flex items-center justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full bg-gold-500/5 blur-3xl pointer-events-none" />
+        <div className="relative w-full max-w-md">
+          <div className="text-center mb-6">
+            <div className="flex justify-center mb-6">
+              <BrandLogo href="/" size="xl" priority />
+            </div>
+            <div className="inline-flex items-center gap-2 bg-emerald-500/20 text-emerald-300 text-xs font-medium px-3 py-1.5 rounded-full mb-3">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              {verifiedPhonePreview} verified
+            </div>
+            <h1 className="font-display text-xl md:text-2xl font-bold text-white">
+              Almost there — set up your account
+            </h1>
+            <p className="text-white/60 mt-2 text-sm">
+              You'll use your phone number + password to log in next time.
+            </p>
+          </div>
+
+          <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b bg-muted/30">
+              <p className="font-display font-semibold text-navy-900 text-sm">Your details</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Name, email and a password to protect your account</p>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <Label>Full name *</Label>
+                <Input
+                  type="text"
+                  placeholder="e.g. Priya Sharma"
+                  icon={<User className="w-4 h-4" />}
+                  value={profileName}
+                  onChange={(e) => setProfileName(e.target.value)}
+                  autoComplete="name"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Email address *</Label>
+                <Input
+                  type="email"
+                  placeholder="you@example.com"
+                  icon={<Mail className="w-4 h-4" />}
+                  value={profileEmail}
+                  onChange={(e) => setProfileEmail(e.target.value)}
+                  autoComplete="email"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Password *</Label>
+                <div className="relative">
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Min. 8 characters"
+                    icon={<Lock className="w-4 h-4" />}
+                    value={profilePassword}
+                    onChange={(e) => setProfilePassword(e.target.value)}
+                    autoComplete="new-password"
+                    className="pr-11"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Confirm password *</Label>
+                <Input
+                  type="password"
+                  placeholder="Re-enter password"
+                  icon={<Lock className="w-4 h-4" />}
+                  value={profileConfirm}
+                  onChange={(e) => setProfileConfirm(e.target.value)}
+                  autoComplete="new-password"
+                  onKeyDown={(e) => e.key === "Enter" && handleCompleteProfile()}
+                />
+              </div>
+
+              {/* Event manager toggle */}
+              <button
+                type="button"
+                onClick={() => setIsEventManager((v) => !v)}
+                className={`w-full flex items-start gap-3 rounded-2xl border p-3.5 text-left transition-all ${
+                  isEventManager
+                    ? "border-gold-500 bg-gold-50 ring-1 ring-gold-500/30"
+                    : "border-border hover:border-gold-200"
+                }`}
+              >
+                <div
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                    isEventManager ? "gold-gradient text-navy-900" : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  <Briefcase className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm text-navy-900">
+                    I&apos;m an event manager / planner
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Booking on behalf of a client or agency
+                  </p>
+                </div>
+                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 ${
+                  isEventManager ? "border-gold-500 bg-gold-500" : "border-muted-foreground/40"
+                }`}>
+                  {isEventManager && <CheckCircle2 className="w-3 h-3 text-white" />}
+                </div>
+              </button>
+
+              {/* Expanded event manager fields */}
+              <AnimatePresence>
+                {isEventManager && (
+                  <motion.div
+                    key="em-fields"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.25, ease: "easeInOut" }}
+                    className="overflow-hidden"
+                  >
+                    <div className="rounded-2xl border border-gold-200 bg-gold-50/50 p-4 space-y-3">
+                      <p className="text-xs font-medium text-gold-700 flex items-center gap-1.5">
+                        <Briefcase className="w-3.5 h-3.5" />
+                        Agency / company details
+                      </p>
+
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Company / agency name *</Label>
+                        <Input
+                          type="text"
+                          placeholder="e.g. Starlight Events"
+                          icon={<Building2 className="w-4 h-4" />}
+                          value={companyName}
+                          onChange={(e) => setCompanyName(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Instagram handle *</Label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm select-none">
+                            @
+                          </span>
+                          <Input
+                            type="text"
+                            placeholder="youragency"
+                            className="pl-7"
+                            icon={<AtSign className="w-4 h-4" />}
+                            value={instagramHandle}
+                            onChange={(e) =>
+                              setInstagramHandle(e.target.value.replace(/^@/, "").replace(/\s/g, ""))
+                            }
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Website <span className="text-muted-foreground">(optional)</span></Label>
+                        <Input
+                          type="url"
+                          placeholder="https://youragency.com"
+                          icon={<Globe className="w-4 h-4" />}
+                          value={websiteUrl}
+                          onChange={(e) => setWebsiteUrl(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <Button
+                type="button"
+                className="w-full h-12 text-base font-semibold"
+                loading={profileBusy}
+                onClick={handleCompleteProfile}
+              >
+                <Sparkles className="w-4 h-4 mr-2" />
+                Create account & continue
+              </Button>
+            </div>
+
+            <div className="px-6 pb-6">
+              <button
+                type="button"
+                onClick={handleStartOver}
+                className="w-full text-center text-xs text-muted-foreground hover:text-navy-900"
+              >
+                Wrong number? Start over
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Phase: Enquiry form ──────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gradient-to-br from-navy-900 via-navy-800 to-navy-950 flex items-center justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full bg-gold-500/5 blur-3xl pointer-events-none" />
@@ -480,30 +844,36 @@ export default function EnquiryPage() {
       <div className="relative w-full max-w-2xl">
         <div className="text-center mb-8">
           <div className="flex justify-center mb-6">
-            <BrandLogo href="/" size="lg" priority />
+            <BrandLogo href="/" size="xl" priority />
           </div>
-          <h1 className="font-display text-2xl md:text-3xl font-bold text-white">Tell us about your event</h1>
-          <p className="text-white/60 mt-2 text-sm">Verified enquiry — coordinator responds within 2 hours</p>
+          <h1 className="font-display text-2xl md:text-3xl font-bold text-white">
+            Tell us about your event
+          </h1>
+          <p className="text-white/60 mt-2 text-sm">
+            Verified enquiry — coordinator responds within 2 hours
+          </p>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 mb-6 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-white/90 text-sm">
             <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>
-              Mobile verified: <span className="font-semibold text-white">{verifiedPhonePreview}</span>
+              Mobile verified:{" "}
+              <span className="font-semibold text-white">{verifiedPhonePreview}</span>
             </span>
           </div>
           <button
             type="button"
-            onClick={handleChangeNumber}
-            className="text-xs font-medium text-gold-300 hover:text-gold-200 underline underline-offset-2 self-start sm:self-auto"
+            onClick={handleStartOver}
+            className="text-xs font-medium text-gold-300 hover:text-gold-200 underline underline-offset-2"
           >
-            Wrong number? Start over
+            Start over
           </button>
         </div>
 
+        {/* Step indicators */}
         <div className="flex items-center justify-center gap-3 mb-8">
-          {STEPS.map((s, i) => (
+          {ENQUIRY_STEPS.map((s, i) => (
             <div key={i} className="flex items-center gap-3">
               <div className="flex flex-col items-center gap-1">
                 <div
@@ -519,8 +889,10 @@ export default function EnquiryPage() {
                 </div>
                 <span className="text-[10px] text-white/60 hidden sm:block">{s.title}</span>
               </div>
-              {i < STEPS.length - 1 && (
-                <div className={`w-12 sm:w-20 h-0.5 transition-all ${i < step ? "bg-gold-500" : "bg-white/20"}`} />
+              {i < ENQUIRY_STEPS.length - 1 && (
+                <div
+                  className={`w-12 sm:w-20 h-0.5 transition-all ${i < step ? "bg-gold-500" : "bg-white/20"}`}
+                />
               )}
             </div>
           ))}
@@ -528,13 +900,14 @@ export default function EnquiryPage() {
 
         <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
           <div className="px-6 py-4 border-b bg-muted/30">
-            <h2 className="font-display font-semibold text-navy-900">{STEPS[step].title}</h2>
-            <p className="text-sm text-muted-foreground">{STEPS[step].subtitle}</p>
+            <h2 className="font-display font-semibold text-navy-900">{ENQUIRY_STEPS[step].title}</h2>
+            <p className="text-sm text-muted-foreground">{ENQUIRY_STEPS[step].subtitle}</p>
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)}>
             <div className="p-4 sm:p-6">
               <AnimatePresence mode="wait">
+                {/* Step 0: Your details */}
                 {step === 0 && (
                   <motion.div
                     key="step0"
@@ -565,56 +938,29 @@ export default function EnquiryPage() {
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label>Who is booking? *</Label>
-                      <p className="text-xs text-muted-foreground -mt-1">
-                        Helps our team prioritise real events and organise follow-up.
-                      </p>
-                      <div className="grid grid-cols-1 gap-2.5">
-                        {SUBMITTER_OPTIONS.map((opt) => {
-                          const Icon = opt.icon;
-                          const sel = watch("submitter_type") === opt.value;
-                          return (
-                            <button
-                              key={opt.value}
-                              type="button"
-                              onClick={() => setValue("submitter_type", opt.value)}
-                              className={`flex items-start gap-3 rounded-2xl border p-3.5 text-left transition-all ${
-                                sel ? "border-gold-500 bg-gold-50 ring-1 ring-gold-500/30" : "border-border hover:border-gold-200"
-                              }`}
-                            >
-                              <div
-                                className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                                  sel ? "gold-gradient text-navy-900" : "bg-muted text-muted-foreground"
-                                }`}
-                              >
-                                <Icon className="w-5 h-5" />
-                              </div>
-                              <div>
-                                <p className="font-medium text-sm text-navy-900">{opt.label}</p>
-                                <p className="text-xs text-muted-foreground mt-0.5">{opt.hint}</p>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {errors.submitter_type && (
-                        <p className="text-xs text-destructive">{errors.submitter_type.message}</p>
-                      )}
-                    </div>
-
                     <div className="space-y-1.5">
                       <Label>How did you hear about us?</Label>
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                        {SOURCE_OPTIONS.map((opt) => {
+                        {[
+                          { value: "website", label: "Website" },
+                          { value: "whatsapp", label: "WhatsApp" },
+                          { value: "email", label: "Email" },
+                          { value: "instagram", label: "Instagram" },
+                          { value: "referral", label: "Referral" },
+                          { value: "walk_in", label: "Walk-in" },
+                        ].map((opt) => {
                           const selected = watch("source") === opt.value;
                           return (
                             <button
                               key={opt.value}
                               type="button"
-                              onClick={() => setValue("source", opt.value as EnquiryFormValues["source"])}
+                              onClick={() =>
+                                setValue("source", opt.value as EnquiryFormValues["source"])
+                              }
                               className={`py-3 px-2.5 rounded-xl border text-xs font-medium transition-all ${
-                                selected ? "border-gold-500 bg-gold-50 text-gold-700" : "border-border hover:border-gold-300"
+                                selected
+                                  ? "border-gold-500 bg-gold-50 text-gold-700"
+                                  : "border-border hover:border-gold-300"
                               }`}
                             >
                               {opt.label}
@@ -626,6 +972,7 @@ export default function EnquiryPage() {
                   </motion.div>
                 )}
 
+                {/* Step 1: Event details */}
                 {step === 1 && (
                   <motion.div
                     key="step1"
@@ -649,7 +996,9 @@ export default function EnquiryPage() {
                             ))}
                           </SelectContent>
                         </Select>
-                        {errors.event_type && <p className="text-xs text-destructive">{errors.event_type.message}</p>}
+                        {errors.event_type && (
+                          <p className="text-xs text-destructive">{errors.event_type.message}</p>
+                        )}
                       </div>
                       <div className="space-y-1.5">
                         <Label>Event date *</Label>
@@ -677,7 +1026,9 @@ export default function EnquiryPage() {
                             ))}
                           </SelectContent>
                         </Select>
-                        {errors.city && <p className="text-xs text-destructive">{errors.city.message}</p>}
+                        {errors.city && (
+                          <p className="text-xs text-destructive">{errors.city.message}</p>
+                        )}
                       </div>
                       <div className="space-y-1.5">
                         <Label>Venue / location *</Label>
@@ -692,6 +1043,7 @@ export default function EnquiryPage() {
                   </motion.div>
                 )}
 
+                {/* Step 2: Budget */}
                 {step === 2 && (
                   <motion.div
                     key="step2"
@@ -752,7 +1104,12 @@ export default function EnquiryPage() {
 
             <div className="px-4 sm:px-6 pb-4 sm:pb-6 flex items-center justify-between gap-3">
               {step > 0 ? (
-                <Button type="button" variant="outline" className="h-11 sm:h-9" onClick={() => setStep((s) => s - 1)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 sm:h-9"
+                  onClick={() => setStep((s) => s - 1)}
+                >
                   <ChevronLeft className="w-4 h-4 mr-1" />
                   Back
                 </Button>
@@ -764,13 +1121,17 @@ export default function EnquiryPage() {
                 </Link>
               )}
 
-              {step < STEPS.length - 1 ? (
+              {step < ENQUIRY_STEPS.length - 1 ? (
                 <Button type="button" className="h-11 sm:h-9 flex-1 sm:flex-none" onClick={nextStep}>
                   Next
                   <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
               ) : (
-                <Button type="submit" className="h-11 sm:h-9 flex-1 sm:flex-none font-semibold" loading={loading}>
+                <Button
+                  type="submit"
+                  className="h-11 sm:h-9 flex-1 sm:flex-none font-semibold"
+                  loading={loading}
+                >
                   <Sparkles className="w-4 h-4 mr-2" />
                   Submit enquiry
                 </Button>

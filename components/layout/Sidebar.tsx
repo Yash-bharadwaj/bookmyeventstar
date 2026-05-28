@@ -86,7 +86,7 @@ const roleLabels: Record<UserRole, string> = {
   admin: "Admin",
   coordinator: "Coordinator",
   artist: "Artist",
-  client: "Client",
+  client: "Customer",
 };
 
 interface SidebarProps {
@@ -110,11 +110,10 @@ export function Sidebar({ role, userName }: SidebarProps) {
       <div className={`flex items-center border-b border-white/10 py-4 ${collapsed ? "justify-center px-2" : "gap-3 px-4"}`}>
         <Link href="/" className="min-w-0 shrink flex justify-center">
           <BrandLogo
-            size={collapsed ? "sm" : "md"}
+            size={collapsed ? "sm" : "lg"}
             frame={false}
             priority
-            className={collapsed ? "max-w-[52px]" : ""}
-            imgClassName={collapsed ? "!h-7 !max-w-[52px] object-contain" : undefined}
+            imgClassName={collapsed ? "!h-8 !max-w-[60px]" : undefined}
           />
         </Link>
       </div>

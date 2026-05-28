@@ -84,7 +84,7 @@ export default function RegisterPage() {
       >
         <div className="bg-white rounded-3xl shadow-2xl p-8">
           <div className="mb-6 flex justify-start">
-            <BrandLogo href="/" size="md" />
+            <BrandLogo href="/" size="lg" />
           </div>
 
           <h2 className="font-display text-2xl font-bold text-navy-900">Create your account</h2>

@@ -54,7 +54,7 @@ export default async function ArtistsPage({
     <div className="min-h-screen bg-white">
       {/* Navbar */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-b">
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 h-20 flex items-center justify-between">
           <BrandLogo size="md" href="/" priority />
           <div className="flex gap-3">
             <Link href="/enquiry" className="text-sm font-medium text-gold-600 hover:text-gold-700">
@@ -67,7 +67,7 @@ export default async function ArtistsPage({
         </div>
       </nav>
 
-      <div className="pt-16">
+      <div className="pt-20">
         <Suspense fallback={<div className="p-8 text-center">Loading artists...</div>}>
           <ArtistsPageClient
             artists={artists}

@@ -8,7 +8,7 @@ import { Home, ArrowLeft } from "lucide-react";
 export default function NotFound() {
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
-      <BrandLogo size="lg" href="/" />
+      <BrandLogo size="xl" href="/" />
 
       <div className="mt-10 mb-6">
         <p className="text-8xl font-display font-bold text-muted-foreground/20 select-none">404</p>

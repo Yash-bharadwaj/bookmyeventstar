@@ -58,7 +58,9 @@ export function TopBar({ user, title }: TopBarProps) {
               </Avatar>
               <div className="hidden md:block text-left">
                 <p className="text-sm font-medium leading-none">{user.name}</p>
-                <p className="text-xs text-muted-foreground capitalize">{user.role}</p>
+                <p className="text-xs text-muted-foreground capitalize">
+                  {user.role === "client" ? "Customer" : user.role}
+                </p>
               </div>
             </button>
           </DropdownMenuTrigger>
