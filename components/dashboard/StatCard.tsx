@@ -10,7 +10,7 @@ interface StatCardProps {
   subtitle?: string;
   icon: LucideIcon;
   trend?: { value: number; label: string };
-  color?: "indigo" | "blue" | "green" | "purple" | "red" | "gold" | "amber";
+  color?: "indigo" | "blue" | "green" | "red" | "gold" | "amber" | "navy";
   index?: number;
 }
 
@@ -36,13 +36,6 @@ const colorMap = {
     shadow: "hover:shadow-emerald-100",
     bg: "emerald",
   },
-  purple: {
-    icon: "bg-purple-100 text-purple-700",
-    trend: "text-purple-600",
-    border: "hover:border-purple-300",
-    shadow: "hover:shadow-purple-100",
-    bg: "purple",
-  },
   red: {
     icon: "bg-red-100 text-red-700",
     trend: "text-red-600",
@@ -64,15 +57,22 @@ const colorMap = {
     shadow: "hover:shadow-amber-100",
     bg: "amber",
   },
+  navy: {
+    icon: "bg-navy-100 text-navy-700",
+    trend: "text-navy-600",
+    border: "hover:border-navy-300",
+    shadow: "hover:shadow-navy-100",
+    bg: "navy",
+  },
 };
 
 const shadowColors: Record<string, string> = {
   indigo: "rgba(99,102,241,0.15)",
   blue: "rgba(59,130,246,0.15)",
   emerald: "rgba(16,185,129,0.15)",
-  purple: "rgba(168,85,247,0.15)",
   red: "rgba(239,68,68,0.15)",
   amber: "rgba(245,158,11,0.15)",
+  navy: "rgba(15,23,42,0.15)",
 };
 
 export function StatCard({

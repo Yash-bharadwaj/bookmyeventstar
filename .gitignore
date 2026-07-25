@@ -38,3 +38,10 @@ public/worker-*.js
 
 # Sharp (dev only)
 node_modules/sharp
+
+# Test artifacts
+/test-results/
+/playwright-report/
+
+# Ad-hoc audit scratch (screenshots/scripts)
+.claude-audit/

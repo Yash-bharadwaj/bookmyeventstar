@@ -1,19 +1,17 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/firebase/server";
+import { serialize } from "@/lib/firebase/firestore-utils";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ProfileClient } from "@/components/profile/ProfileClient";
 
 export default async function AdminProfilePage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) redirect("/login");
-
-  const { data: profile } = await supabase.from("users").select("*").eq("id", user.id).single();
-  if (!profile || profile.role !== "admin") redirect("/login");
+  if (user.role !== "admin") redirect("/login");
 
   return (
-    <DashboardLayout user={profile} title="My Profile">
-      <ProfileClient user={profile} />
+    <DashboardLayout user={serialize(user)} title="My Profile">
+      <ProfileClient user={serialize(user)} />
     </DashboardLayout>
   );
 }

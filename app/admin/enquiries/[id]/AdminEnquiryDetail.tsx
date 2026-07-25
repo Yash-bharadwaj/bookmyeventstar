@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDate, formatCurrency, getStatusColor, getStatusLabel } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
+import { db } from "@/lib/firebase/client";
+import { doc, updateDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -46,13 +47,16 @@ export function AdminEnquiryDetail({ enquiry, proposals, coordinators }: Props) 
 
   const saveUpdate = async () => {
     setSaving(true);
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("enquiries")
-      .update({ status, other_requirements: notes })
-      .eq("id", enquiry.id);
-    if (error) toast.error("Failed to save");
-    else toast.success("Enquiry updated!");
+    try {
+      await updateDoc(doc(db, "enquiries", enquiry.id), {
+        status,
+        other_requirements: notes,
+        updated_at: serverTimestamp(),
+      });
+      toast.success("Enquiry updated!");
+    } catch {
+      toast.error("Failed to save");
+    }
     setSaving(false);
     router.refresh();
   };
@@ -60,22 +64,23 @@ export function AdminEnquiryDetail({ enquiry, proposals, coordinators }: Props) 
   const reassignCoordinator = async () => {
     if (!coordinatorId) return;
     setAssigning(true);
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("enquiries")
-      .update({ coordinator_id: coordinatorId, status: status === "new" ? "assigned" : status })
-      .eq("id", enquiry.id);
-    if (!error) {
-      await supabase.from("notifications").insert({
-        user_id: coordinatorId,
+    try {
+      await updateDoc(doc(db, "enquiries", enquiry.id), {
+        coordinator_id: coordinatorId,
+        status: status === "new" ? "assigned" : status,
+        updated_at: serverTimestamp(),
+      });
+      await addDoc(collection(db, "users", coordinatorId, "notifications"), {
         title: "Enquiry Assigned",
         message: `You have been assigned the enquiry for ${enquiry.event_type} in ${enquiry.city}.`,
         type: "info",
+        is_read: false,
         link: `/coordinator/enquiries/${enquiry.id}`,
+        created_at: serverTimestamp(),
       });
       toast.success("Coordinator assigned!");
       if (status === "new") setStatus("assigned");
-    } else {
+    } catch {
       toast.error("Failed to assign coordinator");
     }
     setAssigning(false);
@@ -113,8 +118,8 @@ export function AdminEnquiryDetail({ enquiry, proposals, coordinators }: Props) 
             <div key={s.key} className="flex items-center gap-1 flex-shrink-0">
               <div className="flex flex-col items-center">
                 <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                  i < currentStepIndex ? "bg-indigo-500 text-white" :
-                  i === currentStepIndex ? "bg-indigo-600 text-white ring-4 ring-indigo-100" :
+                  i < currentStepIndex ? "bg-navy-500 text-white" :
+                  i === currentStepIndex ? "bg-navy-600 text-white ring-4 ring-navy-100" :
                   "bg-muted text-muted-foreground"
                 }`}>
                   {i < currentStepIndex ? <CheckCircle className="w-3.5 h-3.5" /> : i + 1}
@@ -122,7 +127,7 @@ export function AdminEnquiryDetail({ enquiry, proposals, coordinators }: Props) 
                 <span className="text-[9px] text-muted-foreground mt-1 text-center w-16 leading-tight">{s.label}</span>
               </div>
               {i < STATUS_FLOW.length - 1 && (
-                <div className={`h-0.5 w-6 flex-shrink-0 mb-4 ${i < currentStepIndex ? "bg-indigo-500" : "bg-muted"}`} />
+                <div className={`h-0.5 w-6 flex-shrink-0 mb-4 ${i < currentStepIndex ? "bg-navy-500" : "bg-muted"}`} />
               )}
             </div>
           ))}
@@ -134,7 +139,7 @@ export function AdminEnquiryDetail({ enquiry, proposals, coordinators }: Props) 
         {/* Client Info */}
         <div className="rounded-2xl border p-5 space-y-3">
           <h2 className="font-semibold text-sm flex items-center gap-2">
-            <User className="w-4 h-4 text-violet-500" />Client Details
+            <User className="w-4 h-4 text-navy-600" />Client Details
           </h2>
           <div className="space-y-2 text-sm">
             <div className="font-medium">{enquiry.client?.name ?? "—"}</div>
@@ -173,18 +178,18 @@ export function AdminEnquiryDetail({ enquiry, proposals, coordinators }: Props) 
       {/* Assign Coordinator */}
       <div className="rounded-2xl border p-5 space-y-4">
         <h2 className="font-semibold text-sm flex items-center gap-2">
-          <UserCheck className="w-4 h-4 text-indigo-500" />Coordinator Assignment
+          <UserCheck className="w-4 h-4 text-navy-500" />Coordinator Assignment
         </h2>
         {enquiry.coordinator && (
-          <div className="flex items-center gap-3 p-3 rounded-xl bg-indigo-50 border border-indigo-100 text-sm">
-            <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-xs">
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-navy-50 border border-navy-100 text-sm">
+            <div className="w-8 h-8 rounded-full bg-navy-100 flex items-center justify-center text-navy-700 font-bold text-xs">
               {enquiry.coordinator.name?.[0]?.toUpperCase()}
             </div>
             <div>
               <p className="font-semibold">{enquiry.coordinator.name}</p>
               <p className="text-xs text-muted-foreground">{enquiry.coordinator.email}</p>
             </div>
-            <span className="ml-auto text-xs text-indigo-600 font-medium">Currently Assigned</span>
+            <span className="ml-auto text-xs text-navy-600 font-medium">Currently Assigned</span>
           </div>
         )}
         {!enquiry.coordinator && (
@@ -249,7 +254,7 @@ export function AdminEnquiryDetail({ enquiry, proposals, coordinators }: Props) 
       {/* Proposals */}
       <div className="rounded-2xl border p-5 space-y-4">
         <h2 className="font-semibold text-sm flex items-center gap-2">
-          <ClipboardList className="w-4 h-4 text-cyan-500" />Proposals ({proposals.length})
+          <ClipboardList className="w-4 h-4 text-gold-600" />Proposals ({proposals.length})
         </h2>
         {proposals.length === 0 ? (
           <div className="py-8 text-center">

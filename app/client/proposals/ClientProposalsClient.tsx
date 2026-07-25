@@ -11,7 +11,8 @@ import { Button } from "@/components/ui/button";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { Proposal } from "@/types";
 import { formatDate, formatCurrency } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
+import { db } from "@/lib/firebase/client";
+import { doc, updateDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 
@@ -54,8 +55,7 @@ export function ClientProposalsClient({ proposals }: Props) {
     // Toggle off if already chosen
     const newChoice = chosenArtist[proposalId] === artistId ? "" : artistId;
     setChosenArtist((prev) => ({ ...prev, [proposalId]: newChoice }));
-    const supabase = createClient();
-    await supabase.from("proposals").update({ client_chosen_artist_id: newChoice || null }).eq("id", proposalId);
+    await updateDoc(doc(db, "proposals", proposalId), { client_chosen_artist_id: newChoice || null });
   };
 
   const acceptProposal = async (proposalId: string, enquiryId: string) => {
@@ -73,24 +73,25 @@ export function ClientProposalsClient({ proposals }: Props) {
 
     setAccepting(proposalId);
     try {
-      const supabase = createClient();
       // Save preference if client indicated one, otherwise coordinator picks best fit
       const preferredArtistId = chosenArtist[proposalId] ?? null;
       const preferredName = artists.find((a: any) => a.artist_id === preferredArtistId)?.name;
 
-      await supabase.from("proposals").update({
+      await updateDoc(doc(db, "proposals", proposalId), {
         status: "accepted",
         client_chosen_artist_id: preferredArtistId,
-      }).eq("id", proposalId);
-      await supabase.from("enquiries").update({ status: "confirmed" }).eq("id", enquiryId);
+        updated_at: serverTimestamp(),
+      });
+      await updateDoc(doc(db, "enquiries", enquiryId), { status: "confirmed", updated_at: serverTimestamp() });
 
       if (proposal?.coordinator_id) {
-        await supabase.from("notifications").insert({
-          user_id: proposal.coordinator_id,
+        await addDoc(collection(db, "users", proposal.coordinator_id, "notifications"), {
           title: "🎉 Proposal Accepted — Create Booking",
           message: `${proposal.enquiry?.event_type ?? "Event"} booking confirmed${preferredName ? `. Client prefers ${preferredName}` : ""}. Please create the booking now.`,
           type: "success",
+          is_read: false,
           link: `/coordinator/proposals`,
+          created_at: serverTimestamp(),
         });
       }
       toast.success("Booking confirmed! Our coordinator will call you shortly.", { duration: 5000 });
@@ -105,8 +106,7 @@ export function ClientProposalsClient({ proposals }: Props) {
   const rejectProposal = async (proposalId: string) => {
     setRejecting(proposalId);
     try {
-      const supabase = createClient();
-      await supabase.from("proposals").update({ status: "rejected" }).eq("id", proposalId);
+      await updateDoc(doc(db, "proposals", proposalId), { status: "rejected", updated_at: serverTimestamp() });
       setConfirmDecline(null);
       let undone = false;
       const tid = window.setTimeout(() => { if (!undone) router.refresh(); }, 6000);
@@ -115,12 +115,12 @@ export function ClientProposalsClient({ proposals }: Props) {
           <span className="flex items-center gap-3 text-sm">
             Proposal declined
             <button
-              className="font-semibold text-indigo-600 underline"
+              className="font-semibold text-navy-600 underline"
               onClick={async () => {
                 undone = true;
                 clearTimeout(tid);
                 toast.dismiss(t.id);
-                await supabase.from("proposals").update({ status: "sent" }).eq("id", proposalId);
+                await updateDoc(doc(db, "proposals", proposalId), { status: "sent", updated_at: serverTimestamp() });
                 router.refresh();
                 toast.success("Decline undone — proposal is active again.");
               }}
@@ -168,9 +168,9 @@ export function ClientProposalsClient({ proposals }: Props) {
       >
         {/* Top status bar */}
         {isPending && (
-          <div className={`h-1.5 ${isExpiringSoon ? "bg-gradient-to-r from-red-400 to-orange-400 animate-pulse" : "gold-gradient"}`} />
+          <div className={`h-1.5 ${isExpiringSoon ? "bg-gradient-to-r from-red-400 to-red-500 animate-pulse" : "gold-gradient"}`} />
         )}
-        {proposal.status === "accepted" && <div className="h-1.5 bg-gradient-to-r from-emerald-400 to-teal-500" />}
+        {proposal.status === "accepted" && <div className="h-1.5 bg-gradient-to-r from-emerald-400 to-emerald-500" />}
 
         <div className="p-4 sm:p-6">
           {/* Header */}
@@ -194,7 +194,7 @@ export function ClientProposalsClient({ proposals }: Props) {
             </div>
 
             <div className="text-right flex-shrink-0">
-              <p className="font-display font-bold text-xl sm:text-2xl text-indigo-700">{formatCurrency(proposal.quoted_price)}</p>
+              <p className="font-display font-bold text-xl sm:text-2xl text-navy-700">{formatCurrency(proposal.quoted_price)}</p>
               <p className="text-[10px] text-muted-foreground font-medium">Total package</p>
             </div>
           </div>
@@ -220,7 +220,7 @@ export function ClientProposalsClient({ proposals }: Props) {
             <div className="mt-4 flex items-center gap-3">
               <div className="flex -space-x-2">
                 {artists.slice(0, 4).map((_, i) => (
-                  <div key={i} className="w-8 h-8 rounded-full gold-gradient border-2 border-background flex items-center justify-center text-navy-900 text-[11px] font-bold">
+                  <div key={i} className="w-8 h-8 rounded-full gold-gradient border-2 border-background flex items-center justify-center text-white text-[11px] font-bold">
                     {i + 1}
                   </div>
                 ))}
@@ -235,7 +235,7 @@ export function ClientProposalsClient({ proposals }: Props) {
           {/* Expand / collapse */}
           <button
             onClick={() => setExpanded(isOpen ? null : proposal.id)}
-            className="mt-4 flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-700 font-medium"
+            className="mt-4 flex items-center gap-1.5 text-sm text-navy-600 hover:text-navy-700 font-medium"
           >
             {isOpen ? <><ChevronUp className="w-4 h-4" />Hide details</> : <><ChevronDown className="w-4 h-4" />View full proposal</>}
           </button>
@@ -254,8 +254,8 @@ export function ClientProposalsClient({ proposals }: Props) {
                   {proposal.content && (
                     <div>
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Message from your Coordinator</p>
-                      <div className="relative p-4 rounded-2xl bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-100">
-                        <div className="absolute top-3 left-3 w-1 h-8 bg-indigo-300 rounded-full" />
+                      <div className="relative p-4 rounded-2xl bg-gradient-to-r from-navy-50 to-gold-50 border border-navy-100">
+                        <div className="absolute top-3 left-3 w-1 h-8 bg-navy-300 rounded-full" />
                         <p className="text-sm leading-relaxed pl-4">{proposal.content}</p>
                       </div>
                     </div>
@@ -286,13 +286,13 @@ export function ClientProposalsClient({ proposals }: Props) {
                                   ? "border-emerald-400 bg-emerald-50/50 ring-1 ring-emerald-300"
                                   : anyChosen
                                   ? "border-border bg-card opacity-60"
-                                  : "border-border bg-card hover:border-indigo-200"
+                                  : "border-border bg-card hover:border-navy-200"
                               }`}
                             >
                               <div className="flex items-start justify-between gap-3">
                                 <div className="flex items-start gap-3">
-                                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-navy-900 font-bold flex-shrink-0 ${
-                                    isChosen ? "bg-emerald-200" : "gold-gradient"
+                                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold flex-shrink-0 ${
+                                    isChosen ? "bg-emerald-200 text-navy-900" : "gold-gradient text-white"
                                   }`}>
                                     {isChosen ? <UserCheck className="w-5 h-5 text-emerald-700" /> : <Mic2 className="w-5 h-5" />}
                                   </div>
@@ -305,7 +305,7 @@ export function ClientProposalsClient({ proposals }: Props) {
                                     </div>
                                     <div className="flex flex-wrap items-center gap-1.5 mt-1">
                                       {a.artist?.categories?.slice(0, 2).map((c: string) => (
-                                        <span key={c} className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-medium">{c}</span>
+                                        <span key={c} className="text-[10px] px-2 py-0.5 rounded-full bg-navy-50 text-navy-700 font-medium">{c}</span>
                                       ))}
                                       {a.artist?.rating ? (
                                         <span className="flex items-center gap-0.5 text-[10px] text-amber-600 font-semibold">
@@ -319,7 +319,7 @@ export function ClientProposalsClient({ proposals }: Props) {
                                 </div>
                                 <div className="text-right flex-shrink-0 space-y-2">
                                   <div>
-                                    <p className="font-bold text-base text-indigo-700">{formatCurrency(a.quoted_price)}</p>
+                                    <p className="font-bold text-base text-navy-700">{formatCurrency(a.quoted_price)}</p>
                                     <p className="text-[10px] text-muted-foreground">for your event</p>
                                   </div>
                                   {/* Choose button — only when pending + multiple options */}
@@ -329,7 +329,7 @@ export function ClientProposalsClient({ proposals }: Props) {
                                       className={`text-xs px-3 py-1.5 rounded-xl font-semibold border transition-all ${
                                         isChosen
                                           ? "bg-emerald-600 text-white border-emerald-600"
-                                          : "border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+                                          : "border-navy-300 text-navy-700 hover:bg-navy-50"
                                       }`}
                                     >
                                       {isChosen ? "✓ Selected" : "Choose"}
@@ -342,7 +342,7 @@ export function ClientProposalsClient({ proposals }: Props) {
                                   href={`/artists?search=${encodeURIComponent(a.name)}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="mt-3 flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+                                  className="mt-3 flex items-center gap-1 text-xs text-navy-600 hover:text-navy-700 font-medium"
                                 >
                                   <ExternalLink className="w-3 h-3" />
                                   View full profile & portfolio
@@ -364,7 +364,7 @@ export function ClientProposalsClient({ proposals }: Props) {
                         { icon: Clock,  label: "On-time",           desc: "We handle logistics" },
                       ].map(({ icon: Icon, label, desc }) => (
                         <div key={label} className="text-center p-2.5 rounded-xl bg-muted/30">
-                          <Icon className="w-4 h-4 mx-auto mb-1 text-indigo-500" />
+                          <Icon className="w-4 h-4 mx-auto mb-1 text-navy-500" />
                           <p className="text-[10px] font-semibold leading-tight">{label}</p>
                           <p className="text-[9px] text-muted-foreground mt-0.5 leading-tight hidden sm:block">{desc}</p>
                         </div>
@@ -403,7 +403,8 @@ export function ClientProposalsClient({ proposals }: Props) {
                 <div className="space-y-3">
                   {/* One big button — always enabled */}
                   <Button
-                    className="w-full h-14 text-base font-bold bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-lg shadow-emerald-200 rounded-2xl active:scale-[0.98] transition-transform"
+                    variant="success"
+                    className="w-full h-14 text-base font-bold shadow-lg shadow-emerald-200 rounded-2xl active:scale-[0.98] transition-transform"
                     loading={accepting === proposal.id}
                     onClick={() => acceptProposal(proposal.id, proposal.enquiry_id)}
                   >
@@ -464,9 +465,9 @@ export function ClientProposalsClient({ proposals }: Props) {
           </div>
 
           {/* One-line guidance */}
-          <div className="flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-indigo-50 border border-indigo-100">
-            <Sparkles className="w-4 h-4 text-indigo-500 shrink-0" />
-            <p className="text-sm text-indigo-800">
+          <div className="flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-navy-50 border border-navy-100">
+            <Sparkles className="w-4 h-4 text-navy-500 shrink-0" />
+            <p className="text-sm text-navy-800">
               Review the proposal, optionally tap an artist you prefer, then hit <strong>Confirm</strong>. Our coordinator handles the rest.
             </p>
           </div>

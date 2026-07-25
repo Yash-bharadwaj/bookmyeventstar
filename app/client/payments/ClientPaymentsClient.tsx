@@ -13,7 +13,8 @@ import { Label } from "@/components/ui/label";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { Payment } from "@/types";
 import { formatCurrency, formatDate, getStatusColor, getStatusLabel } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
+import { db } from "@/lib/firebase/client";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 
@@ -57,26 +58,33 @@ export function ClientPaymentsClient({ bookings, payments: initialPayments }: Pr
     if (!payDialog) return;
     if (!transactionRef.trim()) { toast.error("Please enter a transaction reference"); return; }
     setMarking(true);
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("payments")
-      .insert({
-        booking_id: payDialog.booking.id,
+    try {
+      const docRef = await addDoc(collection(db, "bookings", payDialog.booking.id, "payments"), {
         type: payDialog.type,
         amount: Number(payAmount),
         status: "paid",
         notes: `Transaction Ref: ${transactionRef.trim()}`,
-        paid_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
-    if (error) {
-      toast.error("Failed to record payment");
-    } else {
-      setPayments((prev) => [...prev, data as Payment]);
+        paid_at: serverTimestamp(),
+        created_at: serverTimestamp(),
+      });
+      setPayments((prev) => [
+        ...prev,
+        {
+          id: docRef.id,
+          booking_id: payDialog.booking.id,
+          type: payDialog.type,
+          amount: Number(payAmount),
+          status: "paid",
+          notes: `Transaction Ref: ${transactionRef.trim()}`,
+          paid_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+        } as Payment,
+      ]);
       toast.success("Payment recorded successfully!");
       setPayDialog(null);
       router.refresh();
+    } catch {
+      toast.error("Failed to record payment");
     }
     setMarking(false);
   };
@@ -115,7 +123,7 @@ export function ClientPaymentsClient({ bookings, payments: initialPayments }: Pr
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         <StatCard title="Total Paid" value={formatCurrency(paidTotal)} icon={CheckCircle2} color="green" index={0} />
         <StatCard title="Balance Due" value={formatCurrency(pendingTotal)} icon={Clock} color="gold" index={1} />
-        <StatCard title="Total Value" value={formatCurrency(totalBookings)} icon={IndianRupee} color="blue" index={2} />
+        <StatCard title="Total Value" value={formatCurrency(totalBookings)} icon={IndianRupee} color="navy" index={2} />
       </div>
 
       <Card>

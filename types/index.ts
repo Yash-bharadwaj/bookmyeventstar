@@ -79,6 +79,7 @@ export interface ArtistMedia {
   artist_id: string;
   type: "photo" | "video";
   url: string;
+  storage_path?: string;
   title: string;
   is_primary: boolean;
 }

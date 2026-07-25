@@ -45,15 +45,18 @@ const mobileNavConfig: Record<UserRole, { label: string; href: string; icon: Rea
     { label: "Enquiries", href: "/client/enquiries", icon: FileText },
     { label: "Proposals", href: "/client/proposals", icon: ClipboardList },
     { label: "Events", href: "/client/events", icon: Calendar },
+    { label: "Payments", href: "/client/payments", icon: Wallet },
     { label: "Messages", href: "/client/messages", icon: MessageSquare },
   ],
 };
 
-const roleActiveStyles: Record<UserRole, { pill: string; text: string }> = {
-  admin:       { pill: "bg-gradient-to-r from-indigo-500 to-violet-600 shadow-md shadow-indigo-500/30", text: "text-indigo-600" },
-  coordinator: { pill: "bg-gradient-to-r from-blue-500 to-cyan-600 shadow-md shadow-blue-500/30",      text: "text-blue-600" },
-  artist:      { pill: "bg-gradient-to-r from-amber-500 to-orange-500 shadow-md shadow-amber-500/30",  text: "text-amber-600" },
-  client:      { pill: "bg-gradient-to-r from-emerald-500 to-teal-600 shadow-md shadow-emerald-500/30", text: "text-emerald-600" },
+// Two-tone brand palette only (steel-blue "gold" + slate "navy") — each role
+// gets a distinct shade from that same family rather than a different hue.
+const roleActiveStyles: Record<UserRole, { pill: string; icon: string; text: string }> = {
+  admin:       { pill: "bg-gradient-to-r from-gold-600 to-gold-800 shadow-md shadow-gold-500/30",   icon: "text-white", text: "text-gold-700" },
+  coordinator: { pill: "bg-gradient-to-r from-navy-500 to-navy-700 shadow-md shadow-navy-500/30",   icon: "text-white", text: "text-navy-600" },
+  artist:      { pill: "bg-gradient-to-r from-navy-700 to-navy-900 shadow-md shadow-navy-800/30",   icon: "text-white", text: "text-navy-700" },
+  client:      { pill: "bg-gradient-to-r from-gold-400 to-gold-600 shadow-md shadow-gold-500/30",   icon: "text-white", text: "text-gold-700" },
 };
 
 interface BottomNavProps {
@@ -88,7 +91,7 @@ export function BottomNav({ role }: BottomNavProps) {
                 <Icon
                   className={cn(
                     "w-5 h-5 transition-colors",
-                    isActive ? "text-white" : "text-muted-foreground"
+                    isActive ? activeStyles.icon : "text-muted-foreground"
                   )}
                 />
               </div>

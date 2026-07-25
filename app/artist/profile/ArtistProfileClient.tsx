@@ -13,7 +13,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { createClient } from "@/lib/supabase/client";
+import { db, storage } from "@/lib/firebase/client";
+import { doc, updateDoc, collection, addDoc, deleteDoc, writeBatch, serverTimestamp } from "firebase/firestore";
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import { ArtistProfile, ArtistMedia, User } from "@/types";
@@ -87,7 +89,6 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
 
   const flushProfileCompleteToDb = async (explicitPhotoCount?: number, explicitHasAvatar?: boolean) => {
     if (!artistProfile?.id) return;
-    const supabase = createClient();
     const snap: ArtistProfileCompletionInput = {
       bio: getValues("bio") ?? "",
       base_price: Number(getValues("base_price")) || 0,
@@ -100,7 +101,8 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
       rider_notes: getValues("rider_notes"),
     };
     const { isComplete } = evaluateArtistProfile(snap);
-    await supabase.from("artist_profiles").update({ is_profile_complete: isComplete }).eq("id", artistProfile.id);
+    // artistProfiles doc id IS the artist's uid — no user_id lookup needed.
+    await updateDoc(doc(db, "artistProfiles", artistProfile.id), { is_profile_complete: isComplete });
   };
 
   const liveCompletion = useMemo(() => {
@@ -121,26 +123,26 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
   const uploadAvatar = async (file: File) => {
     if (!file) return;
     setUploadingAvatar(true);
-    const supabase = createClient();
     const ext = file.name.split(".").pop() ?? "jpg";
-    const path = `profile/${user.id}.${ext}`;
-    const { error: upErr } = await supabase.storage
-      .from("artist-media")
-      .upload(path, file, { cacheControl: "3600", upsert: true });
-    if (upErr) {
-      toast.error("Failed to upload photo: " + upErr.message);
+    const path = `artist-media/profile/${user.id}.${ext}`;
+    const fileRef = storageRef(storage, path);
+    let downloadUrl: string;
+    try {
+      await uploadBytes(fileRef, file);
+      downloadUrl = await getDownloadURL(fileRef);
+    } catch {
+      toast.error("Failed to upload photo");
       setUploadingAvatar(false);
       return;
     }
-    const { data: urlData } = supabase.storage.from("artist-media").getPublicUrl(path);
-    const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
-    const { error: dbErr } = await supabase.from("users").update({ avatar_url: publicUrl }).eq("id", user.id);
-    if (dbErr) {
+    try {
+      await updateDoc(doc(db, "users", user.id), { avatar_url: downloadUrl, updated_at: serverTimestamp() });
+    } catch {
       toast.error("Failed to save photo");
       setUploadingAvatar(false);
       return;
     }
-    setAvatarUrl(publicUrl);
+    setAvatarUrl(downloadUrl);
     toast.success("Profile photo updated!");
     await flushProfileCompleteToDb(undefined, true);
     setUploadingAvatar(false);
@@ -162,7 +164,6 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
   const onSubmit = async (data: ProfileFormData) => {
     setSaving(true);
     try {
-      const supabase = createClient();
       const { isComplete } = evaluateArtistProfile({
         bio: data.bio,
         base_price: data.base_price,
@@ -174,21 +175,20 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
         youtube: data.youtube,
         rider_notes: data.rider_notes,
       });
-      await supabase
-        .from("artist_profiles")
-        .update({
-          bio: data.bio,
-          categories: selectedCategories,
-          cities: selectedCities,
-          base_price: data.base_price,
-          rider_notes: data.rider_notes,
-          social_links: {
-            instagram: data.instagram,
-            youtube: data.youtube,
-          },
-          is_profile_complete: isComplete,
-        })
-        .eq("user_id", user.id);
+      // artistProfiles doc id IS the artist's uid — no user_id lookup needed.
+      await updateDoc(doc(db, "artistProfiles", user.id), {
+        bio: data.bio,
+        categories: selectedCategories,
+        cities: selectedCities,
+        base_price: data.base_price,
+        rider_notes: data.rider_notes,
+        social_links: {
+          instagram: data.instagram,
+          youtube: data.youtube,
+        },
+        is_profile_complete: isComplete,
+        updated_at: serverTimestamp(),
+      });
 
       toast.success("Profile updated successfully!");
       router.refresh();
@@ -205,35 +205,43 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
       return;
     }
     setUploading(true);
-    const supabase = createClient();
     let aggregated = [...mediaList];
     for (const file of Array.from(files)) {
       const isVideo = file.type.startsWith("video/");
       const ext = file.name.split(".").pop();
-      const path = `${artistProfile.id}/${Date.now()}.${ext}`;
-      const { data: upload, error: upErr } = await supabase.storage
-        .from("artist-media")
-        .upload(path, file, { cacheControl: "3600", upsert: false });
-      if (upErr) {
-        toast.error(`Failed to upload ${file.name}: ${upErr.message}`);
+      const path = `artist-media/${artistProfile.id}/${Date.now()}.${ext}`;
+      const fileRef = storageRef(storage, path);
+      let downloadUrl: string;
+      try {
+        await uploadBytes(fileRef, file);
+        downloadUrl = await getDownloadURL(fileRef);
+      } catch {
+        toast.error(`Failed to upload ${file.name}`);
         continue;
       }
-      const { data: urlData } = supabase.storage.from("artist-media").getPublicUrl(path);
-      const { data: record, error: dbErr } = await supabase
-        .from("artist_media")
-        .insert({
-          artist_id: artistProfile.id,
+      try {
+        const ref = await addDoc(collection(db, "artistProfiles", artistProfile.id, "media"), {
           type: isVideo ? "video" : "photo",
-          url: urlData.publicUrl,
+          url: downloadUrl,
+          storage_path: path,
           title: file.name,
           is_primary: mediaList.length === 0,
-        })
-        .select()
-        .single();
-      if (!dbErr && record) {
-        aggregated = [...aggregated, record as ArtistMedia];
+          created_at: serverTimestamp(),
+        });
+        const record: ArtistMedia = {
+          id: ref.id,
+          artist_id: artistProfile.id,
+          type: isVideo ? "video" : "photo",
+          url: downloadUrl,
+          storage_path: path,
+          title: file.name,
+          is_primary: mediaList.length === 0,
+        };
+        aggregated = [...aggregated, record];
         setMediaList(aggregated);
         toast.success(`${file.name} uploaded!`);
+      } catch {
+        toast.error(`Failed to save ${file.name}`);
       }
     }
     const photoCount = aggregated.filter((m) => m.type === "photo").length;
@@ -243,14 +251,12 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
   };
 
   const deleteMedia = async (item: ArtistMedia) => {
+    if (!artistProfile?.id) return;
     setDeletingId(item.id);
-    const supabase = createClient();
-    // Extract storage path from URL
-    const urlParts = item.url.split("/artist-media/");
-    if (urlParts.length > 1) {
-      await supabase.storage.from("artist-media").remove([urlParts[1]]);
+    if (item.storage_path) {
+      await deleteObject(storageRef(storage, item.storage_path)).catch(() => {});
     }
-    await supabase.from("artist_media").delete().eq("id", item.id);
+    await deleteDoc(doc(db, "artistProfiles", artistProfile.id, "media", item.id));
     const next = mediaList.filter((m) => m.id !== item.id);
     setMediaList(next);
     const photoCount = next.filter((m) => m.type === "photo").length;
@@ -262,9 +268,11 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
 
   const setPrimary = async (id: string) => {
     if (!artistProfile?.id) return;
-    const supabase = createClient();
-    await supabase.from("artist_media").update({ is_primary: false }).eq("artist_id", artistProfile.id);
-    await supabase.from("artist_media").update({ is_primary: true }).eq("id", id);
+    const batch = writeBatch(db);
+    for (const m of mediaList) {
+      batch.update(doc(db, "artistProfiles", artistProfile.id, "media", m.id), { is_primary: m.id === id });
+    }
+    await batch.commit();
     setMediaList((prev) => prev.map((m) => ({ ...m, is_primary: m.id === id })));
     toast.success("Primary photo set!");
   };
@@ -327,7 +335,7 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
                 ) : (
                   <div className={`w-full h-full flex flex-col items-center justify-center gap-0.5 ${uploadingAvatar ? "gold-gradient" : "bg-amber-50 border-2 border-dashed border-amber-400"}`}>
                     {uploadingAvatar ? (
-                      <Loader2 className="w-5 h-5 text-navy-900 animate-spin" />
+                      <Loader2 className="w-5 h-5 text-white animate-spin" />
                     ) : (
                       <>
                         <Camera className="w-5 h-5 text-amber-500" />
@@ -459,7 +467,7 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
                       onClick={() => toggleCategory(cat)}
                       className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
                         selected
-                          ? "gold-gradient text-navy-900 shadow-sm"
+                          ? "gold-gradient text-white shadow-sm"
                           : "border border-border hover:border-gold-400 text-muted-foreground"
                       }`}
                     >

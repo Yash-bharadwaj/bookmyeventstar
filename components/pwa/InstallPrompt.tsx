@@ -96,7 +96,8 @@ export function InstallPrompt() {
                     <Button
                       size="sm"
                       onClick={handleInstall}
-                      className="flex-1 bg-gold-500 hover:bg-gold-600 text-navy-900 font-semibold text-xs h-8"
+                      variant="default"
+                      className="flex-1 font-semibold text-xs h-8"
                     >
                       <Download className="w-3.5 h-3.5 mr-1.5" />
                       {isIOS ? "How to Install" : "Install App"}
@@ -135,7 +136,7 @@ export function InstallPrompt() {
             >
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold-500 to-gold-600 flex items-center justify-center">
-                  <Smartphone className="w-5 h-5 text-navy-900" />
+                  <Smartphone className="w-5 h-5 text-white" />
                 </div>
                 <div>
                   <h3 className="font-bold text-white">Install on iPhone / iPad</h3>
@@ -158,7 +159,8 @@ export function InstallPrompt() {
               </ol>
               <Button
                 onClick={handleDismiss}
-                className="w-full mt-5 bg-gold-500 hover:bg-gold-600 text-navy-900 font-semibold"
+                variant="default"
+                className="w-full mt-5 font-semibold"
               >
                 Got it!
               </Button>

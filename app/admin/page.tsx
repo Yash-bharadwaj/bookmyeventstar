@@ -1,85 +1,113 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { Timestamp } from "firebase-admin/firestore";
+import { getCurrentUser } from "@/lib/firebase/server";
+import { adminDb } from "@/lib/firebase/admin";
+import { serialize, type AnyDoc } from "@/lib/firebase/firestore-utils";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminOverview } from "@/components/dashboard/AdminOverview";
+import type { User } from "@/types";
 
 export default async function AdminPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
+  const user = await getCurrentUser();
   if (!user) redirect("/login");
-
-  const { data: profile } = await supabase
-    .from("users")
-    .select("*")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile || profile.role !== "admin") redirect("/login");
+  if (user.role !== "admin") redirect("/login");
 
   const now = new Date();
-  const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
+  const thisMonthStart = Timestamp.fromDate(new Date(now.getFullYear(), now.getMonth(), 1));
+  const lastMonthStart = Timestamp.fromDate(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+
+  const enquiriesCol = adminDb.collection("enquiries");
+  const bookingsCol = adminDb.collection("bookings");
 
   const [
-    { count: totalEnquiries },
-    { count: activeBookings },
-    { data: recentEnquiries },
-    { data: coordinators },
-    { count: artistsCount },
-    { count: newCount },
-    { count: assignedCount },
-    { count: proposalCount },
-    { count: confirmedCount },
-    { count: thisMonthEnquiries },
-    { count: lastMonthEnquiries },
-    { count: thisMonthBookings },
-    { count: lastMonthBookings },
+    totalEnquiriesSnap,
+    activeBookingsSnap,
+    recentEnquiriesSnap,
+    coordinatorsSnap,
+    artistsCountSnap,
+    newCountSnap,
+    assignedCountSnap,
+    proposalCountSnap,
+    confirmedCountSnap,
+    thisMonthEnquiriesSnap,
+    lastMonthEnquiriesSnap,
+    thisMonthBookingsSnap,
+    lastMonthBookingsSnap,
   ] = await Promise.all([
-    supabase.from("enquiries").select("*", { count: "exact", head: true }),
-    supabase.from("bookings").select("*", { count: "exact", head: true }).in("status", ["confirmed", "in_progress"]),
-    supabase.from("enquiries")
-      .select("*, client:users!enquiries_client_id_fkey(name,email,phone), coordinator:users!enquiries_coordinator_id_fkey(name)")
-      .order("created_at", { ascending: false })
-      .limit(10),
-    supabase.from("users").select("id,name,email,phone,is_active").eq("role", "coordinator"),
-    supabase.from("users").select("*", { count: "exact", head: true }).eq("role", "artist"),
-    supabase.from("enquiries").select("*", { count: "exact", head: true }).eq("status", "new"),
-    supabase.from("enquiries").select("*", { count: "exact", head: true }).eq("status", "assigned"),
-    supabase.from("enquiries").select("*", { count: "exact", head: true }).eq("status", "proposal_sent"),
-    supabase.from("enquiries").select("*", { count: "exact", head: true }).eq("status", "confirmed"),
-    supabase.from("enquiries").select("*", { count: "exact", head: true }).gte("created_at", thisMonthStart),
-    supabase.from("enquiries").select("*", { count: "exact", head: true }).gte("created_at", lastMonthStart).lt("created_at", thisMonthStart),
-    supabase.from("bookings").select("*", { count: "exact", head: true }).gte("created_at", thisMonthStart).in("status", ["confirmed", "in_progress"]),
-    supabase.from("bookings").select("*", { count: "exact", head: true }).gte("created_at", lastMonthStart).lt("created_at", thisMonthStart).in("status", ["confirmed", "in_progress"]),
+    enquiriesCol.count().get(),
+    bookingsCol.where("status", "in", ["confirmed", "in_progress"]).count().get(),
+    enquiriesCol.orderBy("created_at", "desc").limit(10).get(),
+    adminDb.collection("users").where("role", "==", "coordinator").get(),
+    adminDb.collection("users").where("role", "==", "artist").count().get(),
+    enquiriesCol.where("status", "==", "new").count().get(),
+    enquiriesCol.where("status", "==", "assigned").count().get(),
+    enquiriesCol.where("status", "==", "proposal_sent").count().get(),
+    enquiriesCol.where("status", "==", "confirmed").count().get(),
+    enquiriesCol.where("created_at", ">=", thisMonthStart).count().get(),
+    enquiriesCol.where("created_at", ">=", lastMonthStart).where("created_at", "<", thisMonthStart).count().get(),
+    bookingsCol.where("status", "in", ["confirmed", "in_progress"]).where("created_at", ">=", thisMonthStart).count().get(),
+    bookingsCol.where("status", "in", ["confirmed", "in_progress"]).where("created_at", ">=", lastMonthStart).where("created_at", "<", thisMonthStart).count().get(),
   ]);
 
-  const enqTrend = lastMonthEnquiries && lastMonthEnquiries > 0
-    ? Math.round(((thisMonthEnquiries ?? 0) - lastMonthEnquiries) / lastMonthEnquiries * 100)
+  const totalEnquiries = totalEnquiriesSnap.data().count;
+  const activeBookings = activeBookingsSnap.data().count;
+  const artistsCount = artistsCountSnap.data().count;
+  const newCount = newCountSnap.data().count;
+  const assignedCount = assignedCountSnap.data().count;
+  const proposalCount = proposalCountSnap.data().count;
+  const confirmedCount = confirmedCountSnap.data().count;
+  const thisMonthEnquiries = thisMonthEnquiriesSnap.data().count;
+  const lastMonthEnquiries = lastMonthEnquiriesSnap.data().count;
+  const thisMonthBookings = thisMonthBookingsSnap.data().count;
+  const lastMonthBookings = lastMonthBookingsSnap.data().count;
+
+  const coordinators = coordinatorsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+  // Enrich recent enquiries with client/coordinator names — no joins in
+  // Firestore, so fetch the referenced user docs in parallel and merge.
+  const rawEnquiries = recentEnquiriesSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as AnyDoc);
+  const userIds = Array.from(
+    new Set(
+      rawEnquiries.flatMap((e) => [e.client_id as string | null, e.coordinator_id as string | null]).filter((v): v is string => !!v)
+    )
+  );
+  const userDocs = userIds.length
+    ? await adminDb.getAll(...userIds.map((id) => adminDb.collection("users").doc(id)))
+    : [];
+  const userMap = new Map(userDocs.map((d, i) => [userIds[i], d.exists ? d.data() : null]));
+
+  const recentEnquiries = rawEnquiries.map((e) => ({
+    ...e,
+    client: e.client_id ? userMap.get(e.client_id as string) ?? undefined : undefined,
+    coordinator: e.coordinator_id ? userMap.get(e.coordinator_id as string) ?? undefined : undefined,
+  }));
+
+  const enqTrend = lastMonthEnquiries > 0
+    ? Math.round(((thisMonthEnquiries - lastMonthEnquiries) / lastMonthEnquiries) * 100)
     : null;
-  const bkTrend = lastMonthBookings && lastMonthBookings > 0
-    ? Math.round(((thisMonthBookings ?? 0) - lastMonthBookings) / lastMonthBookings * 100)
+  const bkTrend = lastMonthBookings > 0
+    ? Math.round(((thisMonthBookings - lastMonthBookings) / lastMonthBookings) * 100)
     : null;
 
   return (
-    <DashboardLayout user={profile} title="Admin Dashboard">
+    <DashboardLayout user={serialize(user)} title="Admin Dashboard">
       <AdminOverview
         stats={{
-          total_enquiries: totalEnquiries ?? 0,
-          active_bookings: activeBookings ?? 0,
-          artists_count: artistsCount ?? 0,
-          coordinators_count: coordinators?.length ?? 0,
+          total_enquiries: totalEnquiries,
+          active_bookings: activeBookings,
+          artists_count: artistsCount,
+          coordinators_count: coordinators.length,
           enq_trend: enqTrend,
           bk_trend: bkTrend,
         }}
         pipelineCounts={{
-          new: newCount ?? 0,
-          assigned: assignedCount ?? 0,
-          proposal_sent: proposalCount ?? 0,
-          confirmed: confirmedCount ?? 0,
+          new: newCount,
+          assigned: assignedCount,
+          proposal_sent: proposalCount,
+          confirmed: confirmedCount,
         }}
-        recentEnquiries={recentEnquiries ?? []}
-        coordinators={coordinators ?? []}
+        recentEnquiries={serialize(recentEnquiries) as any}
+        coordinators={serialize(coordinators) as User[]}
       />
     </DashboardLayout>
   );

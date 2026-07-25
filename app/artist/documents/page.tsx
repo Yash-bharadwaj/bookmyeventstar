@@ -1,27 +1,27 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/firebase/server";
+import { adminDb } from "@/lib/firebase/admin";
+import { serialize } from "@/lib/firebase/firestore-utils";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ArtistDocumentsClient } from "./ArtistDocumentsClient";
 
 export default async function ArtistDocumentsPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) redirect("/login");
-  const { data: profile } = await supabase.from("users").select("*").eq("id", user.id).single();
-  if (!profile || profile.role !== "artist") redirect("/login");
+  if (user.role !== "artist") redirect("/login");
 
-  const { data: artistProfile } = await supabase
-    .from("artist_profiles").select("id").eq("user_id", user.id).single();
+  const documentsSnap = await adminDb
+    .collection("artistProfiles")
+    .doc(user.id)
+    .collection("documents")
+    .orderBy("created_at", "desc")
+    .get();
 
-  const { data: documents } = await supabase
-    .from("artist_documents")
-    .select("*")
-    .eq("artist_id", artistProfile?.id ?? "")
-    .order("created_at", { ascending: false });
+  const documents = documentsSnap.docs.map((d) => ({ id: d.id, artist_id: user.id, ...d.data() }));
 
   return (
-    <DashboardLayout user={profile} title="My Documents">
-      <ArtistDocumentsClient artistProfileId={artistProfile?.id ?? ""} documents={documents ?? []} />
+    <DashboardLayout user={serialize(user)} title="My Documents">
+      <ArtistDocumentsClient artistProfileId={user.id} documents={serialize(documents) as any} />
     </DashboardLayout>
   );
 }

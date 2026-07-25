@@ -21,7 +21,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Availability, AvailabilityStatus } from "@/types";
-import { createClient } from "@/lib/supabase/client";
+import { db } from "@/lib/firebase/client";
+import { doc, deleteDoc, setDoc, writeBatch, serverTimestamp } from "firebase/firestore";
 import toast from "react-hot-toast";
 import { cn } from "@/lib/utils";
 
@@ -137,23 +138,18 @@ export function ArtistAvailabilityClient({ artistProfileId, availability }: Prop
 
     setSaving(dateStr);
     try {
-      const supabase = createClient();
+      // Doc ID IS the "YYYY-MM-DD" date string per the schema — no
+      // artist_id/date composite key needed, unlike the old Postgres table.
+      const ref = doc(db, "artistProfiles", artistProfileId, "availability", dateStr);
       if (shouldClear) {
-        await supabase
-          .from("availability")
-          .delete()
-          .eq("artist_id", artistProfileId)
-          .eq("date", dateStr);
+        await deleteDoc(ref);
         setAvailMap((prev) => {
           const next = new Map(prev);
           next.delete(dateStr);
           return next;
         });
       } else {
-        await supabase.from("availability").upsert(
-          { artist_id: artistProfileId, date: dateStr, status: selectedStatus },
-          { onConflict: "artist_id,date" }
-        );
+        await setDoc(ref, { status: selectedStatus, created_at: serverTimestamp() }, { merge: true });
         setAvailMap((prev) => {
           const next = new Map(prev);
           next.set(dateStr, selectedStatus);
@@ -176,15 +172,14 @@ export function ArtistAvailabilityClient({ artistProfileId, availability }: Prop
 
     setBulkSaving(action.id);
     try {
-      const supabase = createClient();
       const dates = targets.map((d) => format(d, "yyyy-MM-dd"));
+      const batch = writeBatch(db);
 
       if (action.status === "clear") {
-        await supabase
-          .from("availability")
-          .delete()
-          .eq("artist_id", artistProfileId)
-          .in("date", dates);
+        for (const date of dates) {
+          batch.delete(doc(db, "artistProfiles", artistProfileId, "availability", date));
+        }
+        await batch.commit();
         setAvailMap((prev) => {
           const next = new Map(prev);
           dates.forEach((d) => next.delete(d));
@@ -192,10 +187,14 @@ export function ArtistAvailabilityClient({ artistProfileId, availability }: Prop
         });
         toast.success(`Cleared ${dates.length} dates`);
       } else {
-        await supabase.from("availability").upsert(
-          dates.map((date) => ({ artist_id: artistProfileId, date, status: action.status })),
-          { onConflict: "artist_id,date" }
-        );
+        for (const date of dates) {
+          batch.set(
+            doc(db, "artistProfiles", artistProfileId, "availability", date),
+            { status: action.status, created_at: serverTimestamp() },
+            { merge: true }
+          );
+        }
+        await batch.commit();
         setAvailMap((prev) => {
           const next = new Map(prev);
           dates.forEach((d) => next.set(d, action.status as AvailabilityStatus));

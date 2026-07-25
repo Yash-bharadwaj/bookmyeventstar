@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import {
+  collection, query, orderBy, limit, onSnapshot,
+  writeBatch, doc,
+} from "firebase/firestore";
+import { db } from "@/lib/firebase/client";
 import { Notification } from "@/types";
 
 export function useNotifications(userId?: string) {
@@ -10,53 +14,31 @@ export function useNotifications(userId?: string) {
 
   useEffect(() => {
     if (!userId) return;
-    const supabase = createClient();
 
-    const fetchNotifications = async () => {
-      const { data } = await supabase
-        .from("notifications")
-        .select("*")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(20);
-      if (data) {
-        setNotifications(data);
-        setUnreadCount(data.filter((n) => !n.is_read).length);
-      }
-    };
+    const q = query(
+      collection(db, "users", userId, "notifications"),
+      orderBy("created_at", "desc"),
+      limit(20)
+    );
 
-    fetchNotifications();
+    const unsubscribe = onSnapshot(q, (snap) => {
+      const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Notification);
+      setNotifications(items);
+      setUnreadCount(items.filter((n) => !n.is_read).length);
+    });
 
-    const channel = supabase
-      .channel(`notifications:${userId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload) => {
-          setNotifications((prev) => [payload.new as Notification, ...prev]);
-          setUnreadCount((c) => c + 1);
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => unsubscribe();
   }, [userId]);
 
   const markAllRead = async () => {
     if (!userId) return;
-    const supabase = createClient();
-    await supabase
-      .from("notifications")
-      .update({ is_read: true })
-      .eq("user_id", userId)
-      .eq("is_read", false);
+    const unread = notifications.filter((n) => !n.is_read);
+    if (unread.length === 0) return;
+    const batch = writeBatch(db);
+    for (const n of unread) {
+      batch.update(doc(db, "users", userId, "notifications", n.id), { is_read: true });
+    }
+    await batch.commit();
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
     setUnreadCount(0);
   };

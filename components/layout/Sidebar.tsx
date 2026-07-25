@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { db } from "@/lib/firebase/client";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard,
@@ -62,25 +63,35 @@ const navConfig: Record<UserRole, { label: string; href: string; icon: React.Ele
   ],
 };
 
+// Two-tone brand palette only (steel-blue "gold" + slate "navy") — each role
+// gets a distinct shade from that same family rather than a different hue.
+// All shades here are mid-to-dark, so every role uses white text.
 const roleColors: Record<UserRole, string> = {
-  admin: "from-indigo-500 to-violet-600",
-  coordinator: "from-blue-600 to-cyan-600",
-  artist: "from-amber-500 to-orange-500",
-  client: "from-emerald-500 to-teal-600",
+  admin: "from-gold-600 to-gold-800",
+  coordinator: "from-navy-500 to-navy-700",
+  artist: "from-navy-700 to-navy-900",
+  client: "from-gold-400 to-gold-600",
+};
+
+const roleBadgeText: Record<UserRole, string> = {
+  admin: "text-white",
+  coordinator: "text-white",
+  artist: "text-white",
+  client: "text-white",
 };
 
 const roleActiveNav: Record<UserRole, string> = {
-  admin: "bg-gradient-to-r from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-500/25",
-  coordinator: "bg-gradient-to-r from-blue-500 to-cyan-600 text-white shadow-lg shadow-blue-500/25",
-  artist: "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/25",
-  client: "bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/25",
+  admin: "bg-gradient-to-r from-gold-600 to-gold-800 text-white shadow-lg shadow-gold-500/25",
+  coordinator: "bg-gradient-to-r from-navy-500 to-navy-700 text-white shadow-lg shadow-navy-500/25",
+  artist: "bg-gradient-to-r from-navy-700 to-navy-900 text-white shadow-lg shadow-navy-800/25",
+  client: "bg-gradient-to-r from-gold-400 to-gold-600 text-white shadow-lg shadow-gold-500/25",
 };
 
 const roleAvatarBg: Record<UserRole, string> = {
-  admin: "bg-gradient-to-br from-indigo-500 to-violet-600",
-  coordinator: "bg-gradient-to-br from-blue-500 to-cyan-600",
-  artist: "bg-gradient-to-br from-amber-500 to-orange-500",
-  client: "bg-gradient-to-br from-emerald-500 to-teal-600",
+  admin: "bg-gradient-to-br from-gold-600 to-gold-800",
+  coordinator: "bg-gradient-to-br from-navy-500 to-navy-700",
+  artist: "bg-gradient-to-br from-navy-700 to-navy-900",
+  client: "bg-gradient-to-br from-gold-400 to-gold-600",
 };
 
 const roleLabels: Record<UserRole, string> = {
@@ -105,15 +116,11 @@ export function Sidebar({ role, userName, userId }: SidebarProps) {
 
   useEffect(() => {
     if (!userId) return;
-    const supabase = createClient();
-    const since = new Date(Date.now() - 24 * 3600_000).toISOString();
-    // Count messages in last 24h not sent by current user, on their enquiries
-    supabase
-      .from("messages")
-      .select("id", { count: "exact", head: true })
-      .neq("sender_id", userId)
-      .gte("created_at", since)
-      .then(({ count }) => setUnreadMessages(count ?? 0));
+    // Unread-notifications badge — reads live from this user's own
+    // `users/{uid}/notifications` subcollection (is_read == false).
+    const q = query(collection(db, "users", userId, "notifications"), where("is_read", "==", false));
+    const unsubscribe = onSnapshot(q, (snap) => setUnreadMessages(snap.size), () => setUnreadMessages(0));
+    return () => unsubscribe();
   }, [userId]);
 
   return (
@@ -143,8 +150,8 @@ export function Sidebar({ role, userName, userId }: SidebarProps) {
             exit={{ opacity: 0 }}
             className="px-4 py-3"
           >
-            <div className={cn("inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gradient-to-r text-white text-xs font-semibold", roleColors[role])}>
-              <span className="w-1.5 h-1.5 rounded-full bg-white/70" />
+            <div className={cn("inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gradient-to-r text-xs font-semibold", roleColors[role], roleBadgeText[role])}>
+              <span className={cn("w-1.5 h-1.5 rounded-full", roleBadgeText[role] === "text-white" ? "bg-white/70" : "bg-navy-900/50")} />
               {roleLabels[role]} Panel
             </div>
           </motion.div>
@@ -207,7 +214,7 @@ export function Sidebar({ role, userName, userId }: SidebarProps) {
       {/* User info */}
       <div className="border-t border-white/10 p-4">
         <div className="flex items-center gap-3">
-          <div className={cn("w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white font-bold text-xs", roleAvatarBg[role])}>
+          <div className={cn("w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-xs", roleAvatarBg[role], roleBadgeText[role])}>
             {userName.charAt(0).toUpperCase()}
           </div>
           <AnimatePresence>

@@ -153,7 +153,7 @@ export function CoordinatorCalendarClient({ bookings }: { bookings: BookingEvent
                     className={cn(
                       "aspect-square rounded-xl flex flex-col items-center justify-start p-1 text-sm transition-all relative",
                       isToday(day) && "ring-2 ring-gold-500",
-                      isSelected && "gold-gradient text-navy-900 shadow-md",
+                      isSelected && "gold-gradient text-white shadow-md",
                       !isSelected && events.length > 0 && "bg-blue-50 hover:bg-blue-100",
                       !isSelected && events.length === 0 && "hover:bg-muted"
                     )}
@@ -201,7 +201,7 @@ export function CoordinatorCalendarClient({ bookings }: { bookings: BookingEvent
             ) : (
               selectedEvents.map((e) => (
                 <Link key={e.id} href={`/coordinator/bookings/${e.id}`}>
-                  <Card className="hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer">
+                  <Card className="hover:border-navy-300 hover:shadow-md transition-all cursor-pointer">
                     <CardContent className="p-4 space-y-2">
                       <div className="flex items-start justify-between gap-2">
                         <div>

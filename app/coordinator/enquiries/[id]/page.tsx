@@ -1,43 +1,46 @@
 import { redirect, notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/firebase/server";
+import { serialize } from "@/lib/firebase/firestore-utils";
+import { adminDb } from "@/lib/firebase/admin";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { CoordinatorEnquiryDetail } from "./CoordinatorEnquiryDetail";
 
+function toIso(v: any) {
+  return v && typeof v.toDate === "function" ? v.toDate().toISOString() : v;
+}
+
 export default async function CoordinatorEnquiryDetailPage({ params }: { params: { id: string } }) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-  const { data: profile } = await supabase.from("users").select("*").eq("id", user.id).single();
-  if (!profile || profile.role !== "coordinator") redirect("/login");
+  const user = await getCurrentUser();
+  if (!user || user.role !== "coordinator") redirect("/login");
 
-  const { data: enquiry } = await supabase
-    .from("enquiries")
-    .select(`
-      *,
-      client:users!enquiries_client_id_fkey(id, name, email, phone),
-      coordinator:users!enquiries_coordinator_id_fkey(id, name, email, phone)
-    `)
-    .eq("id", params.id)
-    .eq("coordinator_id", user.id)
-    .single();
+  const enquirySnap = await adminDb.collection("enquiries").doc(params.id).get();
+  if (!enquirySnap.exists) notFound();
+  const data: any = enquirySnap.data();
+  if (data.coordinator_id !== user.id) notFound();
 
-  if (!enquiry) notFound();
+  const [clientSnap, coordinatorSnap, proposalsSnap] = await Promise.all([
+    data.client_id ? adminDb.collection("users").doc(data.client_id).get() : Promise.resolve(null),
+    data.coordinator_id ? adminDb.collection("users").doc(data.coordinator_id).get() : Promise.resolve(null),
+    adminDb.collection("proposals").where("enquiry_id", "==", params.id).orderBy("created_at", "desc").get(),
+  ]);
 
-  const { data: proposals } = await supabase
-    .from("proposals")
-    .select("id, status, quoted_price, validity_date, created_at, artists_proposed")
-    .eq("enquiry_id", params.id)
-    .order("created_at", { ascending: false });
+  const proposals = proposalsSnap.docs.map((d) => {
+    const p = d.data();
+    return { id: d.id, ...p, created_at: toIso(p.created_at), updated_at: toIso(p.updated_at) };
+  });
 
-  const e = {
-    ...enquiry,
-    client: Array.isArray(enquiry.client) ? enquiry.client[0] ?? null : enquiry.client,
-    coordinator: Array.isArray(enquiry.coordinator) ? enquiry.coordinator[0] ?? null : enquiry.coordinator,
+  const enquiry = {
+    id: enquirySnap.id,
+    ...data,
+    created_at: toIso(data.created_at),
+    updated_at: toIso(data.updated_at),
+    client: clientSnap && clientSnap.exists ? { id: clientSnap.id, ...clientSnap.data() } : null,
+    coordinator: coordinatorSnap && coordinatorSnap.exists ? { id: coordinatorSnap.id, ...coordinatorSnap.data() } : null,
   };
 
   return (
-    <DashboardLayout user={profile} title="Enquiry Details">
-      <CoordinatorEnquiryDetail enquiry={e} proposals={proposals ?? []} coordinatorId={user.id} />
+    <DashboardLayout user={serialize(user)} title="Enquiry Details">
+      <CoordinatorEnquiryDetail enquiry={serialize(enquiry) as any} proposals={serialize(proposals) as any} coordinatorId={user.id} />
     </DashboardLayout>
   );
 }

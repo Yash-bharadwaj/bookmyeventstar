@@ -1,17 +1,15 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, MessageSquare, ChevronLeft, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { createClient } from "@/lib/supabase/client";
+import { db } from "@/lib/firebase/client";
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, Timestamp } from "firebase/firestore";
 import { formatDateTime, getInitials, cn } from "@/lib/utils";
-import {
-  requestMessageNotificationPermission,
-  showIncomingMessageAlert,
-} from "@/lib/incoming-message-alert";
+import { requestMessageNotificationPermission } from "@/lib/incoming-message-alert";
 
 interface Message {
   id: string;
@@ -38,10 +36,9 @@ export function CoordinatorMessagesClient({ enquiries, currentUserId, currentUse
   const [selectedEnquiryId, setSelectedEnquiryId] = useState<string | null>(
     enquiries[0]?.id ?? null
   );
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messagesByEnquiry, setMessagesByEnquiry] = useState<Record<string, Message[]>>({});
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
   const [convSearch, setConvSearch] = useState("");
   // track which enquiry IDs have unread messages (new since page load)
@@ -49,100 +46,71 @@ export function CoordinatorMessagesClient({ enquiries, currentUserId, currentUse
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const selectedRef = useRef<string | null>(selectedEnquiryId);
-  const enquiriesRef = useRef(enquiries);
-  const alertedIdsRef = useRef<Set<string>>(new Set());
+  const initializedRef = useRef<Set<string>>(new Set()); // skip the unread bump on each listener's first (backlog) snapshot
 
   const selectedEnquiry = enquiries.find((e) => e.id === selectedEnquiryId) ?? null;
+  const messages = useMemo(
+    () => messagesByEnquiry[selectedEnquiryId ?? ""] ?? [],
+    [messagesByEnquiry, selectedEnquiryId]
+  );
+  const loading = selectedEnquiryId != null && !(selectedEnquiryId in messagesByEnquiry);
 
   selectedRef.current = selectedEnquiryId;
-  enquiriesRef.current = enquiries;
 
-  const fetchMessages = useCallback(async (enquiryId: string) => {
-    setLoading(true);
-    const supabase = createClient();
-    const { data } = await supabase
-      .from("messages")
-      .select("*")
-      .eq("enquiry_id", enquiryId)
-      .order("created_at");
-    if (data) setMessages(data);
-    setLoading(false);
+  useEffect(() => {
+    requestMessageNotificationPermission();
   }, []);
+
+  // One live listener per conversation — nesting messages under their
+  // enquiry means each listener is naturally scoped by the security rules,
+  // so there's no need for a table-wide subscription filtered client-side.
+  useEffect(() => {
+    const unsubscribes = enquiries.map((e) => {
+      const q = query(collection(db, "enquiries", e.id, "messages"), orderBy("created_at"));
+      return onSnapshot(q, (snap) => {
+        const data: Message[] = snap.docs.map((d) => {
+          const m = d.data() as any;
+          const createdAt: Timestamp | string | undefined = m.created_at;
+          return {
+            id: d.id,
+            enquiry_id: e.id,
+            sender_id: m.sender_id,
+            sender_name: m.sender_name,
+            content: m.content,
+            created_at: createdAt && typeof (createdAt as Timestamp).toDate === "function"
+              ? (createdAt as Timestamp).toDate().toISOString()
+              : String(createdAt ?? ""),
+          } as Message;
+        });
+
+        const isFirstLoad = !initializedRef.current.has(e.id);
+        initializedRef.current.add(e.id);
+
+        if (!isFirstLoad) {
+          const previous = messagesByEnquiry[e.id] ?? [];
+          const hasNewFromOther = data.slice(previous.length).some((m) => m.sender_id !== currentUserId);
+          if (hasNewFromOther && selectedRef.current !== e.id) {
+            setUnreadIds((prev) => new Set(prev).add(e.id));
+          }
+        }
+
+        setMessagesByEnquiry((prev) => ({ ...prev, [e.id]: data }));
+      });
+    });
+
+    return () => unsubscribes.forEach((unsub) => unsub());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enquiries.map((e) => e.id).join(","), currentUserId]);
 
   useEffect(() => {
     if (!selectedEnquiryId) return;
-
-    fetchMessages(selectedEnquiryId);
-
     setUnreadIds((prev) => {
+      if (!prev.has(selectedEnquiryId)) return prev;
       const next = new Set(prev);
       next.delete(selectedEnquiryId);
       return next;
     });
-  }, [selectedEnquiryId, fetchMessages]);
-
-  useEffect(() => {
-    requestMessageNotificationPermission();
-
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`coord-msg-all:${currentUserId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "messages",
-        },
-        (payload) => {
-          const raw = payload.new as Record<string, unknown>;
-          const msg = {
-            id: String(raw.id ?? ""),
-            enquiry_id: String(raw.enquiry_id ?? ""),
-            sender_id: String(raw.sender_id ?? ""),
-            sender_name: String(raw.sender_name ?? ""),
-            content: String(raw.content ?? ""),
-            created_at: String(raw.created_at ?? ""),
-          };
-
-          const allowedIds = new Set(enquiriesRef.current.map((e) => e.id));
-          if (!msg.enquiry_id || !allowedIds.has(msg.enquiry_id)) return;
-
-          const selected = selectedRef.current;
-
-          setMessages((prev) => {
-            if (msg.enquiry_id !== selected) return prev;
-            if (prev.some((m) => m.id === msg.id)) return prev;
-            return [...prev, msg as Message];
-          });
-
-          if (msg.sender_id === currentUserId) return;
-
-          if (msg.enquiry_id !== selected) {
-            setUnreadIds((prev) => {
-              const next = new Set(prev);
-              next.add(msg.enquiry_id);
-              return next;
-            });
-          }
-
-          if (!msg.id || alertedIdsRef.current.has(msg.id)) return;
-          alertedIdsRef.current.add(msg.id);
-          if (alertedIdsRef.current.size > 300) alertedIdsRef.current.clear();
-
-          const enq = enquiriesRef.current.find((e) => e.id === msg.enquiry_id);
-          showIncomingMessageAlert({
-            title: msg.sender_name || "Client",
-            subtitle: enq ? `${enq.client?.name ?? "Client"} · ${enq.event_type}` : undefined,
-            body: msg.content,
-            notificationTag: msg.id,
-          });
-        }
-      )
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [currentUserId]);
+  }, [selectedEnquiryId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -150,7 +118,6 @@ export function CoordinatorMessagesClient({ enquiries, currentUserId, currentUse
 
   const selectConversation = (id: string) => {
     setSelectedEnquiryId(id);
-    setMessages([]);
     // on mobile, hide sidebar after selecting
     if (window.innerWidth < 768) setShowSidebar(false);
   };
@@ -158,14 +125,15 @@ export function CoordinatorMessagesClient({ enquiries, currentUserId, currentUse
   const sendMessage = async () => {
     if (!newMessage.trim() || !selectedEnquiryId) return;
     setSending(true);
-    const supabase = createClient();
-    const { error } = await supabase.from("messages").insert({
-      enquiry_id: selectedEnquiryId,
-      sender_id: currentUserId,
-      sender_name: currentUserName,
-      content: newMessage.trim(),
-    });
-    if (error) {
+    try {
+      await addDoc(collection(db, "enquiries", selectedEnquiryId, "messages"), {
+        sender_id: currentUserId,
+        sender_name: currentUserName,
+        content: newMessage.trim(),
+        created_at: serverTimestamp(),
+      });
+      // The onSnapshot listener above picks this up automatically.
+    } catch (error) {
       console.error("Send error:", error);
     }
     setNewMessage("");
@@ -219,14 +187,14 @@ export function CoordinatorMessagesClient({ enquiries, currentUserId, currentUse
                       className={cn(
                         "w-full text-left px-4 py-3.5 border-b transition-colors flex items-center gap-3",
                         isSelected
-                          ? "bg-indigo-50 border-l-2 border-l-indigo-500"
+                          ? "bg-navy-50 border-l-2 border-l-navy-500"
                           : "hover:bg-accent/30"
                       )}
                     >
                       <Avatar className="h-9 w-9 flex-shrink-0">
                         <AvatarFallback className={cn(
                           "text-xs font-semibold",
-                          isSelected ? "bg-indigo-100 text-indigo-700" : "bg-muted"
+                          isSelected ? "bg-navy-100 text-navy-700" : "bg-muted"
                         )}>
                           {getInitials(e.client?.name ?? "C")}
                         </AvatarFallback>
@@ -237,7 +205,7 @@ export function CoordinatorMessagesClient({ enquiries, currentUserId, currentUse
                             {e.client?.name ?? "Client"}
                           </p>
                           {hasUnread && (
-                            <span className="w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0 ml-1" />
+                            <span className="w-2 h-2 rounded-full bg-navy-500 flex-shrink-0 ml-1" />
                           )}
                         </div>
                         <p className="text-xs text-muted-foreground truncate mt-0.5">{e.event_type}</p>
@@ -267,7 +235,7 @@ export function CoordinatorMessagesClient({ enquiries, currentUserId, currentUse
                 </button>
               )}
               <Avatar>
-                <AvatarFallback className="bg-indigo-100 text-indigo-700 font-semibold">
+                <AvatarFallback className="bg-navy-100 text-navy-700 font-semibold">
                   {getInitials(selectedEnquiry.client?.name ?? "C")}
                 </AvatarFallback>
               </Avatar>
@@ -282,7 +250,7 @@ export function CoordinatorMessagesClient({ enquiries, currentUserId, currentUse
               {loading ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center text-muted-foreground">
-                    <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                    <div className="w-6 h-6 border-2 border-navy-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
                     <p className="text-xs">Loading messages…</p>
                   </div>
                 </div>
@@ -325,7 +293,7 @@ export function CoordinatorMessagesClient({ enquiries, currentUserId, currentUse
                           <Avatar className="h-7 w-7 flex-shrink-0 mt-0.5">
                             <AvatarFallback className={cn(
                               "text-[10px] font-semibold",
-                              isMe ? "bg-indigo-100 text-indigo-700" : "bg-muted"
+                              isMe ? "bg-navy-100 text-navy-700" : "bg-muted"
                             )}>
                               {getInitials(msg.sender_name)}
                             </AvatarFallback>
@@ -334,7 +302,7 @@ export function CoordinatorMessagesClient({ enquiries, currentUserId, currentUse
                             <div className={cn(
                               "rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
                               isMe
-                                ? "bg-indigo-600 text-white rounded-tr-sm"
+                                ? "bg-navy-800 text-white rounded-tr-sm"
                                 : "bg-muted text-foreground rounded-tl-sm"
                             )}>
                               {msg.content}
@@ -364,7 +332,7 @@ export function CoordinatorMessagesClient({ enquiries, currentUserId, currentUse
                 <button
                   key={t}
                   onClick={() => setNewMessage(t)}
-                  className="text-[10px] px-2 py-1 rounded-lg border bg-muted hover:bg-indigo-50 hover:border-indigo-300 text-muted-foreground hover:text-indigo-700 transition-colors truncate max-w-[160px]"
+                  className="text-[10px] px-2 py-1 rounded-lg border bg-muted hover:bg-navy-50 hover:border-navy-300 text-muted-foreground hover:text-navy-700 transition-colors truncate max-w-[160px]"
                   title={t}
                 >
                   {t.slice(0, 28)}…
@@ -383,7 +351,8 @@ export function CoordinatorMessagesClient({ enquiries, currentUserId, currentUse
               />
               <Button
                 size="icon"
-                className="rounded-xl bg-indigo-600 hover:bg-indigo-700 flex-shrink-0"
+                variant="secondary"
+                className="rounded-xl flex-shrink-0"
                 onClick={sendMessage}
                 disabled={!newMessage.trim() || sending}
               >

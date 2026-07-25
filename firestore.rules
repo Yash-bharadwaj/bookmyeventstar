@@ -1,0 +1,157 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function role() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin() {
+      return signedIn() && role() == 'admin';
+    }
+
+    function isCoordinatorOrAdmin() {
+      return signedIn() && role() in ['coordinator', 'admin'];
+    }
+
+    function enquiryClientId(enquiryId) {
+      return get(/databases/$(database)/documents/enquiries/$(enquiryId)).data.client_id;
+    }
+
+    function bookingEnquiryId(bookingId) {
+      return get(/databases/$(database)/documents/bookings/$(bookingId)).data.enquiry_id;
+    }
+
+    // ─── users ──────────────────────────────────────────────────────────────
+    // Account creation always goes through server API routes using the Admin
+    // SDK (which bypasses these rules entirely), so there is no client-side
+    // create rule here — mirrors the fact that every signup path in the app
+    // is server-mediated.
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isCoordinatorOrAdmin());
+      allow update: if signedIn() && request.auth.uid == uid;
+
+      match /notifications/{notificationId} {
+        allow read, update: if signedIn() && request.auth.uid == uid;
+        allow create: if signedIn(); // any signed-in actor (e.g. a coordinator) can notify a user
+      }
+    }
+
+    // ─── artistProfiles (doc id == the artist's uid) ───────────────────────
+    match /artistProfiles/{artistUid} {
+      allow read: if true; // public artist directory
+      allow create, update: if signedIn() && (request.auth.uid == artistUid || isAdmin());
+
+      match /media/{mediaId} {
+        allow read: if true;
+        allow write: if signedIn() && request.auth.uid == artistUid;
+      }
+      match /documents/{docId} {
+        allow read: if signedIn() && (request.auth.uid == artistUid || isCoordinatorOrAdmin());
+        allow write: if signedIn() && request.auth.uid == artistUid;
+      }
+      match /availability/{dateId} {
+        allow read: if true;
+        allow write: if signedIn() && request.auth.uid == artistUid;
+      }
+    }
+
+    // ─── categories / cities — public read, admin-managed ──────────────────
+    match /categories/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /cities/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ─── settings — public read (client app needs e.g. the cities list),
+    // admin-managed ───────────────────────────────────────────────────────
+    match /settings/{key} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ─── enquiries ──────────────────────────────────────────────────────────
+    match /enquiries/{enquiryId} {
+      allow read: if signedIn() && (
+        resource.data.client_id == request.auth.uid ||
+        resource.data.coordinator_id == request.auth.uid ||
+        isCoordinatorOrAdmin()
+      );
+      allow create: if signedIn(); // the enquiry form itself requires a signed-in client
+      // Coordinators/admins manage the full lifecycle; a client may only ever
+      // touch their OWN enquiry (e.g. adding follow-up notes) — not a
+      // field-level restriction, but scoped to documents they own.
+      allow update: if isCoordinatorOrAdmin() || resource.data.client_id == request.auth.uid;
+
+      match /messages/{msgId} {
+        allow read: if signedIn() && (
+          get(/databases/$(database)/documents/enquiries/$(enquiryId)).data.client_id == request.auth.uid ||
+          get(/databases/$(database)/documents/enquiries/$(enquiryId)).data.coordinator_id == request.auth.uid
+        );
+        allow create: if signedIn() && request.resource.data.sender_id == request.auth.uid && (
+          get(/databases/$(database)/documents/enquiries/$(enquiryId)).data.client_id == request.auth.uid ||
+          get(/databases/$(database)/documents/enquiries/$(enquiryId)).data.coordinator_id == request.auth.uid
+        );
+      }
+    }
+
+    // ─── proposals ──────────────────────────────────────────────────────────
+    match /proposals/{proposalId} {
+      allow read: if signedIn() && (
+        isCoordinatorOrAdmin() ||
+        enquiryClientId(resource.data.enquiry_id) == request.auth.uid
+      );
+      // Coordinators/admins author proposals; the owning client can update
+      // one (accept/reject) but not create/delete it. Not field-restricted
+      // (a client could in principle edit price/content too) — acceptable
+      // for now given the scope of this migration, worth tightening later.
+      allow create, delete: if isCoordinatorOrAdmin();
+      allow update: if isCoordinatorOrAdmin() ||
+        (signedIn() && enquiryClientId(resource.data.enquiry_id) == request.auth.uid);
+    }
+
+    // ─── bookings ───────────────────────────────────────────────────────────
+    match /bookings/{bookingId} {
+      allow read: if signedIn() && (
+        resource.data.artist_id == request.auth.uid ||
+        isCoordinatorOrAdmin() ||
+        (resource.data.enquiry_id != null && enquiryClientId(resource.data.enquiry_id) == request.auth.uid)
+      );
+      allow create, delete: if isCoordinatorOrAdmin();
+      // Same tradeoff as proposals: the owning client can update (e.g.
+      // request cancellation) but it isn't restricted to specific fields.
+      allow update: if isCoordinatorOrAdmin() ||
+        (signedIn() && resource.data.enquiry_id != null && enquiryClientId(resource.data.enquiry_id) == request.auth.uid);
+
+      match /tasks/{taskId} {
+        allow read, write: if isCoordinatorOrAdmin();
+      }
+      match /payments/{paymentId} {
+        allow read: if signedIn() && (
+          isCoordinatorOrAdmin() ||
+          (get(/databases/$(database)/documents/bookings/$(bookingId)).data.artist_id == request.auth.uid &&
+            resource.data.type == 'artist_settlement') ||
+          enquiryClientId(bookingEnquiryId(bookingId)) == request.auth.uid
+        );
+        // Clients record their own advance/final payments; coordinators/
+        // admins manage everything including settlements.
+        allow create: if isCoordinatorOrAdmin() ||
+          (signedIn() && enquiryClientId(bookingEnquiryId(bookingId)) == request.auth.uid);
+        allow update, delete: if isCoordinatorOrAdmin();
+      }
+      match /feedback/{feedbackId} {
+        allow read: if true;
+        allow create: if signedIn() && request.resource.data.client_id == request.auth.uid;
+        allow update, delete: if isAdmin();
+      }
+    }
+  }
+}

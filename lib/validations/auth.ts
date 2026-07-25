@@ -1,13 +1,14 @@
 import { z } from "zod";
 
 export const loginSchema = z.object({
-  email: z.string().email("Enter a valid email address"),
+  identifier: z
+    .string()
+    .min(1, "Enter your email or mobile number")
+    .refine(
+      (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) || /^[6-9]\d{9}$/.test(v.replace(/\D/g, "")),
+      "Enter a valid email address or 10-digit mobile number"
+    ),
   password: z.string().min(6, "Password must be at least 6 characters"),
-});
-
-export const phoneLoginSchema = z.object({
-  phone: z.string().regex(/^[6-9]\d{9}$/, "Enter a valid 10-digit Indian mobile number"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
 });
 
 export const registerSchema = z
@@ -27,5 +28,4 @@ export const registerSchema = z
   });
 
 export type LoginFormData = z.infer<typeof loginSchema>;
-export type PhoneLoginFormData = z.infer<typeof phoneLoginSchema>;
 export type RegisterFormData = z.infer<typeof registerSchema>;

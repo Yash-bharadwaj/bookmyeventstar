@@ -10,7 +10,8 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Booking, Task } from "@/types";
 import { formatDate, formatCurrency, getStatusColor, getStatusLabel, getInitials } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
+import { db } from "@/lib/firebase/client";
+import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -45,7 +46,7 @@ const TASK_ICONS: Record<string, LucideIcon> = {
 };
 
 const TASK_COLORS: Record<string, string> = {
-  artist_confirmation: "bg-rose-100 text-rose-600",
+  artist_confirmation: "bg-gold-100 text-gold-600",
   travel_stay:        "bg-blue-100 text-blue-600",
   technical:          "bg-amber-100 text-amber-600",
   payment_docs:       "bg-emerald-100 text-emerald-600",
@@ -69,13 +70,12 @@ export function CoordinatorBookingsClient({ bookings }: { bookings: BookingWithE
     );
   };
 
-  const updateTaskStatus = async (taskId: string, done: boolean) => {
+  const updateTaskStatus = async (bookingId: string, taskId: string, done: boolean) => {
     setUpdatingTask(taskId);
-    const supabase = createClient();
-    await supabase
-      .from("tasks")
-      .update({ status: done ? "done" : "pending" })
-      .eq("id", taskId);
+    await updateDoc(doc(db, "bookings", bookingId, "tasks", taskId), {
+      status: done ? "done" : "pending",
+      updated_at: serverTimestamp(),
+    });
     toast.success(done ? "Task marked complete!" : "Task reopened");
     setUpdatingTask(null);
     router.refresh();
@@ -150,7 +150,7 @@ export function CoordinatorBookingsClient({ bookings }: { bookings: BookingWithE
             <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Artist</p>
             {booking.artist ? (
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full gold-gradient flex items-center justify-center text-navy-900 font-bold text-sm flex-shrink-0">
+                <div className="w-10 h-10 rounded-full gold-gradient flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
                   {getInitials(booking.artist.user.name)}
                 </div>
                 <div>
@@ -215,7 +215,7 @@ export function CoordinatorBookingsClient({ bookings }: { bookings: BookingWithE
                   <Switch
                     checked={task.status === "done"}
                     disabled={updatingTask === task.id}
-                    onCheckedChange={(checked) => updateTaskStatus(task.id, checked)}
+                    onCheckedChange={(checked) => updateTaskStatus(booking.id, task.id, checked)}
                     className="scale-75"
                   />
                 </div>

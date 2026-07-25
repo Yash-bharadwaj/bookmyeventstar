@@ -21,7 +21,6 @@ import { Button } from "@/components/ui/button";
 import { ArtistProfile, Booking } from "@/types";
 import { formatDate, formatCurrency, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { aggregateCompletionFromStoredProfile } from "@/lib/artist-profile-completion";
 import { ProfileCompletionGauge } from "@/components/artist/ProfileCompletionGauge";
 import toast from "react-hot-toast";
@@ -59,29 +58,20 @@ export function ArtistOverview({
 
   const handleBookingAction = async (bookingId: string, action: "confirmed" | "cancelled") => {
     setUpdatingId(bookingId);
-    const supabase = createClient();
-    const { error } = await supabase.from("bookings").update({ status: action }).eq("id", bookingId);
-    if (error) {
-      toast.error("Failed to update booking");
-    } else {
+    try {
+      // Server-mediated: firestore.rules doesn't grant an artist a direct
+      // write path to their own booking's status — this route also handles
+      // notifying the coordinator.
+      const res = await fetch(`/api/artist/bookings/${bookingId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: action }),
+      });
+      if (!res.ok) throw new Error();
       toast.success(action === "confirmed" ? "Booking accepted!" : "Booking declined");
-      // Notify coordinator
-      const { data: booking } = await supabase
-        .from("bookings")
-        .select("coordinator_id, enquiry:enquiries(event_type)")
-        .eq("id", bookingId)
-        .single();
-      if (booking?.coordinator_id) {
-        const eventType = (booking.enquiry as any)?.event_type ?? "event";
-        await supabase.from("notifications").insert({
-          user_id: booking.coordinator_id,
-          title: action === "confirmed" ? "Artist Confirmed Booking" : "Artist Declined Booking",
-          message: `Artist has ${action === "confirmed" ? "accepted" : "declined"} the booking for ${eventType}.`,
-          type: action === "confirmed" ? "success" : "warning",
-          link: "/coordinator/bookings",
-        });
-      }
       router.refresh();
+    } catch {
+      toast.error("Failed to update booking");
     }
     setUpdatingId(null);
   };
@@ -128,16 +118,16 @@ export function ArtistOverview({
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Total Earnings" value={formatCurrency(totalEarnings)} icon={IndianRupee} color="gold" index={0} />
-        <StatCard title="Upcoming Events" value={upcomingCount} icon={Calendar} color="blue" index={1} />
+        <StatCard title="Upcoming Events" value={upcomingCount} icon={Calendar} color="navy" index={1} />
         <StatCard title="Completed Events" value={completedCount} icon={CheckCircle2} color="green" index={2} />
-        <StatCard title="Rating" value={`${(artistProfile?.rating ?? 0).toFixed(1)}/5`} icon={Star} color="purple" index={3} />
+        <StatCard title="Rating" value={`${(artistProfile?.rating ?? 0).toFixed(1)}/5`} icon={Star} color="gold" index={3} />
       </div>
 
       {/* Quick actions */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {([
-          { label: "Edit Profile",     href: "/artist/profile",      icon: UserCog,     color: "text-violet-600 bg-violet-50" },
-          { label: "Set Availability", href: "/artist/availability", icon: Calendar,    color: "text-teal-600 bg-teal-50" },
+          { label: "Edit Profile",     href: "/artist/profile",      icon: UserCog,     color: "text-navy-700 bg-navy-50" },
+          { label: "Set Availability", href: "/artist/availability", icon: Calendar,    color: "text-gold-600 bg-gold-50" },
           { label: "View Earnings",    href: "/artist/earnings",     icon: TrendingUp,  color: "text-emerald-600 bg-emerald-50" },
           { label: "Upload Docs",      href: "/artist/documents",    icon: FileText,    color: "text-amber-600 bg-amber-50" },
         ] as { label: string; href: string; icon: LucideIcon; color: string }[]).map((a) => {

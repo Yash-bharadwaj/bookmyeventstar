@@ -49,6 +49,9 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // Warm amber/gold — the platform's single accent color. Used for
+        // every primary CTA, focus ring, and highlight against the navy
+        // scale below.
         gold: {
           50: "#fffbeb",
           100: "#fef3c7",
@@ -61,18 +64,21 @@ const config: Config = {
           800: "#92400e",
           900: "#78350f",
         },
+        // True navy blue (not indigo/violet) — the dark/neutral scale for
+        // text, dark panels (hero/footer/sidebars), and borders. Deliberately
+        // far from `gold` in hue so the two-tone brand contrast reads clearly.
         navy: {
-          50: "#f0f4ff",
-          100: "#e0e9ff",
-          200: "#c7d7fe",
-          300: "#a5b9fd",
-          400: "#8193fb",
-          500: "#6366f1",
-          600: "#4f46e5",
-          700: "#4338ca",
-          800: "#1e1b4b",
-          900: "#0f172a",
-          950: "#080d1a",
+          50: "#f1f5f9",
+          100: "#dfe7ef",
+          200: "#bccddd",
+          300: "#8fa8c2",
+          400: "#5c7fa0",
+          500: "#3d6285",
+          600: "#2f4d69",
+          700: "#243c52",
+          800: "#182838",
+          900: "#0f1b26",
+          950: "#080f16",
         },
       },
       borderRadius: {

@@ -1,36 +1,45 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/firebase/server";
+import { adminDb } from "@/lib/firebase/admin";
+import { serialize } from "@/lib/firebase/firestore-utils";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ArtistEarningsClient } from "./ArtistEarningsClient";
 
 export default async function ArtistEarningsPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) redirect("/login");
-  const { data: profile } = await supabase.from("users").select("*").eq("id", user.id).single();
-  if (!profile || profile.role !== "artist") redirect("/login");
+  if (user.role !== "artist") redirect("/login");
 
-  const { data: artistProfile } = await supabase
-    .from("artist_profiles")
-    .select("id")
-    .eq("user_id", user.id)
-    .single();
+  const bookingsSnap = await adminDb
+    .collection("bookings")
+    .where("artist_id", "==", user.id)
+    .select("event_date", "total_amount", "advance_amount", "balance_amount", "status", "venue", "city")
+    .get();
 
-  const { data: bookingIds } = await supabase
-    .from("bookings")
-    .select("id, event_date, total_amount, advance_amount, balance_amount, status, venue, city")
-    .eq("artist_id", artistProfile?.id ?? "");
+  const bookings = bookingsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
-  const { data: payments } = await supabase
-    .from("payments")
-    .select("*")
-    .in("booking_id", bookingIds?.map((b) => b.id) ?? [])
-    .eq("type", "artist_settlement")
-    .order("created_at", { ascending: false });
+  // Payments now live under bookings/{id}/payments — fetch each booking's
+  // artist_settlement payments in parallel and flatten.
+  const paymentSnaps = bookings.length
+    ? await Promise.all(
+        bookings.map((b) =>
+          adminDb.collection("bookings").doc(b.id).collection("payments")
+            .where("type", "==", "artist_settlement")
+            .get()
+        )
+      )
+    : [];
+  const payments = paymentSnaps
+    .flatMap((snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+    .sort((a: any, b: any) => {
+      const aTime = a.created_at?.toMillis ? a.created_at.toMillis() : 0;
+      const bTime = b.created_at?.toMillis ? b.created_at.toMillis() : 0;
+      return bTime - aTime;
+    });
 
   return (
-    <DashboardLayout user={profile} title="My Earnings">
-      <ArtistEarningsClient payments={payments ?? []} bookings={bookingIds ?? []} />
+    <DashboardLayout user={serialize(user)} title="My Earnings">
+      <ArtistEarningsClient payments={serialize(payments) as any} bookings={serialize(bookings) as any} />
     </DashboardLayout>
   );
 }

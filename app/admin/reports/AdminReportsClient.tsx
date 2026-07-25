@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { format, subMonths, startOfMonth } from "date-fns";
+import { CHART_SERIES } from "@/lib/chart-colors";
 
 interface CoordinatorStat {
   name: string;
@@ -40,7 +41,7 @@ interface ReportsProps {
   coordinatorStats: CoordinatorStat[];
 }
 
-const COLORS = ["#f59e0b", "#3b82f6", "#10b981", "#8b5cf6", "#ef4444", "#ec4899"];
+const COLORS = CHART_SERIES;
 
 export function AdminReportsClient({ enquiries, bookings, payments, coordinatorStats }: ReportsProps) {
   const [dateFrom, setDateFrom] = useState("");
@@ -214,8 +215,8 @@ export function AdminReportsClient({ enquiries, bookings, payments, coordinatorS
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Total Enquiries" value={enquiries.length} icon={FileText} color="gold" index={0} />
         <StatCard title="Total Revenue" value={formatCurrency(totalRevenue)} icon={DollarSign} color="green" index={1} />
-        <StatCard title="Completed Events" value={completedBookings} icon={Calendar} color="purple" index={2} />
-        <StatCard title="Conversion Rate" value={`${enquiries.length ? Math.round((completedBookings / enquiries.length) * 100) : 0}%`} icon={TrendingUp} color="blue" index={3} />
+        <StatCard title="Completed Events" value={completedBookings} icon={Calendar} color="navy" index={2} />
+        <StatCard title="Conversion Rate" value={`${enquiries.length ? Math.round((completedBookings / enquiries.length) * 100) : 0}%`} icon={TrendingUp} color="navy" index={3} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -298,7 +299,7 @@ export function AdminReportsClient({ enquiries, bookings, payments, coordinatorS
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <UserCog className="w-5 h-5 text-indigo-500" />Coordinator Performance
+                <UserCog className="w-5 h-5 text-navy-500" />Coordinator Performance
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -322,7 +323,7 @@ export function AdminReportsClient({ enquiries, bookings, payments, coordinatorS
                       >
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm">
+                            <div className="w-8 h-8 rounded-full bg-navy-100 flex items-center justify-center text-navy-700 font-bold text-sm">
                               {c.name[0]?.toUpperCase()}
                             </div>
                             <span className="font-medium text-sm">{c.name}</span>

@@ -1,4 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
+import { adminDb } from "@/lib/firebase/admin";
+import { serialize } from "@/lib/firebase/firestore-utils";
 import Link from "next/link";
 import { Suspense } from "react";
 import { ArtistsPageClient } from "./ArtistsPageClient";
@@ -14,41 +15,50 @@ export default async function ArtistsPage({
 }: {
   searchParams: { category?: string; city?: string };
 }) {
-  const supabase = await createClient();
+  let query = adminDb
+    .collection("artistProfiles")
+    .where("is_verified", "==", true)
+    .where("is_listed", "==", true)
+    .where("is_profile_complete", "==", true)
+    .orderBy("rating", "desc") as FirebaseFirestore.Query;
 
-    let query = supabase
-      .from("artist_profiles")
-      .select(`
-      id, user_id, bio, categories, cities, base_price, rating,
-      total_bookings, is_verified, social_links, rider_notes,
-      user:users!artist_profiles_user_id_fkey(name, avatar_url),
-      media:artist_media(url, is_primary, type)
-    `)
-      .eq("is_verified", true)
-      .eq("is_listed", true)
-      .eq("is_profile_complete", true)
-      .order("rating", { ascending: false });
-
+  // Firestore only supports a single array-contains clause per query — apply
+  // one (category takes priority) here, and post-filter the other in JS
+  // below on the already-narrowed result set.
   if (searchParams.category) {
-    query = query.contains("categories", [searchParams.category]);
-  }
-  if (searchParams.city) {
-    query = query.contains("cities", [searchParams.city]);
+    query = query.where("categories", "array-contains", searchParams.category);
+  } else if (searchParams.city) {
+    query = query.where("cities", "array-contains", searchParams.city);
   }
 
-  const [{ data: rawArtists }, { data: categoriesData }] = await Promise.all([
-    query.limit(60),
-    supabase.from("categories").select("name").order("name"),
+  const [artistsSnap, categoriesSnap] = await Promise.all([
+    query.limit(60).get(),
+    adminDb.collection("categories").orderBy("name").get(),
   ]);
 
-  const artists = (rawArtists ?? []).map((a: any) => ({
-    ...a,
-    pricing_details: a.pricing_details ?? {},
-    user: Array.isArray(a.user) ? a.user[0] ?? null : a.user,
-    media: a.media ?? [],
-  }));
+  let rawArtists = artistsSnap.docs.map((d) => ({ id: d.id, user_id: d.id, ...d.data() }));
+  if (searchParams.category && searchParams.city) {
+    rawArtists = rawArtists.filter((a: any) => (a.cities ?? []).includes(searchParams.city));
+  }
 
-  const categoryNames = (categoriesData ?? []).map((c) => c.name);
+  const userDocs = rawArtists.length
+    ? await adminDb.getAll(...rawArtists.map((a) => adminDb.collection("users").doc(a.id)))
+    : [];
+  const mediaSnaps = rawArtists.length
+    ? await Promise.all(rawArtists.map((a) => adminDb.collection("artistProfiles").doc(a.id).collection("media").get()))
+    : [];
+
+  const artists = rawArtists.map((a: any, i) => {
+    const u = userDocs[i]?.exists ? userDocs[i].data()! : {};
+    return {
+      ...a,
+      pricing_details: a.pricing_details ?? {},
+      user: { name: u.name ?? "", avatar_url: u.avatar_url },
+      media: mediaSnaps[i].docs.map((d) => ({ url: d.data().url, is_primary: d.data().is_primary, type: d.data().type })),
+    };
+  });
+
+  const categoryNames = categoriesSnap.docs.map((d) => d.data().name as string);
 
   return (
     <div className="min-h-screen bg-white">
@@ -70,7 +80,7 @@ export default async function ArtistsPage({
       <div className="pt-20">
         <Suspense fallback={<div className="p-8 text-center">Loading artists...</div>}>
           <ArtistsPageClient
-            artists={artists}
+            artists={serialize(artists) as any}
             initialCategory={searchParams.category}
             initialCity={searchParams.city}
             categories={categoryNames}

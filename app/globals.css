@@ -12,7 +12,7 @@
     --popover-foreground: 222 84% 5%;
     --primary: 38 92% 50%;
     --primary-foreground: 222 84% 5%;
-    --secondary: 225 71% 10%;
+    --secondary: 210 45% 14%;
     --secondary-foreground: 0 0% 98%;
     --muted: 210 40% 96%;
     --muted-foreground: 215 16% 47%;
@@ -35,7 +35,7 @@
     --popover-foreground: 0 0% 98%;
     --primary: 38 92% 50%;
     --primary-foreground: 222 84% 5%;
-    --secondary: 217 33% 17%;
+    --secondary: 212 35% 16%;
     --secondary-foreground: 0 0% 98%;
     --muted: 217 33% 17%;
     --muted-foreground: 215 20% 65%;
@@ -84,7 +84,7 @@
   }
 
   .navy-gradient {
-    background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #080d1a 100%);
+    background: linear-gradient(135deg, #0f1b26 0%, #182838 50%, #080f16 100%);
   }
 
   .text-gradient-gold {
@@ -113,24 +113,6 @@
     min-height: 44px;
     min-width: 44px;
   }
-}
-
-/* react-big-calendar overrides */
-.rbc-calendar {
-  @apply font-sans;
-}
-.rbc-header {
-  @apply text-xs font-semibold uppercase tracking-wide py-2;
-}
-.rbc-event {
-  @apply rounded-lg text-xs font-medium;
-  background-color: hsl(38 92% 50%);
-}
-.rbc-today {
-  @apply bg-gold-50;
-}
-.rbc-toolbar button {
-  @apply text-sm;
 }
 
 /* Smooth scrolling */

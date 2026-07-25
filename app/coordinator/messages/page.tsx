@@ -1,34 +1,46 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/firebase/server";
+import { serialize } from "@/lib/firebase/firestore-utils";
+import { adminDb } from "@/lib/firebase/admin";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { CoordinatorMessagesClient } from "./CoordinatorMessagesClient";
 
 export default async function CoordinatorMessagesPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-  const { data: profile } = await supabase.from("users").select("*").eq("id", user.id).single();
-  if (!profile || profile.role !== "coordinator") redirect("/login");
+  const user = await getCurrentUser();
+  if (!user || user.role !== "coordinator") redirect("/login");
 
-  const { data: rawEnquiries } = await supabase
-    .from("enquiries")
-    .select("id, event_type, client:users!enquiries_client_id_fkey(id,name,avatar_url)")
-    .eq("coordinator_id", user.id)
-    .not("client_id", "is", null)
-    .order("updated_at", { ascending: false });
+  // Single equality filter (no orderBy) avoids needing a composite index here;
+  // sorting/filtering on client_id + updated_at happens in JS below.
+  const enquiriesSnap = await adminDb.collection("enquiries").where("coordinator_id", "==", user.id).get();
 
-  const enquiries = (rawEnquiries ?? []).map((e: any) => ({
-    id: e.id,
-    event_type: e.event_type,
-    client: Array.isArray(e.client) ? e.client[0] ?? null : e.client,
-  }));
+  const enquiriesRaw = enquiriesSnap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .filter((e: any) => !!e.client_id)
+    .sort((a: any, b: any) => {
+      const au = a.updated_at?.toMillis?.() ?? 0;
+      const bu = b.updated_at?.toMillis?.() ?? 0;
+      return bu - au;
+    });
+
+  const clientIds = Array.from(new Set(enquiriesRaw.map((e: any) => e.client_id))) as string[];
+  const clientDocs = await Promise.all(clientIds.map((id: string) => adminDb.collection("users").doc(id).get()));
+  const clientsById = Object.fromEntries(clientDocs.filter((d) => d.exists).map((d) => [d.id, d.data()]));
+
+  const enquiries = enquiriesRaw.map((e: any) => {
+    const client: any = clientsById[e.client_id];
+    return {
+      id: e.id,
+      event_type: e.event_type,
+      client: client ? { id: e.client_id, name: client.name, avatar_url: client.avatar_url } : null,
+    };
+  });
 
   return (
-    <DashboardLayout user={profile} title="Messages">
+    <DashboardLayout user={serialize(user)} title="Messages">
       <CoordinatorMessagesClient
         enquiries={enquiries}
         currentUserId={user.id}
-        currentUserName={profile.name}
+        currentUserName={user.name}
       />
     </DashboardLayout>
   );

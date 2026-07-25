@@ -39,15 +39,17 @@ const JOURNEY = [
   { key: "completed",             label: "Completed",              desc: "Hope it was amazing!" },
 ];
 
+// Terminal/semantic states (proposal_sent=pending action, confirmed/in_progress=success, cancelled=error)
+// keep their meaningful colors; the in-between progress stages rotate through the brand's gold/navy accents.
 const STATUS_COLORS: Record<string, string> = {
-  new:                   "bg-blue-100 text-blue-700",
-  assigned:              "bg-violet-100 text-violet-700",
-  requirement_gathering: "bg-cyan-100 text-cyan-700",
-  shortlisting:          "bg-indigo-100 text-indigo-700",
+  new:                   "bg-gold-100 text-gold-700",
+  assigned:              "bg-navy-100 text-navy-700",
+  requirement_gathering: "bg-navy-100 text-navy-700",
+  shortlisting:          "bg-gold-100 text-gold-700",
   proposal_sent:         "bg-amber-100 text-amber-700",
   confirmed:             "bg-emerald-100 text-emerald-700",
   in_progress:           "bg-green-100 text-green-700",
-  completed:             "bg-teal-100 text-teal-700",
+  completed:             "bg-gold-100 text-gold-700",
   cancelled:             "bg-red-100 text-red-600",
 };
 
@@ -112,8 +114,8 @@ export function ClientEnquiriesClient({ enquiries }: Props) {
         }`}
       >
         {/* Top accent bar */}
-        {isActionNeeded && <div className="h-1 bg-gradient-to-r from-amber-400 to-orange-400" />}
-        {isConfirmed && <div className="h-1 bg-gradient-to-r from-emerald-400 to-teal-500" />}
+        {isActionNeeded && <div className="h-1 bg-gradient-to-r from-amber-400 to-amber-500" />}
+        {isConfirmed && <div className="h-1 bg-gradient-to-r from-emerald-400 to-emerald-500" />}
 
         <div className="p-5">
           {/* Header */}
@@ -167,7 +169,7 @@ export function ClientEnquiriesClient({ enquiries }: Props) {
             {e.coordinator ? (
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 text-xs font-bold flex-shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-navy-100 flex items-center justify-center text-navy-700 text-xs font-bold flex-shrink-0">
                     {getInitials(e.coordinator.name)}
                   </div>
                   <div>
@@ -199,7 +201,7 @@ export function ClientEnquiriesClient({ enquiries }: Props) {
             <div className="flex flex-col sm:flex-row gap-2">
               {isActionNeeded && (
                 <Link href="/client/proposals" className="flex-1">
-                  <Button className="w-full h-11 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold">
+                  <Button variant="warning" className="w-full h-11 text-sm font-semibold">
                     Review Proposal <ArrowRight className="w-4 h-4 ml-1.5" />
                   </Button>
                 </Link>

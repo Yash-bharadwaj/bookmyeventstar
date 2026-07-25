@@ -18,7 +18,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Proposal } from "@/types";
 import { formatDate, formatCurrency, getStatusColor, getStatusLabel } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
+import { db } from "@/lib/firebase/client";
+import {
+  collection, doc, addDoc, updateDoc, getDoc, getDocs,
+  query, where, serverTimestamp, writeBatch,
+} from "firebase/firestore";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 
@@ -125,18 +129,22 @@ export function CoordinatorProposalsClient({
           : s
       )
     );
-    // Check availability on event date
+    // Check availability on event date. artistId here IS the artist's uid
+    // (artistProfiles doc id == artist uid == bookings.artist_id), so no
+    // extra lookup is needed to resolve a separate "user_id" field.
     const eventDate = enquiries.find((e) => e.id === selectedEnquiryId)?.event_date;
     if (artistId && eventDate && !(artistId in conflictMap)) {
-      createClient()
-        .from("bookings")
-        .select("id", { count: "exact", head: true })
-        .eq("artist_id", (a as any)?.user_id ?? artistId)
-        .eq("event_date", eventDate)
-        .not("status", "in", "(cancelled)")
-        .then(({ count }) => {
-          setConflictMap((prev) => ({ ...prev, [artistId]: (count ?? 0) > 0 }));
-        });
+      (async () => {
+        const snap = await getDocs(
+          query(
+            collection(db, "bookings"),
+            where("artist_id", "==", artistId),
+            where("event_date", "==", eventDate)
+          )
+        );
+        const hasConflict = snap.docs.some((d) => d.data().status !== "cancelled");
+        setConflictMap((prev) => ({ ...prev, [artistId]: hasConflict }));
+      })();
     }
   };
 
@@ -213,15 +221,15 @@ export function CoordinatorProposalsClient({
 
   const sendProposal = async (proposalId: string, enquiryId: string) => {
     setSending(proposalId);
-    const supabase = createClient();
-    await supabase.from("proposals").update({ status: "sent" }).eq("id", proposalId);
-    await supabase.from("enquiries").update({ status: "proposal_sent" }).eq("id", enquiryId);
-    const { data: enq } = await supabase.from("enquiries").select("client_id,event_type").eq("id", enquiryId).single();
+    await updateDoc(doc(db, "proposals", proposalId), { status: "sent", updated_at: serverTimestamp() });
+    await updateDoc(doc(db, "enquiries", enquiryId), { status: "proposal_sent", updated_at: serverTimestamp() });
+    const enqSnap = await getDoc(doc(db, "enquiries", enquiryId));
+    const enq = enqSnap.exists() ? (enqSnap.data() as any) : null;
     if (enq?.client_id) {
-      await supabase.from("notifications").insert({
-        user_id: enq.client_id, title: "Proposal Ready for Review",
+      await addDoc(collection(db, "users", enq.client_id, "notifications"), {
+        title: "Proposal Ready for Review",
         message: `Your proposal for ${enq.event_type} is ready. Please review the artist options.`,
-        type: "success", link: "/client/proposals",
+        type: "success", link: "/client/proposals", is_read: false, created_at: serverTimestamp(),
       });
     }
     toast.success("Proposal sent to client!");
@@ -241,7 +249,6 @@ export function CoordinatorProposalsClient({
     }
     setCreating(true);
     try {
-      const supabase = createClient();
       const artistsProposed = filledArtists.map((a) => ({
         artist_id: a.artistId,
         name: a.name,
@@ -249,7 +256,7 @@ export function CoordinatorProposalsClient({
         notes: a.notes,
       }));
       const maxPrice = Math.max(...filledArtists.map((a) => a.price));
-      const { error } = await supabase.from("proposals").insert({
+      await addDoc(collection(db, "proposals"), {
         enquiry_id: selectedEnquiryId,
         coordinator_id: coordinatorId,
         content,
@@ -257,8 +264,9 @@ export function CoordinatorProposalsClient({
         quoted_price: maxPrice,
         validity_date: validityDate,
         status: "draft",
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp(),
       });
-      if (error) throw error;
       toast.success("Proposal saved as draft! Review and send to client.");
       setShowCreate(false);
       resetForm();
@@ -281,45 +289,70 @@ export function CoordinatorProposalsClient({
     }
     setCreatingBooking(true);
     try {
-      const supabase = createClient();
-      const { data: newBooking, error } = await supabase.from("bookings").insert({
+      const totalAmt = Number(totalAmount);
+      const advanceAmt = Number(advanceAmount);
+
+      const bookingRef = doc(collection(db, "bookings"));
+      const batch = writeBatch(db);
+      batch.set(bookingRef, {
         enquiry_id: proposal.enquiry_id,
         coordinator_id: coordinatorId,
         artist_id: selectedBookingArtistId,
         event_date: proposal.enquiry?.event_date,
-        venue, city: bookingCity,
-        total_amount: Number(totalAmount),
-        advance_amount: Number(advanceAmount),
+        venue,
+        city: bookingCity,
+        total_amount: totalAmt,
+        advance_amount: advanceAmt,
+        balance_amount: totalAmt - advanceAmt,
         status: "pending",
         // Use client's actual event requirements (other_requirements from enquiry), not the coordinator's proposal message
         special_requirements: (proposal as any).enquiry?.other_requirements ?? null,
-      }).select("id").single();
-      if (error) throw error;
-      await supabase.from("enquiries").update({ status: "confirmed" }).eq("id", proposal.enquiry_id);
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp(),
+      });
+
+      // Replaces the old Postgres trigger: every new booking gets these 5
+      // checklist tasks created in the same write path, atomically.
+      const taskTypes = ["artist_confirmation", "travel_stay", "technical", "payment_docs", "hospitality"] as const;
+      taskTypes.forEach((type) => {
+        const taskRef = doc(collection(bookingRef, "tasks"));
+        batch.set(taskRef, {
+          type,
+          status: "pending",
+          notes: "",
+          due_date: null,
+          assigned_to: null,
+          created_at: serverTimestamp(),
+          updated_at: serverTimestamp(),
+        });
+      });
+
+      await batch.commit();
+
+      await updateDoc(doc(db, "enquiries", proposal.enquiry_id), { status: "confirmed", updated_at: serverTimestamp() });
+
       // Notify client
-      const { data: enq } = await supabase.from("enquiries").select("client_id,event_type").eq("id", proposal.enquiry_id).single();
+      const enqSnap = await getDoc(doc(db, "enquiries", proposal.enquiry_id));
+      const enq = enqSnap.exists() ? (enqSnap.data() as any) : null;
       if (enq?.client_id) {
-        await supabase.from("notifications").insert({
-          user_id: enq.client_id, title: "Booking Confirmed!",
+        await addDoc(collection(db, "users", enq.client_id, "notifications"), {
+          title: "Booking Confirmed!",
           message: `Your ${enq.event_type} booking has been created. Artist confirmation pending.`,
-          type: "success", link: "/client/events",
+          type: "success", link: "/client/events", is_read: false, created_at: serverTimestamp(),
         });
       }
-      // Notify the selected artist
-      const { data: artistProfile } = await supabase
-        .from("artist_profiles")
-        .select("user_id")
-        .eq("id", selectedBookingArtistId)
-        .single();
-      if (artistProfile?.user_id) {
-        await supabase.from("notifications").insert({
-          user_id: artistProfile.user_id,
-          title: "New Booking Request",
-          message: `You have a new booking request for ${enq?.event_type ?? "an event"} in ${bookingCity} on ${proposal.enquiry?.event_date ? new Date(proposal.enquiry.event_date).toLocaleDateString("en-IN") : ""}. Please accept or decline.`,
-          type: "info",
-          link: "/artist/bookings",
-        });
-      }
+      // Notify the selected artist. selectedBookingArtistId IS the artist's
+      // uid (artistProfiles doc id == the artist's users/{uid} doc id), so no
+      // extra lookup is needed to resolve a separate "user_id" field.
+      await addDoc(collection(db, "users", selectedBookingArtistId, "notifications"), {
+        title: "New Booking Request",
+        message: `You have a new booking request for ${enq?.event_type ?? "an event"} in ${bookingCity} on ${proposal.enquiry?.event_date ? new Date(proposal.enquiry.event_date).toLocaleDateString("en-IN") : ""}. Please accept or decline.`,
+        type: "info",
+        link: "/artist/bookings",
+        is_read: false,
+        created_at: serverTimestamp(),
+      });
+
       toast.success("Booking created! Artist has been notified to confirm.");
       setShowBooking(null);
       setVenue(""); setBookingCity(""); setTotalAmount(""); setAdvanceAmount(""); setSelectedBookingArtistId("");
@@ -343,9 +376,9 @@ export function CoordinatorProposalsClient({
         animate={{ opacity: 1, y: 0 }}
         className="rounded-2xl border overflow-hidden hover:shadow-md transition-all"
       >
-        {p.status === "draft" && <div className="h-1 bg-gradient-to-r from-indigo-400 to-violet-500" />}
-        {p.status === "sent"  && <div className="h-1 bg-gradient-to-r from-amber-400 to-orange-400" />}
-        {p.status === "accepted" && <div className="h-1 bg-gradient-to-r from-emerald-400 to-teal-500" />}
+        {p.status === "draft" && <div className="h-1 bg-gradient-to-r from-navy-400 to-navy-600" />}
+        {p.status === "sent"  && <div className="h-1 bg-gradient-to-r from-amber-400 to-amber-500" />}
+        {p.status === "accepted" && <div className="h-1 bg-gradient-to-r from-emerald-400 to-emerald-500" />}
 
         <div className="p-4 border-b bg-muted/20 flex items-start justify-between flex-wrap gap-3">
           <div className="min-w-0">
@@ -370,7 +403,7 @@ export function CoordinatorProposalsClient({
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
-            <p className="font-bold text-indigo-700">{formatCurrency(p.quoted_price)}</p>
+            <p className="font-bold text-navy-700">{formatCurrency(p.quoted_price)}</p>
 
             {/* Preview button — always visible */}
             <Button size="sm" variant="outline" onClick={() => setPreviewProposal(p)}>
@@ -418,7 +451,7 @@ export function CoordinatorProposalsClient({
                   <Mic2 className="w-3 h-3 text-muted-foreground" />
                   <span className={`font-medium ${isClientChoice ? "text-emerald-800" : ""}`}>{a.name ?? `Option ${i + 1}`}</span>
                   {isClientChoice && <span className="text-[9px] bg-emerald-600 text-white px-1.5 py-0.5 rounded-full font-bold">Client picked</span>}
-                  <span className={`font-semibold ${isClientChoice ? "text-emerald-700" : "text-indigo-600"}`}>{formatCurrency(a.quoted_price)}</span>
+                  <span className={`font-semibold ${isClientChoice ? "text-emerald-700" : "text-navy-600"}`}>{formatCurrency(a.quoted_price)}</span>
                 </div>
               );
             })}
@@ -445,7 +478,7 @@ export function CoordinatorProposalsClient({
     return (
       <div className="space-y-5">
         {/* "You are previewing as client" banner */}
-        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-700 font-medium">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-navy-50 border border-navy-200 text-xs text-navy-700 font-medium">
           <Eye className="w-3.5 h-3.5 flex-shrink-0" />
           This is exactly what <span className="font-bold mx-1">{p.enquiry?.client?.name ?? "the client"}</span> will see when you send this proposal.
         </div>
@@ -464,7 +497,7 @@ export function CoordinatorProposalsClient({
                 </div>
               </div>
               <div className="text-right flex-shrink-0">
-                <p className="font-display font-bold text-2xl text-indigo-700">{formatCurrency(p.quoted_price)}</p>
+                <p className="font-display font-bold text-2xl text-navy-700">{formatCurrency(p.quoted_price)}</p>
                 <p className="text-[10px] text-muted-foreground font-medium">Total package</p>
               </div>
             </div>
@@ -490,7 +523,7 @@ export function CoordinatorProposalsClient({
               <div className="mt-4 flex items-center gap-3">
                 <div className="flex -space-x-2">
                   {artists_list.slice(0, 4).map((_: any, i: number) => (
-                    <div key={i} className="w-8 h-8 rounded-full gold-gradient border-2 border-background flex items-center justify-center text-navy-900 text-[11px] font-bold">
+                    <div key={i} className="w-8 h-8 rounded-full gold-gradient border-2 border-background flex items-center justify-center text-white text-[11px] font-bold">
                       {i + 1}
                     </div>
                   ))}
@@ -508,8 +541,8 @@ export function CoordinatorProposalsClient({
               {p.content && (
                 <div>
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Message from your Coordinator</p>
-                  <div className="relative p-4 rounded-2xl bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-100">
-                    <div className="absolute top-3 left-3 w-1 h-8 bg-indigo-300 rounded-full" />
+                  <div className="relative p-4 rounded-2xl bg-gradient-to-r from-navy-50 to-gold-50 border border-navy-100">
+                    <div className="absolute top-3 left-3 w-1 h-8 bg-navy-300 rounded-full" />
                     <p className="text-sm leading-relaxed pl-4 whitespace-pre-line">{p.content}</p>
                   </div>
                 </div>
@@ -521,9 +554,9 @@ export function CoordinatorProposalsClient({
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Artist Options</p>
                   <div className="space-y-3">
                     {artists_list.map((a: any, i: number) => (
-                      <div key={i} className="flex items-start justify-between gap-3 p-4 rounded-2xl bg-card border hover:border-indigo-200 transition-colors">
+                      <div key={i} className="flex items-start justify-between gap-3 p-4 rounded-2xl bg-card border hover:border-navy-200 transition-colors">
                         <div className="flex items-start gap-3">
-                          <div className="w-11 h-11 rounded-xl gold-gradient flex items-center justify-center text-navy-900 font-bold flex-shrink-0">
+                          <div className="w-11 h-11 rounded-xl gold-gradient flex items-center justify-center text-white font-bold flex-shrink-0">
                             <Mic2 className="w-5 h-5" />
                           </div>
                           <div>
@@ -532,7 +565,7 @@ export function CoordinatorProposalsClient({
                           </div>
                         </div>
                         <div className="text-right flex-shrink-0">
-                          <p className="font-bold text-base text-indigo-700">{formatCurrency(a.quoted_price)}</p>
+                          <p className="font-bold text-base text-navy-700">{formatCurrency(a.quoted_price)}</p>
                           <p className="text-[10px] text-muted-foreground">quoted</p>
                         </div>
                       </div>
@@ -549,7 +582,7 @@ export function CoordinatorProposalsClient({
                   { icon: Clock,        label: "On-time Guarantee",desc: "We handle all logistics" },
                 ].map(({ icon: Icon, label, desc }) => (
                   <div key={label} className="text-center p-3 rounded-xl bg-muted/30">
-                    <Icon className="w-4 h-4 mx-auto mb-1.5 text-indigo-500" />
+                    <Icon className="w-4 h-4 mx-auto mb-1.5 text-navy-500" />
                     <p className="text-[10px] font-semibold">{label}</p>
                     <p className="text-[9px] text-muted-foreground mt-0.5 leading-tight">{desc}</p>
                   </div>
@@ -558,7 +591,7 @@ export function CoordinatorProposalsClient({
 
               {/* Client CTA (read-only in preview) */}
               <div className="space-y-2 opacity-60 pointer-events-none select-none">
-                <div className="w-full h-14 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 flex items-center justify-center text-white font-semibold gap-2 text-base">
+                <div className="w-full h-14 rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 flex items-center justify-center text-white font-semibold gap-2 text-base">
                   <ThumbsUp className="w-5 h-5" />Accept &amp; Confirm Booking
                   <ChevronRight className="w-4 h-4" />
                 </div>
@@ -640,7 +673,7 @@ export function CoordinatorProposalsClient({
           <DialogHeader>
             <div className="flex items-center justify-between">
               <DialogTitle className="font-display text-lg flex items-center gap-2">
-                <Eye className="w-5 h-5 text-indigo-500" />Client View Preview
+                <Eye className="w-5 h-5 text-navy-500" />Client View Preview
               </DialogTitle>
             </div>
           </DialogHeader>
@@ -656,7 +689,8 @@ export function CoordinatorProposalsClient({
                 </Button>
                 {previewProposal.status === "draft" && (
                   <Button
-                    className="flex-1 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white"
+                    variant="secondary"
+                    className="flex-1"
                     loading={sending === previewProposal.id}
                     onClick={() => {
                       sendProposal(previewProposal.id, previewProposal.enquiry_id);
@@ -725,12 +759,12 @@ export function CoordinatorProposalsClient({
                       { label: "City", value: selectedEnquiry.city, icon: MapPin },
                       { label: "Client Budget", value: `${formatCurrency(selectedEnquiry.budget_min)} – ${formatCurrency(selectedEnquiry.budget_max)}`, icon: IndianRupee },
                     ].map(({ label, value, icon: Icon }) => (
-                      <div key={label} className="p-2.5 rounded-xl bg-indigo-50 border border-indigo-100">
+                      <div key={label} className="p-2.5 rounded-xl bg-navy-50 border border-navy-100">
                         <div className="flex items-center gap-1.5 mb-0.5">
-                          <Icon className="w-3 h-3 text-indigo-400" />
-                          <p className="text-[10px] text-indigo-400 font-semibold uppercase tracking-wide">{label}</p>
+                          <Icon className="w-3 h-3 text-navy-400" />
+                          <p className="text-[10px] text-navy-400 font-semibold uppercase tracking-wide">{label}</p>
                         </div>
-                        <p className="text-xs font-bold text-indigo-800 truncate">{value}</p>
+                        <p className="text-xs font-bold text-navy-800 truncate">{value}</p>
                       </div>
                     ))}
                   </motion.div>
@@ -792,7 +826,7 @@ export function CoordinatorProposalsClient({
                           {suggestedArtists.map((a) => (
                             <SelectItem key={a.id} value={a.id}>
                               <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                                <div className="w-6 h-6 rounded-full bg-navy-100 text-navy-700 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
                                   {(a.user?.name ?? "A")[0]}
                                 </div>
                                 <span className="font-medium text-sm">{a.user?.name}</span>
@@ -802,7 +836,7 @@ export function CoordinatorProposalsClient({
                                 <span className="flex items-center gap-0.5 text-xs text-amber-600">
                                   <Star className="w-3 h-3 fill-amber-400" />{a.rating.toFixed(1)}
                                 </span>
-                                <span className="text-xs font-semibold text-indigo-600">{formatCurrency(a.base_price)}</span>
+                                <span className="text-xs font-semibold text-navy-600">{formatCurrency(a.base_price)}</span>
                               </div>
                             </SelectItem>
                           ))}
@@ -882,9 +916,9 @@ export function CoordinatorProposalsClient({
 
               {/* Total quoted */}
               {totalQuoted > 0 && (
-                <div className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-indigo-50 border border-indigo-100 text-sm">
-                  <span className="text-indigo-600 font-medium">Highest quote (shown to client)</span>
-                  <span className="font-bold text-indigo-800">{formatCurrency(totalQuoted)}</span>
+                <div className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-navy-50 border border-navy-100 text-sm">
+                  <span className="text-navy-600 font-medium">Highest quote (shown to client)</span>
+                  <span className="font-bold text-navy-800">{formatCurrency(totalQuoted)}</span>
                 </div>
               )}
             </div>
@@ -912,8 +946,8 @@ export function CoordinatorProposalsClient({
                     onClick={() => setValidityDate(addDays(d))}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
                       validityDate === addDays(d)
-                        ? "bg-indigo-600 text-white border-indigo-600"
-                        : "bg-background border-border text-muted-foreground hover:border-indigo-400"
+                        ? "bg-navy-600 text-white border-navy-600"
+                        : "bg-background border-border text-muted-foreground hover:border-navy-400"
                     }`}
                   >
                     {d} days
@@ -1001,7 +1035,7 @@ export function CoordinatorProposalsClient({
                               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-bold">Client's choice</span>
                             )}
                             <span className="text-muted-foreground text-xs">·</span>
-                            <span className="text-xs font-semibold text-indigo-600">{formatCurrency(a.quoted_price)}</span>
+                            <span className="text-xs font-semibold text-navy-600">{formatCurrency(a.quoted_price)}</span>
                           </div>
                         </SelectItem>
                       ))}
@@ -1063,7 +1097,7 @@ export function CoordinatorProposalsClient({
                           key={pct}
                           type="button"
                           onClick={() => setAdvanceAmount(String(Math.round(Number(totalAmount) * pct / 100)))}
-                          className="text-[10px] px-2 py-0.5 rounded border bg-muted hover:bg-indigo-50 hover:border-indigo-300 text-muted-foreground hover:text-indigo-700 transition-colors"
+                          className="text-[10px] px-2 py-0.5 rounded border bg-muted hover:bg-navy-50 hover:border-navy-300 text-muted-foreground hover:text-navy-700 transition-colors"
                         >
                           {pct}%
                         </button>

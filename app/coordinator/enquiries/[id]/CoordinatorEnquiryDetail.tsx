@@ -12,7 +12,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDate, formatCurrency, getStatusColor, getStatusLabel } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
+import { db } from "@/lib/firebase/client";
+import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -49,26 +50,32 @@ export function CoordinatorEnquiryDetail({ enquiry, proposals, coordinatorId }: 
 
   const saveUpdate = async () => {
     setSaving(true);
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("enquiries")
-      .update({ status, other_requirements: notes })
-      .eq("id", enquiry.id);
-    if (error) toast.error("Failed to save");
-    else toast.success("Enquiry updated!");
+    try {
+      await updateDoc(doc(db, "enquiries", enquiry.id), {
+        status,
+        other_requirements: notes,
+        updated_at: serverTimestamp(),
+      });
+      toast.success("Enquiry updated!");
+    } catch {
+      toast.error("Failed to save");
+    }
     setSaving(false);
     router.refresh();
   };
 
   const saveFollowUp = async () => {
     setSavingFollowUp(true);
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("enquiries")
-      .update({ follow_up_date: followUpDate || null, follow_up_notes: followUpNotes || null })
-      .eq("id", enquiry.id);
-    if (error) toast.error("Failed to save follow-up");
-    else toast.success("Follow-up scheduled!");
+    try {
+      await updateDoc(doc(db, "enquiries", enquiry.id), {
+        follow_up_date: followUpDate || null,
+        follow_up_notes: followUpNotes || null,
+        updated_at: serverTimestamp(),
+      });
+      toast.success("Follow-up scheduled!");
+    } catch {
+      toast.error("Failed to save follow-up");
+    }
     setSavingFollowUp(false);
     router.refresh();
   };
@@ -130,7 +137,7 @@ export function CoordinatorEnquiryDetail({ enquiry, proposals, coordinatorId }: 
         {/* Client Info */}
         <div className="rounded-2xl border p-5 space-y-3">
           <h2 className="font-semibold text-sm flex items-center gap-2">
-            <User className="w-4 h-4 text-violet-500" />Client Details
+            <User className="w-4 h-4 text-navy-600" />Client Details
           </h2>
           <div className="space-y-2 text-sm">
             <div className="flex items-center gap-2 font-medium">{enquiry.client?.name}</div>
@@ -201,7 +208,7 @@ export function CoordinatorEnquiryDetail({ enquiry, proposals, coordinatorId }: 
       {/* Follow-up Tracker */}
       <div className="rounded-2xl border p-5 space-y-4">
         <h2 className="font-semibold text-sm flex items-center gap-2">
-          <Bell className={`w-4 h-4 ${followUpDue ? "text-red-500" : "text-violet-500"}`} />
+          <Bell className={`w-4 h-4 ${followUpDue ? "text-red-500" : "text-gold-600"}`} />
           Follow-up Tracker
           {followUpDue && (
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-600 font-semibold ml-1">
@@ -251,7 +258,7 @@ export function CoordinatorEnquiryDetail({ enquiry, proposals, coordinatorId }: 
       <div className="rounded-2xl border p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold text-sm flex items-center gap-2">
-            <ClipboardList className="w-4 h-4 text-cyan-500" />Proposals ({proposals.length})
+            <ClipboardList className="w-4 h-4 text-navy-600" />Proposals ({proposals.length})
           </h2>
           <Link href="/coordinator/proposals">
             <Button size="sm" variant="outline">

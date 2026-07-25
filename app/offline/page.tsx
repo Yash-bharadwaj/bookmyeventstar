@@ -20,7 +20,7 @@ export default function OfflinePage() {
         </p>
         <button
           onClick={() => window.location.reload()}
-          className="w-full py-3 rounded-xl bg-gradient-to-r from-gold-500 to-gold-600 text-navy-900 font-semibold text-sm hover:opacity-90 transition-opacity"
+          className="w-full py-3 rounded-xl bg-gradient-to-r from-gold-500 to-gold-600 text-white font-semibold text-sm hover:opacity-90 transition-opacity"
         >
           Try Again
         </button>

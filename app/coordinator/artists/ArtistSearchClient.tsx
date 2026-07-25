@@ -148,15 +148,15 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
 
       {/* ── Enquiry context selector ── */}
       {enquiries.length > 0 && (
-        <div className="rounded-2xl border bg-gradient-to-r from-indigo-50 to-violet-50 border-indigo-100 p-4 space-y-3">
+        <div className="rounded-2xl border bg-gradient-to-r from-navy-50 to-gold-50 border-navy-100 p-4 space-y-3">
           <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-indigo-500" />
-            <p className="text-sm font-semibold text-indigo-800">Shortlisting for which enquiry?</p>
+            <Sparkles className="w-4 h-4 text-navy-500" />
+            <p className="text-sm font-semibold text-navy-800">Shortlisting for which enquiry?</p>
           </div>
           <div className="flex gap-3 flex-wrap items-end">
             <div className="flex-1 min-w-[220px]">
               <Select value={enquiryId} onValueChange={applyEnquiryContext}>
-                <SelectTrigger className="bg-white border-indigo-200">
+                <SelectTrigger className="bg-white border-navy-200">
                   <SelectValue placeholder="Select enquiry…" />
                 </SelectTrigger>
                 <SelectContent>
@@ -171,10 +171,10 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
             </div>
             {enquiry && (
               <div className="flex gap-2 flex-wrap">
-                <span className="px-3 py-1.5 rounded-xl bg-white border border-indigo-200 text-xs font-medium text-indigo-700 flex items-center gap-1.5">
+                <span className="px-3 py-1.5 rounded-xl bg-white border border-navy-200 text-xs font-medium text-navy-700 flex items-center gap-1.5">
                   <Calendar className="w-3 h-3" />{formatDate(enquiry.event_date)}
                 </span>
-                <span className="px-3 py-1.5 rounded-xl bg-white border border-indigo-200 text-xs font-medium text-indigo-700 flex items-center gap-1.5">
+                <span className="px-3 py-1.5 rounded-xl bg-white border border-navy-200 text-xs font-medium text-navy-700 flex items-center gap-1.5">
                   <MapPin className="w-3 h-3" />{enquiry.city}
                 </span>
                 <span className="px-3 py-1.5 rounded-xl bg-white border border-amber-300 text-xs font-semibold text-amber-700 flex items-center gap-1.5">
@@ -218,7 +218,7 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
           <SlidersHorizontal className="w-4 h-4 mr-2" />
           Filters
           {activeFilterCount > 0 && (
-            <span className="ml-2 px-1.5 py-0.5 rounded-full bg-white text-indigo-700 text-[10px] font-bold">
+            <span className="ml-2 px-1.5 py-0.5 rounded-full bg-white text-navy-700 text-[10px] font-bold">
               {activeFilterCount}
             </span>
           )}
@@ -252,8 +252,8 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                       onClick={() => toggleCategory(c)}
                       className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
                         categories.includes(c)
-                          ? "bg-indigo-600 text-white border-indigo-600"
-                          : "bg-background border-border text-muted-foreground hover:border-indigo-400 hover:text-indigo-600"
+                          ? "bg-navy-600 text-white border-navy-600"
+                          : "bg-background border-border text-muted-foreground hover:border-navy-400 hover:text-navy-600"
                       }`}
                     >
                       {categories.includes(c) && <Check className="w-3 h-3 inline mr-1" />}
@@ -273,8 +273,8 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                       onClick={() => toggleCity(c)}
                       className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all flex-shrink-0 ${
                         cities.includes(c)
-                          ? "bg-violet-600 text-white border-violet-600"
-                          : "bg-background border-border text-muted-foreground hover:border-violet-400"
+                          ? "bg-gold-600 text-white border-gold-600"
+                          : "bg-background border-border text-muted-foreground hover:border-gold-400"
                       }`}
                     >
                       {cities.includes(c) && <Check className="w-3 h-3 inline mr-1" />}
@@ -308,7 +308,7 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                     {enquiry && (
                       <button
                         onClick={() => setMaxPrice(enquiry.budget_max)}
-                        className="text-[10px] text-indigo-600 hover:underline"
+                        className="text-[10px] text-navy-600 hover:underline"
                       >
                         Use client budget
                       </button>
@@ -369,13 +369,13 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
               {(categories.length > 0 || cities.length > 0) && (
                 <div className="flex flex-wrap gap-2 pt-2 border-t">
                   {categories.map((c) => (
-                    <span key={c} className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-700 text-xs font-medium">
+                    <span key={c} className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-navy-100 text-navy-700 text-xs font-medium">
                       {c}
                       <button onClick={() => toggleCategory(c)}><X className="w-3 h-3" /></button>
                     </span>
                   ))}
                   {cities.map((c) => (
-                    <span key={c} className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-violet-100 text-violet-700 text-xs font-medium">
+                    <span key={c} className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-gold-100 text-gold-700 text-xs font-medium">
                       <MapPin className="w-3 h-3" />{c}
                       <button onClick={() => toggleCity(c)}><X className="w-3 h-3" /></button>
                     </span>
@@ -412,7 +412,7 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                     {a.user?.avatar_url ? (
                       <img src={a.user.avatar_url} alt={a.user?.name ?? ""} className="w-full h-full object-cover" />
                     ) : (
-                      <span className="text-navy-900 text-xs font-bold">{getInitials(a.user?.name ?? "A")}</span>
+                      <span className="text-white text-xs font-bold">{getInitials(a.user?.name ?? "A")}</span>
                     )}
                   </div>
                 ))}
@@ -443,7 +443,8 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                 </Button>
                 <Button
                   size="sm"
-                  className="bg-gold-500 hover:bg-gold-400 text-navy-900 font-semibold"
+                  variant="default"
+                  className="font-semibold"
                   onClick={goToCreateProposal}
                 >
                   <Send className="w-3.5 h-3.5 mr-1.5" />Create Proposal
@@ -479,7 +480,7 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                 transition={{ delay: Math.min(i * 0.04, 0.3) }}
               >
                 <div className={`rounded-2xl border overflow-hidden hover:shadow-lg transition-all ${
-                  isShortlisted ? "ring-2 ring-indigo-500 ring-offset-1" : ""
+                  isShortlisted ? "ring-2 ring-navy-500 ring-offset-1" : ""
                 } ${overBudget ? "border-red-200" : ""}`}>
 
                   {/* Budget indicator bar */}
@@ -494,7 +495,7 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                     ) : artist.user?.avatar_url ? (
                       <img src={artist.user.avatar_url} alt={artist.user?.name} className="w-full h-full object-cover" />
                     ) : (
-                      <div className="w-20 h-20 rounded-full gold-gradient flex items-center justify-center text-navy-900 font-bold text-2xl">
+                      <div className="w-20 h-20 rounded-full gold-gradient flex items-center justify-center text-white font-bold text-2xl">
                         {getInitials(artist.user?.name ?? "A")}
                       </div>
                     )}
@@ -523,8 +524,8 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                       onClick={() => toggleShortlist(artist.id)}
                       className={`absolute bottom-2 right-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all flex items-center gap-1.5 shadow-md ${
                         isShortlisted
-                          ? "bg-indigo-600 text-white"
-                          : "bg-black/50 text-white hover:bg-indigo-600 backdrop-blur-sm"
+                          ? "bg-navy-600 text-white"
+                          : "bg-black/50 text-white hover:bg-navy-600 backdrop-blur-sm"
                       }`}
                     >
                       {isShortlisted
@@ -548,7 +549,7 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                     {/* Categories */}
                     <div className="flex flex-wrap gap-1 mt-2">
                       {artist.categories.slice(0, 2).map((c) => (
-                        <Badge key={c} variant="secondary" className={`text-[10px] ${categories.includes(c) ? "bg-indigo-100 text-indigo-700" : ""}`}>{c}</Badge>
+                        <Badge key={c} variant="secondary" className={`text-[10px] ${categories.includes(c) ? "bg-navy-100 text-navy-700" : ""}`}>{c}</Badge>
                       ))}
                       {artist.categories.length > 2 && (
                         <Badge variant="outline" className="text-[10px]">+{artist.categories.length - 2}</Badge>
@@ -564,7 +565,7 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                     {/* Price */}
                     <div className="mt-3 flex items-center justify-between">
                       <div className={`flex items-center gap-0.5 font-bold text-base ${
-                        overBudget ? "text-red-600" : withinBudget ? "text-emerald-700" : "text-indigo-700"
+                        overBudget ? "text-red-600" : withinBudget ? "text-emerald-700" : "text-navy-700"
                       }`}>
                         <IndianRupee className="w-4 h-4" />
                         {formatCurrency(artist.base_price).replace("₹", "")}
@@ -594,10 +595,11 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                       </Button>
                       <Button
                         size="sm"
+                        variant={isShortlisted ? "ghost" : "secondary"}
                         className={`flex-1 text-xs ${
                           isShortlisted
-                            ? "bg-indigo-100 text-indigo-700 hover:bg-red-50 hover:text-red-600 border border-indigo-200"
-                            : "bg-indigo-600 hover:bg-indigo-700 text-white"
+                            ? "bg-navy-100 text-navy-700 border border-navy-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200"
+                            : ""
                         }`}
                         onClick={() => toggleShortlist(artist.id)}
                       >
@@ -656,7 +658,7 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                     <Button
                       size="sm"
                       variant={isShortlisted ? "outline" : "default"}
-                      className={isShortlisted ? "border-indigo-300 text-indigo-700" : ""}
+                      className={isShortlisted ? "border-navy-300 text-navy-700" : ""}
                       onClick={() => toggleShortlist(a.id)}
                     >
                       {isShortlisted
@@ -711,7 +713,7 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                       <img src={a.user.avatar_url} alt={a.user?.name} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
-                        <div className="w-24 h-24 rounded-full gold-gradient flex items-center justify-center text-navy-900 font-bold text-3xl">
+                        <div className="w-24 h-24 rounded-full gold-gradient flex items-center justify-center text-white font-bold text-3xl">
                           {getInitials(a.user?.name ?? "A")}
                         </div>
                       </div>
@@ -743,7 +745,7 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                         </div>
                       </div>
                       <div className="text-right flex-shrink-0">
-                        <p className={`font-display font-bold text-xl ${withinBudget === true ? "text-emerald-700" : withinBudget === false ? "text-red-600" : "text-indigo-700"}`}>
+                        <p className={`font-display font-bold text-xl ${withinBudget === true ? "text-emerald-700" : withinBudget === false ? "text-red-600" : "text-navy-700"}`}>
                           {formatCurrency(a.base_price)}
                         </p>
                         <p className="text-[10px] text-muted-foreground">base price</p>
@@ -766,7 +768,7 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                       )}
                       {a.user?.email && (
                         <a href={`mailto:${a.user.email}`} className="flex items-center gap-2 px-3 py-2 rounded-xl border hover:bg-accent transition-colors text-sm">
-                          <Mail className="w-4 h-4 text-indigo-500" />{a.user.email}
+                          <Mail className="w-4 h-4 text-navy-500" />{a.user.email}
                         </a>
                       )}
                     </div>
@@ -776,7 +778,7 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Specialities</p>
                       <div className="flex flex-wrap gap-2">
                         {a.categories.map((c) => (
-                          <span key={c} className="px-3 py-1.5 rounded-full bg-indigo-50 border border-indigo-100 text-xs font-medium text-indigo-700">
+                          <span key={c} className="px-3 py-1.5 rounded-full bg-navy-50 border border-navy-100 text-xs font-medium text-navy-700">
                             {c}
                           </span>
                         ))}
@@ -882,7 +884,8 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                     Close
                   </Button>
                   <Button
-                    className={`flex-1 ${isShortlisted ? "bg-red-50 text-red-600 border border-red-200 hover:bg-red-100" : "bg-indigo-600 hover:bg-indigo-700 text-white"}`}
+                    variant={isShortlisted ? "ghost" : "secondary"}
+                    className={`flex-1 ${isShortlisted ? "bg-red-50 text-red-600 border border-red-200 hover:bg-red-100" : ""}`}
                     onClick={() => { toggleShortlist(a.id); if (!isShortlisted) setProfileArtist(null); }}
                   >
                     {isShortlisted

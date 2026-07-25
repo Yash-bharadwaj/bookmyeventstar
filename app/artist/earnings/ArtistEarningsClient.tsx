@@ -16,6 +16,7 @@ import { IndianRupee, TrendingUp, Calendar, CheckCircle2 } from "lucide-react";
 import { formatCurrency, formatDate, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { format, subMonths } from "date-fns";
 import { Payment } from "@/types";
+import { CHART_GOLD } from "@/lib/chart-colors";
 
 interface Props {
   payments: Payment[];
@@ -53,9 +54,9 @@ export function ArtistEarningsClient({ payments, bookings }: Props) {
     <div className="p-4 md:p-6 space-y-6 max-w-4xl mx-auto">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Total Earned" value={formatCurrency(totalEarned)} icon={IndianRupee} color="gold" index={0} />
-        <StatCard title="Pending Settlement" value={formatCurrency(pendingAmount)} icon={TrendingUp} color="blue" index={1} />
+        <StatCard title="Pending Settlement" value={formatCurrency(pendingAmount)} icon={TrendingUp} color="navy" index={1} />
         <StatCard title="Events Completed" value={completedCount} icon={CheckCircle2} color="green" index={2} />
-        <StatCard title="Avg per Event" value={completedCount ? formatCurrency(totalEarned / completedCount) : "₹0"} icon={Calendar} color="purple" index={3} />
+        <StatCard title="Avg per Event" value={completedCount ? formatCurrency(totalEarned / completedCount) : "₹0"} icon={Calendar} color="gold" index={3} />
       </div>
 
       <Card>
@@ -67,7 +68,7 @@ export function ArtistEarningsClient({ payments, bookings }: Props) {
               <XAxis dataKey="month" tick={{ fontSize: 12 }} />
               <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
               <Tooltip formatter={(v) => [formatCurrency(Number(v)), "Earnings"]} />
-              <Bar dataKey="amount" fill="#f59e0b" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="amount" fill={CHART_GOLD} radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </CardContent>

@@ -1,68 +1,120 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/firebase/server";
+import { serialize } from "@/lib/firebase/firestore-utils";
+import { adminDb } from "@/lib/firebase/admin";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { CoordinatorProposalsClient } from "./CoordinatorProposalsClient";
 
+function toIso(v: any) {
+  return v && typeof v.toDate === "function" ? v.toDate().toISOString() : v;
+}
+
 export default async function CoordinatorProposalsPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-  const { data: profile } = await supabase.from("users").select("*").eq("id", user.id).single();
-  if (!profile || profile.role !== "coordinator") redirect("/login");
+  const user = await getCurrentUser();
+  if (!user || user.role !== "coordinator") redirect("/login");
 
-  const [{ data: rawProposals }, { data: rawEnquiries }, { data: rawArtists }, { data: cities }] = await Promise.all([
-    supabase
-      .from("proposals")
-      .select("*, enquiry:enquiries(event_type, event_date, city, other_requirements, client:users!enquiries_client_id_fkey(name))")
-      .eq("coordinator_id", user.id)
-      .order("created_at", { ascending: false }),
-
-    supabase
-      .from("enquiries")
-      .select("id, event_type, event_date, city, budget_min, budget_max, client:users!enquiries_client_id_fkey(name)")
-      .eq("coordinator_id", user.id)
-      .in("status", ["assigned", "requirement_gathering", "shortlisting"])
-      .order("event_date"),
-
-    supabase
-      .from("artist_profiles")
-      .select("id, categories, cities, base_price, rating, total_bookings, user:users!artist_profiles_user_id_fkey(name, phone)")
-      .eq("is_verified", true)
-      .eq("is_listed", true)
-      .eq("is_profile_complete", true)
-      .order("rating", { ascending: false }),
-
-    supabase
-      .from("settings")
-      .select("value")
-      .eq("key", "cities")
-      .single(),
+  const [proposalsSnap, enquiriesSnap, artistsSnap, citiesSettingSnap] = await Promise.all([
+    adminDb.collection("proposals").where("coordinator_id", "==", user.id).orderBy("created_at", "desc").get(),
+    adminDb.collection("enquiries").where("coordinator_id", "==", user.id).get(),
+    adminDb
+      .collection("artistProfiles")
+      .where("is_verified", "==", true)
+      .where("is_listed", "==", true)
+      .where("is_profile_complete", "==", true)
+      .orderBy("rating", "desc")
+      .get(),
+    adminDb.collection("settings").doc("cities").get(),
   ]);
 
-  const proposals = (rawProposals ?? []).map((p: any) => ({
-    ...p,
-    enquiry: Array.isArray(p.enquiry) ? p.enquiry[0] ?? null : p.enquiry,
+  const proposalsRaw = proposalsSnap.docs.map((d) => {
+    const p = d.data();
+    return { id: d.id, ...p, created_at: toIso(p.created_at), updated_at: toIso(p.updated_at) };
+  });
+
+  const enquiryIdsForProposals = Array.from(new Set(proposalsRaw.map((p: any) => p.enquiry_id).filter(Boolean))) as string[];
+  const enquiryDocsForProposals = await Promise.all(
+    enquiryIdsForProposals.map((id: string) => adminDb.collection("enquiries").doc(id).get())
+  );
+  const enquiriesByIdForProposals = Object.fromEntries(
+    enquiryDocsForProposals.filter((d) => d.exists).map((d) => [d.id, d.data()])
+  );
+
+  const proposalClientIds = Array.from(
+    new Set(Object.values(enquiriesByIdForProposals).map((e: any) => e.client_id).filter(Boolean))
+  ) as string[];
+  const proposalClientDocs = await Promise.all(
+    proposalClientIds.map((id: string) => adminDb.collection("users").doc(id).get())
+  );
+  const proposalClientsById = Object.fromEntries(
+    proposalClientDocs.filter((d) => d.exists).map((d) => [d.id, d.data()])
+  );
+
+  const proposals = proposalsRaw.map((p: any) => {
+    const enq: any = p.enquiry_id ? enquiriesByIdForProposals[p.enquiry_id] : null;
+    const client: any = enq?.client_id ? proposalClientsById[enq.client_id] : null;
+    return {
+      ...p,
+      enquiry: enq
+        ? {
+            event_type: enq.event_type,
+            event_date: enq.event_date,
+            city: enq.city,
+            other_requirements: enq.other_requirements,
+            client: client ? { name: client.name } : null,
+          }
+        : null,
+    };
+  });
+
+  const enquiriesRaw = enquiriesSnap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .filter((e: any) => ["assigned", "requirement_gathering", "shortlisting"].includes(e.status))
+    .sort((a: any, b: any) => (a.event_date > b.event_date ? 1 : -1));
+
+  const enquiryClientIds = Array.from(new Set(enquiriesRaw.map((e: any) => e.client_id).filter(Boolean))) as string[];
+  const enquiryClientDocs = await Promise.all(
+    enquiryClientIds.map((id: string) => adminDb.collection("users").doc(id).get())
+  );
+  const enquiryClientsById = Object.fromEntries(
+    enquiryClientDocs.filter((d) => d.exists).map((d) => [d.id, d.data()])
+  );
+
+  const enquiries = enquiriesRaw.map((e: any) => ({
+    id: e.id,
+    event_type: e.event_type,
+    event_date: e.event_date,
+    city: e.city,
+    budget_min: e.budget_min,
+    budget_max: e.budget_max,
+    client: e.client_id && enquiryClientsById[e.client_id] ? { name: (enquiryClientsById[e.client_id] as any).name } : null,
   }));
 
-  const enquiries = (rawEnquiries ?? []).map((e: any) => ({
-    ...e,
-    client: Array.isArray(e.client) ? e.client[0] ?? null : e.client,
-  }));
+  const artistsRaw = artistsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const artistUserDocs = await Promise.all(artistsRaw.map((a: any) => adminDb.collection("users").doc(a.id).get()));
+  const artistUsersById = Object.fromEntries(artistUserDocs.filter((d) => d.exists).map((d) => [d.id, d.data()]));
 
-  const artists = (rawArtists ?? []).map((a: any) => ({
-    ...a,
-    user: Array.isArray(a.user) ? a.user[0] ?? null : a.user,
-  }));
+  const artists = artistsRaw.map((a: any) => {
+    const artistUser: any = artistUsersById[a.id];
+    return {
+      id: a.id,
+      categories: a.categories ?? [],
+      cities: a.cities ?? [],
+      base_price: a.base_price,
+      rating: a.rating,
+      total_bookings: a.total_bookings,
+      user: artistUser ? { name: artistUser.name, phone: artistUser.phone } : null,
+    };
+  });
 
-  const cityList: string[] = cities?.value ?? [];
+  const cityList: string[] = citiesSettingSnap.exists ? citiesSettingSnap.data()?.value ?? [] : [];
 
   return (
-    <DashboardLayout user={profile} title="My Proposals">
+    <DashboardLayout user={serialize(user)} title="My Proposals">
       <CoordinatorProposalsClient
-        proposals={proposals}
+        proposals={proposals as any}
         coordinatorId={user.id}
-        enquiries={enquiries}
-        artists={artists}
+        enquiries={enquiries as any}
+        artists={artists as any}
         cityList={cityList}
       />
     </DashboardLayout>

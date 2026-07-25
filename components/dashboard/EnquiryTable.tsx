@@ -68,12 +68,12 @@ export function EnquiryTable({ enquiries, baseHref, showCoordinator = false, onA
   });
 
   const sourceIcons: Record<string, { icon: React.ElementType; color: string; label: string }> = {
-    website:   { icon: Globe,          color: "text-blue-500",   label: "Website" },
+    website:   { icon: Globe,          color: "text-navy-600",   label: "Website" },
     whatsapp:  { icon: MessageCircle,  color: "text-green-500",  label: "WhatsApp" },
-    email:     { icon: Mail,           color: "text-violet-500", label: "Email" },
-    instagram: { icon: Camera,         color: "text-pink-500",   label: "Instagram" },
+    email:     { icon: Mail,           color: "text-gold-600",   label: "Email" },
+    instagram: { icon: Camera,         color: "text-navy-600",   label: "Instagram" },
     referral:  { icon: Handshake,      color: "text-amber-500",  label: "Referral" },
-    walk_in:   { icon: PersonStanding, color: "text-teal-500",   label: "Walk-in" },
+    walk_in:   { icon: PersonStanding, color: "text-gold-600",   label: "Walk-in" },
   };
 
   return (
@@ -129,8 +129,8 @@ export function EnquiryTable({ enquiries, baseHref, showCoordinator = false, onA
                       onClick={() => toggleStatus(s)}
                       className={`px-3 py-1 rounded-full text-xs font-medium transition-all border ${
                         statusFilter.includes(s)
-                          ? "bg-indigo-600 text-white border-indigo-600"
-                          : "bg-background border-border text-muted-foreground hover:border-indigo-400"
+                          ? "bg-navy-600 text-white border-navy-600"
+                          : "bg-background border-border text-muted-foreground hover:border-navy-400"
                       }`}
                     >
                       {getStatusLabel(s)}
@@ -150,8 +150,8 @@ export function EnquiryTable({ enquiries, baseHref, showCoordinator = false, onA
                         onClick={() => toggleSource(s)}
                         className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all border ${
                           sourceFilter.includes(s)
-                            ? "bg-indigo-600 text-white border-indigo-600"
-                            : "bg-background border-border text-muted-foreground hover:border-indigo-400"
+                            ? "bg-navy-600 text-white border-navy-600"
+                            : "bg-background border-border text-muted-foreground hover:border-navy-400"
                         }`}
                       >
                         <Icon className="w-3 h-3" />
@@ -173,8 +173,8 @@ export function EnquiryTable({ enquiries, baseHref, showCoordinator = false, onA
                         onClick={() => toggleSubmitter(opt.value)}
                         className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all border ${
                           submitterFilter.includes(opt.value)
-                            ? "bg-indigo-600 text-white border-indigo-600"
-                            : "bg-background border-border text-muted-foreground hover:border-indigo-400"
+                            ? "bg-navy-600 text-white border-navy-600"
+                            : "bg-background border-border text-muted-foreground hover:border-navy-400"
                         }`}
                       >
                         <Icon className="w-3 h-3" />
@@ -269,7 +269,7 @@ export function EnquiryTable({ enquiries, baseHref, showCoordinator = false, onA
                         {enquiry.coordinator?.name ?? (
                           <button
                             onClick={() => onAssign?.(enquiry)}
-                            className="text-xs text-indigo-600 hover:text-indigo-700 font-medium border border-indigo-300 rounded-lg px-2 py-0.5"
+                            className="text-xs text-navy-600 hover:text-navy-700 font-medium border border-navy-300 rounded-lg px-2 py-0.5"
                           >
                             Assign
                           </button>

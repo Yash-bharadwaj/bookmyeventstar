@@ -20,4 +20,6 @@ const nextConfig = {
   // Server Actions work on Vercel and any production domain.
 };
 
-export default withPWAConfig(nextConfig);
+// Skip the PWA wrapper entirely in dev — it attaches a webpack() config
+// function even when disabled, which conflicts with Turbopack (`next dev --turbo`).
+export default process.env.NODE_ENV === "development" ? nextConfig : withPWAConfig(nextConfig);

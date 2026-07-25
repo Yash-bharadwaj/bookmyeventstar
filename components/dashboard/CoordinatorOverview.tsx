@@ -8,6 +8,8 @@ import {
   Calendar,
   AlertTriangle,
   ArrowRight,
+  TrendingUp,
+  Gauge,
   Mic2,
   Plane,
   Wrench,
@@ -30,6 +32,7 @@ interface CoordinatorOverviewProps {
   upcomingBookings: Booking[];
   pendingTasks: (Task & { booking?: { event_date: string; venue: string; city: string } })[];
   followUpEnquiries?: (Enquiry & { follow_up_date: string; follow_up_notes?: string })[];
+  performance?: { conversionPct: number; activeCount: number; workloadMax: number; isOverloaded: boolean };
 }
 
 const taskTypeLabels: Record<string, string> = {
@@ -49,11 +52,11 @@ const taskTypeIcons: Record<string, LucideIcon> = {
 };
 
 const taskTypeColors: Record<string, string> = {
-  artist_confirmation: "bg-rose-100 text-rose-600",
-  travel_stay:        "bg-blue-100 text-blue-600",
+  artist_confirmation: "bg-gold-100 text-gold-700",
+  travel_stay:        "bg-navy-100 text-navy-700",
   technical:          "bg-amber-100 text-amber-600",
   payment_docs:       "bg-emerald-100 text-emerald-600",
-  hospitality:        "bg-orange-100 text-orange-600",
+  hospitality:        "bg-gold-100 text-gold-700",
 };
 
 export function CoordinatorOverview({
@@ -61,6 +64,7 @@ export function CoordinatorOverview({
   upcomingBookings,
   pendingTasks,
   followUpEnquiries = [],
+  performance,
 }: CoordinatorOverviewProps) {
   const router = useRouter();
 
@@ -72,9 +76,42 @@ export function CoordinatorOverview({
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="My Enquiries" value={enquiries.length} icon={FileText} color="gold" index={0} />
         <StatCard title="New / Assigned" value={newEnquiries.length} icon={AlertTriangle} color="red" index={1} />
-        <StatCard title="Pending Tasks" value={pendingTasks.length} icon={Clock} color="blue" index={2} />
+        <StatCard title="Pending Tasks" value={pendingTasks.length} icon={Clock} color="navy" index={2} />
         <StatCard title="Upcoming Events" value={upcomingBookings.length} icon={Calendar} color="green" index={3} />
       </div>
+
+      {/* My performance — conversion rate + workload, computed for this coordinator only */}
+      {performance && (
+        <Card className={performance.isOverloaded ? "border-red-300 bg-red-50/30" : undefined}>
+          <CardContent className="pt-5">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gold-100 text-gold-700 flex items-center justify-center flex-shrink-0">
+                  <TrendingUp className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Your conversion rate</p>
+                  <p className="text-lg font-bold">{performance.conversionPct}% <span className="text-xs font-normal text-muted-foreground">enquiries → completed events</span></p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${performance.isOverloaded ? "bg-red-100 text-red-600" : "bg-navy-100 text-navy-700"}`}>
+                  <Gauge className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Active workload</p>
+                  <p className="text-lg font-bold">
+                    {performance.activeCount} / {performance.workloadMax}
+                    {performance.isOverloaded && (
+                      <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-700 align-middle">OVERLOADED</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Alerts — follow-up needed */}
       {newEnquiries.length > 0 && (
@@ -102,10 +139,10 @@ export function CoordinatorOverview({
         const today = new Date().toISOString().split("T")[0];
         const overdue = followUpEnquiries.filter((e) => e.follow_up_date < today);
         return (
-          <Card className={overdue.length > 0 ? "border-red-300 bg-red-50/30" : "border-violet-200 bg-violet-50/30"}>
+          <Card className={overdue.length > 0 ? "border-red-300 bg-red-50/30" : "border-gold-200 bg-gold-50/30"}>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <Bell className={`w-4 h-4 ${overdue.length > 0 ? "text-red-500" : "text-violet-500"}`} />
+                <Bell className={`w-4 h-4 ${overdue.length > 0 ? "text-red-500" : "text-gold-600"}`} />
                 {overdue.length > 0
                   ? `⚠️ ${overdue.length} Overdue Follow-up${overdue.length > 1 ? "s" : ""} + ${followUpEnquiries.length - overdue.length} due today`
                   : `Today's Follow-ups (${followUpEnquiries.length})`}
@@ -123,7 +160,7 @@ export function CoordinatorOverview({
                   >
                     <Link href={`/coordinator/enquiries/${e.id}`}>
                       <div className={`flex items-center justify-between p-3 rounded-xl border bg-white transition-all hover:shadow-sm ${
-                        isOverdue ? "border-red-200 hover:border-red-400" : "hover:border-violet-300"
+                        isOverdue ? "border-red-200 hover:border-red-400" : "hover:border-gold-300"
                       }`}>
                         <div>
                           <div className="flex items-center gap-2">
@@ -134,7 +171,7 @@ export function CoordinatorOverview({
                           </div>
                           <p className="text-xs text-muted-foreground mt-0.5">{e.client?.name} · {e.city}</p>
                           {e.follow_up_notes && (
-                            <p className="text-xs text-violet-600 mt-0.5 truncate max-w-xs">{e.follow_up_notes}</p>
+                            <p className="text-xs text-gold-700 mt-0.5 truncate max-w-xs">{e.follow_up_notes}</p>
                           )}
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">

@@ -1,50 +1,66 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/firebase/server";
+import { serialize } from "@/lib/firebase/firestore-utils";
+import { adminDb } from "@/lib/firebase/admin";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ArtistSearchClient } from "./ArtistSearchClient";
 
 export default async function CoordinatorArtistsPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-  const { data: profile } = await supabase.from("users").select("*").eq("id", user.id).single();
-  if (!profile || profile.role !== "coordinator") redirect("/login");
+  const user = await getCurrentUser();
+  if (!user || user.role !== "coordinator") redirect("/login");
 
-  const [{ data: artists }, { data: enquiries }, { data: categoriesData }] = await Promise.all([
-    supabase
-      .from("artist_profiles")
-      .select("*, user:users(name,email,phone,avatar_url), media:artist_media(url,is_primary,type)")
-      .eq("is_verified", true)
-      .eq("is_listed", true)
-      .eq("is_profile_complete", true)
-      .order("rating", { ascending: false }),
-
-    supabase
-      .from("enquiries")
-      .select("id, event_type, event_date, city, budget_min, budget_max, client:users!enquiries_client_id_fkey(name)")
-      .eq("coordinator_id", user.id)
-      .in("status", ["assigned", "requirement_gathering", "shortlisting"])
-      .order("event_date"),
-
-    supabase.from("categories").select("name").order("name"),
+  const [artistsSnap, enquiriesSnap, categoriesSnap] = await Promise.all([
+    adminDb
+      .collection("artistProfiles")
+      .where("is_verified", "==", true)
+      .where("is_listed", "==", true)
+      .where("is_profile_complete", "==", true)
+      .orderBy("rating", "desc")
+      .get(),
+    adminDb.collection("enquiries").where("coordinator_id", "==", user.id).get(),
+    adminDb.collection("categories").get(),
   ]);
 
-  const mappedEnquiries = (enquiries ?? []).map((e: any) => ({
-    ...e,
-    client: Array.isArray(e.client) ? e.client[0] ?? null : e.client,
-  }));
+  const artistsRaw = artistsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const artistIds = artistsRaw.map((a: any) => a.id);
 
-  const mappedArtists = (artists ?? []).map((a: any) => ({
+  const [userDocs, mediaSnaps] = await Promise.all([
+    Promise.all(artistIds.map((id: string) => adminDb.collection("users").doc(id).get())),
+    Promise.all(artistIds.map((id: string) => adminDb.collection("artistProfiles").doc(id).collection("media").get())),
+  ]);
+
+  const usersById = Object.fromEntries(userDocs.filter((d) => d.exists).map((d) => [d.id, d.data()]));
+
+  const mappedArtists = artistsRaw.map((a: any, i: number) => ({
     ...a,
-    user: Array.isArray(a.user) ? a.user[0] ?? null : a.user,
-    media: Array.isArray(a.media) ? a.media : [],
+    user: usersById[a.id] ?? null,
+    media: mediaSnaps[i].docs.map((m) => ({ id: m.id, ...m.data() })),
   }));
 
-  const categoryNames = (categoriesData ?? []).map((c) => c.name);
+  const enquiriesRaw = enquiriesSnap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .filter((e: any) => ["assigned", "requirement_gathering", "shortlisting"].includes(e.status))
+    .sort((a: any, b: any) => (a.event_date > b.event_date ? 1 : -1));
+
+  const clientIds = Array.from(new Set(enquiriesRaw.map((e: any) => e.client_id).filter(Boolean))) as string[];
+  const clientDocs = await Promise.all(clientIds.map((id: string) => adminDb.collection("users").doc(id).get()));
+  const clientsById = Object.fromEntries(clientDocs.filter((d) => d.exists).map((d) => [d.id, d.data()]));
+
+  const mappedEnquiries = enquiriesRaw.map((e: any) => ({
+    id: e.id,
+    event_type: e.event_type,
+    event_date: e.event_date,
+    city: e.city,
+    budget_min: e.budget_min,
+    budget_max: e.budget_max,
+    client: e.client_id && clientsById[e.client_id] ? { name: (clientsById[e.client_id] as any).name } : null,
+  }));
+
+  const categoryNames = categoriesSnap.docs.map((d) => d.data().name as string).sort();
 
   return (
-    <DashboardLayout user={profile} title="Artist Search">
-      <ArtistSearchClient artists={mappedArtists} enquiries={mappedEnquiries} allCategories={categoryNames} />
+    <DashboardLayout user={serialize(user)} title="Artist Search">
+      <ArtistSearchClient artists={serialize(mappedArtists) as any} enquiries={serialize(mappedEnquiries) as any} allCategories={categoryNames} />
     </DashboardLayout>
   );
 }

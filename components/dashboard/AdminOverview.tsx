@@ -14,7 +14,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Enquiry } from "@/types";
 import { formatDate, formatCurrency, getStatusColor, getStatusLabel } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
+import { db } from "@/lib/firebase/client";
+import { doc, updateDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -40,18 +41,19 @@ interface AdminOverviewProps {
   coordinators: CoordinatorOption[];
 }
 
+// Confirmed keeps green (semantic success); the other stages rotate through the brand's gold/navy accents.
 const PIPELINE_STAGES = [
-  { key: "new",           label: "New",           icon: AlertCircle, color: "text-blue-600",   bg: "bg-blue-50",   border: "border-blue-200",  dot: "bg-blue-500" },
-  { key: "assigned",      label: "Assigned",      icon: UserCog,     color: "text-purple-600", bg: "bg-purple-50", border: "border-purple-200", dot: "bg-purple-500" },
-  { key: "proposal_sent", label: "Proposal Sent", icon: FileText,    color: "text-cyan-600",   bg: "bg-cyan-50",   border: "border-cyan-200",   dot: "bg-cyan-500" },
-  { key: "confirmed",     label: "Confirmed",     icon: CheckCircle, color: "text-green-600",  bg: "bg-green-50",  border: "border-green-200",  dot: "bg-green-500" },
+  { key: "new",           label: "New",           icon: AlertCircle, color: "text-gold-700",  bg: "bg-gold-50",  border: "border-gold-200",  dot: "bg-gold-500" },
+  { key: "assigned",      label: "Assigned",      icon: UserCog,     color: "text-navy-700",  bg: "bg-navy-50",  border: "border-navy-200",  dot: "bg-navy-600" },
+  { key: "proposal_sent", label: "Proposal Sent", icon: FileText,    color: "text-navy-700",  bg: "bg-navy-50",  border: "border-navy-200",  dot: "bg-navy-600" },
+  { key: "confirmed",     label: "Confirmed",     icon: CheckCircle, color: "text-green-600", bg: "bg-green-50", border: "border-green-200", dot: "bg-green-500" },
 ];
 
 const QUICK_ACTIONS = [
-  { label: "Add Coordinator", desc: "Invite a new coordinator", href: "/admin/coordinators", icon: UserPlus,  color: "text-violet-600", bg: "bg-violet-50" },
-  { label: "View Reports",    desc: "Analytics & revenue",      href: "/admin/reports",      icon: BarChart3,  color: "text-amber-600",  bg: "bg-amber-50" },
-  { label: "Manage Artists",  desc: "Verify & review artists",  href: "/admin/artists",      icon: Mic2Icon,   color: "text-rose-600",   bg: "bg-rose-50" },
-  { label: "Settings",        desc: "Categories & cities",      href: "/admin/settings",     icon: Settings2,  color: "text-teal-600",   bg: "bg-teal-50" },
+  { label: "Add Coordinator", desc: "Invite a new coordinator", href: "/admin/coordinators", icon: UserPlus,  color: "text-gold-600", bg: "bg-gold-50" },
+  { label: "View Reports",    desc: "Analytics & revenue",      href: "/admin/reports",      icon: BarChart3,  color: "text-navy-700", bg: "bg-navy-50" },
+  { label: "Manage Artists",  desc: "Verify & review artists",  href: "/admin/artists",      icon: Mic2Icon,   color: "text-navy-700", bg: "bg-navy-50" },
+  { label: "Settings",        desc: "Categories & cities",      href: "/admin/settings",     icon: Settings2,  color: "text-gold-600", bg: "bg-gold-50" },
 ];
 
 function timeAgo(date: string) {
@@ -88,16 +90,18 @@ export function AdminOverview({ stats, pipelineCounts: globalCounts, recentEnqui
     if (!selectedEnquiry || !selectedCoordinator) return;
     setAssigning(true);
     try {
-      const supabase = createClient();
-      await supabase.from("enquiries")
-        .update({ coordinator_id: selectedCoordinator, status: "assigned" })
-        .eq("id", selectedEnquiry.id);
-      await supabase.from("notifications").insert({
-        user_id: selectedCoordinator,
+      await updateDoc(doc(db, "enquiries", selectedEnquiry.id), {
+        coordinator_id: selectedCoordinator,
+        status: "assigned",
+        updated_at: serverTimestamp(),
+      });
+      await addDoc(collection(db, "users", selectedCoordinator, "notifications"), {
         title: "New Enquiry Assigned",
         message: `You have been assigned an enquiry for ${selectedEnquiry.event_type} in ${selectedEnquiry.city}.`,
         type: "info",
+        is_read: false,
         link: `/coordinator/enquiries/${selectedEnquiry.id}`,
+        created_at: serverTimestamp(),
       });
       toast.success("Coordinator assigned successfully!");
       setAssignDialogOpen(false);
@@ -117,7 +121,7 @@ export function AdminOverview({ stats, pipelineCounts: globalCounts, recentEnqui
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex items-center gap-4 p-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-200"
+          className="flex items-center gap-4 p-4 rounded-2xl navy-gradient text-white shadow-lg shadow-navy-900/20"
         >
           <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
             <Bell className="w-5 h-5" />
@@ -126,10 +130,10 @@ export function AdminOverview({ stats, pipelineCounts: globalCounts, recentEnqui
             <p className="font-semibold text-sm">
               {totalNew} new {totalNew === 1 ? "enquiry needs" : "enquiries need"} a coordinator assigned
             </p>
-            <p className="text-indigo-200 text-xs mt-0.5">Assign now to keep clients happy</p>
+            <p className="text-white/60 text-xs mt-0.5">Assign now to keep clients happy</p>
           </div>
           <Link href="/admin/enquiries">
-            <Button size="sm" className="bg-white text-indigo-700 hover:bg-indigo-50 flex-shrink-0">
+            <Button size="sm" variant="white" className="flex-shrink-0">
               Assign Now <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
             </Button>
           </Link>
@@ -138,10 +142,10 @@ export function AdminOverview({ stats, pipelineCounts: globalCounts, recentEnqui
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total Enquiries" value={stats.total_enquiries} icon={FileText}  color="indigo"  trend={stats.enq_trend != null ? { value: stats.enq_trend, label: "vs last month" } : undefined} index={0} />
+        <StatCard title="Total Enquiries" value={stats.total_enquiries} icon={FileText}  color="gold"  trend={stats.enq_trend != null ? { value: stats.enq_trend, label: "vs last month" } : undefined} index={0} />
         <StatCard title="Active Bookings" value={stats.active_bookings} icon={CheckCircle} color="green"  trend={stats.bk_trend != null ? { value: stats.bk_trend, label: "vs last month" } : undefined} index={1} />
-        <StatCard title="Artists Listed"  value={stats.artists_count}   icon={Music}      color="purple" index={2} />
-        <StatCard title="Coordinators"    value={stats.coordinators_count} icon={Users}   color="blue"   index={3} />
+        <StatCard title="Artists Listed"  value={stats.artists_count}   icon={Music}      color="gold" index={2} />
+        <StatCard title="Coordinators"    value={stats.coordinators_count} icon={Users}   color="navy"   index={3} />
       </div>
 
       {/* Pipeline - clickable */}
@@ -150,7 +154,7 @@ export function AdminOverview({ stats, pipelineCounts: globalCounts, recentEnqui
           <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-2">
             <TrendingUp className="w-4 h-4" />Enquiry Pipeline
           </h2>
-          <Link href="/admin/enquiries" className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
+          <Link href="/admin/enquiries" className="text-xs text-gold-600 hover:text-gold-700 flex items-center gap-1">
             View all <ChevronRight className="w-3 h-3" />
           </Link>
         </div>
@@ -196,7 +200,7 @@ export function AdminOverview({ stats, pipelineCounts: globalCounts, recentEnqui
               <Link key={action.label} href={action.href}>
                 <motion.div
                   whileHover={{ y: -2 }}
-                  className="p-4 rounded-2xl border hover:border-indigo-200 hover:bg-indigo-50/20 bg-card transition-all cursor-pointer group"
+                  className="p-4 rounded-2xl border hover:border-navy-200 hover:bg-navy-50/20 bg-card transition-all cursor-pointer group"
                 >
                   <div className={`w-10 h-10 rounded-xl ${action.bg} flex items-center justify-center mb-3`}>
                     <Icon className={`w-5 h-5 ${action.color}`} />
@@ -218,7 +222,7 @@ export function AdminOverview({ stats, pipelineCounts: globalCounts, recentEnqui
               <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
               Needs Assignment ({newEnquiries.length} shown)
             </h2>
-            <Link href="/admin/enquiries" className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
+            <Link href="/admin/enquiries" className="text-xs text-gold-600 hover:text-gold-700 flex items-center gap-1">
               View all <ChevronRight className="w-3 h-3" />
             </Link>
           </div>
@@ -256,7 +260,7 @@ export function AdminOverview({ stats, pipelineCounts: globalCounts, recentEnqui
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Recent Enquiries</h2>
-          <Link href="/admin/enquiries" className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
+          <Link href="/admin/enquiries" className="text-xs text-gold-600 hover:text-gold-700 flex items-center gap-1">
             View all <ChevronRight className="w-3 h-3" />
           </Link>
         </div>
@@ -272,8 +276,8 @@ export function AdminOverview({ stats, pipelineCounts: globalCounts, recentEnqui
               <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
                 e.status === "new" ? "bg-red-500 animate-pulse" :
                 e.status === "confirmed" ? "bg-green-500" :
-                e.status === "proposal_sent" ? "bg-cyan-500" :
-                "bg-purple-500"
+                e.status === "proposal_sent" ? "bg-navy-500" :
+                "bg-gold-500"
               }`} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
@@ -288,7 +292,7 @@ export function AdminOverview({ stats, pipelineCounts: globalCounts, recentEnqui
                   {getStatusLabel(e.status)}
                 </span>
                 {!e.coordinator_id ? (
-                  <Button size="sm" variant="outline" className="h-6 text-xs px-2 border-indigo-300 text-indigo-600" onClick={() => handleAssign(e)}>
+                  <Button size="sm" variant="outline" className="h-6 text-xs px-2 border-gold-300 text-gold-700" onClick={() => handleAssign(e)}>
                     Assign
                   </Button>
                 ) : (
@@ -313,16 +317,16 @@ export function AdminOverview({ stats, pipelineCounts: globalCounts, recentEnqui
           </DialogHeader>
           {selectedEnquiry && (
             <div className="space-y-4">
-              <div className="p-4 rounded-xl bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-100 text-sm space-y-1.5">
+              <div className="p-4 rounded-xl bg-gradient-to-r from-navy-50 to-gold-50 border border-navy-100 text-sm space-y-1.5">
                 <div className="flex items-center gap-2">
-                  <span className="font-semibold text-indigo-700">{selectedEnquiry.event_type}</span>
+                  <span className="font-semibold text-navy-700">{selectedEnquiry.event_type}</span>
                   <span className="text-xs text-muted-foreground">—</span>
                   <span className="text-xs text-muted-foreground">{selectedEnquiry.city}</span>
                 </div>
                 <p className="text-muted-foreground text-xs">
                   Client: {selectedEnquiry.client?.name} · Date: {formatDate(selectedEnquiry.event_date)}
                 </p>
-                <p className="text-xs font-medium text-indigo-600">
+                <p className="text-xs font-medium text-gold-700">
                   Budget: {formatCurrency(selectedEnquiry.budget_min)} – {formatCurrency(selectedEnquiry.budget_max)}
                 </p>
               </div>
@@ -336,7 +340,7 @@ export function AdminOverview({ stats, pipelineCounts: globalCounts, recentEnqui
                     {coordinators.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
                         <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 text-xs font-bold">
+                          <div className="w-6 h-6 rounded-full bg-navy-100 flex items-center justify-center text-navy-700 text-xs font-bold">
                             {c.name[0]}
                           </div>
                           <span>{c.name}</span>

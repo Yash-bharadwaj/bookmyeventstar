@@ -1,46 +1,34 @@
 "use client";
 
 import { useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { onIdTokenChanged } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase/client";
+import { syncSessionCookie, clearSessionCookie } from "@/lib/firebase/auth-client";
 import { useAuthStore } from "@/store/auth";
+import type { User } from "@/types";
 
 export function useUser() {
   const { user, isLoading, setUser, setLoading } = useAuthStore();
 
   useEffect(() => {
-    const supabase = createClient();
-
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        const { data } = await supabase
-          .from("users")
-          .select("*")
-          .eq("id", session.user.id)
-          .single();
-        setUser(data);
+    // Fires on sign-in, sign-out, and Firebase's automatic ~hourly token
+    // refresh — keeps the httpOnly session cookie middleware reads in sync
+    // with the client SDK's own session state.
+    const unsubscribe = onIdTokenChanged(auth, async (fbUser) => {
+      if (fbUser) {
+        const idToken = await fbUser.getIdToken();
+        await syncSessionCookie(idToken);
+        const snap = await getDoc(doc(db, "users", fbUser.uid));
+        setUser(snap.exists() ? ({ id: fbUser.uid, ...snap.data() } as User) : null);
       } else {
+        await clearSessionCookie();
         setUser(null);
       }
       setLoading(false);
     });
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        const { data } = await supabase
-          .from("users")
-          .select("*")
-          .eq("id", session.user.id)
-          .single();
-        setUser(data);
-      } else {
-        setUser(null);
-      }
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    return () => unsubscribe();
   }, [setUser, setLoading]);
 
   return { user, isLoading };

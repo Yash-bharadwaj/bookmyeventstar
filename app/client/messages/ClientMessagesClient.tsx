@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, MessageSquare, ChevronLeft, Headphones } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { createClient } from "@/lib/supabase/client";
+import { db } from "@/lib/firebase/client";
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, Timestamp } from "firebase/firestore";
 import { formatDateTime, getInitials, cn } from "@/lib/utils";
 import {
   requestMessageNotificationPermission,
@@ -38,109 +39,85 @@ export function ClientMessagesClient({ enquiries, currentUserId, currentUserName
   const [selectedEnquiryId, setSelectedEnquiryId] = useState<string | null>(
     enquiries[0]?.id ?? null
   );
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messagesByEnquiry, setMessagesByEnquiry] = useState<Record<string, Message[]>>({});
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
-  const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
   const [unreadIds, setUnreadIds] = useState<Set<string>>(new Set());
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const selectedRef = useRef<string | null>(selectedEnquiryId);
-  const enquiriesRef = useRef(enquiries);
-  const alertedIdsRef = useRef<Set<string>>(new Set());
+  const initializedRef = useRef<Set<string>>(new Set()); // skip the alert on each listener's first (backlog) snapshot
 
   const selectedEnquiry = enquiries.find((e) => e.id === selectedEnquiryId) ?? null;
+  const messages = useMemo(
+    () => messagesByEnquiry[selectedEnquiryId ?? ""] ?? [],
+    [messagesByEnquiry, selectedEnquiryId]
+  );
+  const loadingMsgs = selectedEnquiryId != null && !(selectedEnquiryId in messagesByEnquiry);
 
   selectedRef.current = selectedEnquiryId;
-  enquiriesRef.current = enquiries;
 
-  const fetchMessages = useCallback(async (enquiryId: string) => {
-    setLoadingMsgs(true);
-    const supabase = createClient();
-    const { data } = await supabase
-      .from("messages")
-      .select("*")
-      .eq("enquiry_id", enquiryId)
-      .order("created_at");
-    if (data) setMessages(data);
-    setLoadingMsgs(false);
+  useEffect(() => {
+    requestMessageNotificationPermission();
   }, []);
+
+  // One live listener per conversation — nesting messages under their
+  // enquiry means each listener is naturally scoped by the security rules
+  // (a client only has read access to their own enquiries' messages), so
+  // there's no need for a table-wide subscription filtered client-side.
+  useEffect(() => {
+    const unsubscribes = enquiries.map((e) => {
+      const q = query(collection(db, "enquiries", e.id, "messages"), orderBy("created_at"));
+      return onSnapshot(q, (snap) => {
+        const data: Message[] = snap.docs.map((d) => {
+          const raw = d.data() as any;
+          const createdAt: Timestamp | undefined = raw.created_at;
+          return {
+            id: d.id,
+            enquiry_id: e.id,
+            sender_id: raw.sender_id,
+            sender_name: raw.sender_name,
+            content: raw.content,
+            created_at: createdAt?.toDate ? createdAt.toDate().toISOString() : new Date().toISOString(),
+          };
+        });
+
+        const isFirstLoad = !initializedRef.current.has(e.id);
+        initializedRef.current.add(e.id);
+
+        if (!isFirstLoad) {
+          const previous = messagesByEnquiry[e.id] ?? [];
+          const newOnes = data.slice(previous.length).filter((m) => m.sender_id !== currentUserId);
+          for (const msg of newOnes) {
+            if (selectedRef.current !== e.id) {
+              setUnreadIds((prev) => new Set(prev).add(e.id));
+            }
+            showIncomingMessageAlert({
+              title: msg.sender_name,
+              body: msg.content,
+              notificationTag: `msg-${e.id}`,
+            });
+          }
+        }
+
+        setMessagesByEnquiry((prev) => ({ ...prev, [e.id]: data }));
+      });
+    });
+
+    return () => unsubscribes.forEach((unsub) => unsub());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enquiries.map((e) => e.id).join(","), currentUserId]);
 
   useEffect(() => {
     if (!selectedEnquiryId) return;
-
-    fetchMessages(selectedEnquiryId);
-
     setUnreadIds((prev) => {
+      if (!prev.has(selectedEnquiryId)) return prev;
       const next = new Set(prev);
       next.delete(selectedEnquiryId);
       return next;
     });
-  }, [selectedEnquiryId, fetchMessages]);
-
-  useEffect(() => {
-    requestMessageNotificationPermission();
-
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`client-msg-all:${currentUserId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "messages",
-        },
-        (payload) => {
-          const raw = payload.new as Record<string, unknown>;
-          const msg = {
-            id: String(raw.id ?? ""),
-            enquiry_id: String(raw.enquiry_id ?? ""),
-            sender_id: String(raw.sender_id ?? ""),
-            sender_name: String(raw.sender_name ?? ""),
-            content: String(raw.content ?? ""),
-            created_at: String(raw.created_at ?? ""),
-          };
-
-          const allowedIds = new Set(enquiriesRef.current.map((e) => e.id));
-          if (!msg.enquiry_id || !allowedIds.has(msg.enquiry_id)) return;
-
-          const selected = selectedRef.current;
-
-          setMessages((prev) => {
-            if (msg.enquiry_id !== selected) return prev;
-            if (prev.some((m) => m.id === msg.id)) return prev;
-            return [...prev, msg as Message];
-          });
-
-          if (msg.sender_id === currentUserId) return;
-
-          if (msg.enquiry_id !== selected) {
-            setUnreadIds((prev) => {
-              const next = new Set(prev);
-              next.add(msg.enquiry_id);
-              return next;
-            });
-          }
-
-          if (!msg.id || alertedIdsRef.current.has(msg.id)) return;
-          alertedIdsRef.current.add(msg.id);
-          if (alertedIdsRef.current.size > 300) alertedIdsRef.current.clear();
-
-          const enq = enquiriesRef.current.find((e) => e.id === msg.enquiry_id);
-          showIncomingMessageAlert({
-            title: msg.sender_name || "Coordinator",
-            subtitle: enq?.event_type,
-            body: msg.content,
-            notificationTag: msg.id,
-          });
-        }
-      )
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [currentUserId]);
+  }, [selectedEnquiryId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -148,20 +125,20 @@ export function ClientMessagesClient({ enquiries, currentUserId, currentUserName
 
   const selectConversation = (id: string) => {
     setSelectedEnquiryId(id);
-    setMessages([]);
     if (window.innerWidth < 768) setShowSidebar(false);
   };
 
   const sendMessage = async () => {
     if (!newMessage.trim() || !selectedEnquiryId) return;
     setSending(true);
-    const supabase = createClient();
-    await supabase.from("messages").insert({
-      enquiry_id: selectedEnquiryId,
+    await addDoc(collection(db, "enquiries", selectedEnquiryId, "messages"), {
       sender_id: currentUserId,
       sender_name: currentUserName,
       content: newMessage.trim(),
+      created_at: serverTimestamp(),
     });
+    // The onSnapshot listener above picks this up automatically — no
+    // optimistic append needed.
     setNewMessage("");
     setSending(false);
     inputRef.current?.focus();
@@ -325,7 +302,7 @@ export function ClientMessagesClient({ enquiries, currentUserId, currentUserName
                             <div className={cn(
                               "rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
                               isMe
-                                ? "gold-gradient text-navy-900 rounded-tr-sm"
+                                ? "gold-gradient text-white rounded-tr-sm"
                                 : "bg-muted text-foreground rounded-tl-sm"
                             )}>
                               {msg.content}
@@ -355,7 +332,7 @@ export function ClientMessagesClient({ enquiries, currentUserId, currentUserName
               />
               <Button
                 size="icon"
-                className="rounded-xl gold-gradient text-navy-900 hover:opacity-90 flex-shrink-0"
+                className="rounded-xl gold-gradient text-white hover:opacity-90 flex-shrink-0"
                 onClick={sendMessage}
                 disabled={!newMessage.trim() || sending}
               >

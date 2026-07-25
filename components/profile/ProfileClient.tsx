@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { createClient } from "@/lib/supabase/client";
+import { db } from "@/lib/firebase/client";
+import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { getInitials } from "@/lib/utils";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
@@ -24,11 +25,12 @@ const ROLE_LABELS: Record<string, string> = {
   client: "Client",
 };
 
+// Brand rotation (gold → navy → gold → navy), matching the role theming used in the sidebar/bottom nav.
 const ROLE_COLORS: Record<string, string> = {
-  admin: "bg-indigo-100 text-indigo-700",
-  coordinator: "bg-blue-100 text-blue-700",
-  artist: "bg-amber-100 text-amber-700",
-  client: "bg-emerald-100 text-emerald-700",
+  admin: "bg-gold-100 text-gold-700",
+  coordinator: "bg-navy-100 text-navy-700",
+  artist: "bg-navy-100 text-navy-700",
+  client: "bg-gold-100 text-gold-700",
 };
 
 export function ProfileClient({ user }: Props) {
@@ -40,10 +42,17 @@ export function ProfileClient({ user }: Props) {
   const save = async () => {
     if (!name.trim()) { toast.error("Name is required"); return; }
     setSaving(true);
-    const supabase = createClient();
-    const { error } = await supabase.from("users").update({ name: name.trim(), phone: phone.trim() }).eq("id", user.id);
-    if (error) toast.error("Failed to save profile");
-    else { toast.success("Profile updated!"); router.refresh(); }
+    try {
+      await updateDoc(doc(db, "users", user.id), {
+        name: name.trim(),
+        phone: phone.trim(),
+        updated_at: serverTimestamp(),
+      });
+      toast.success("Profile updated!");
+      router.refresh();
+    } catch {
+      toast.error("Failed to save profile");
+    }
     setSaving(false);
   };
 
@@ -54,7 +63,7 @@ export function ProfileClient({ user }: Props) {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-5">
-              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-2xl font-bold select-none">
+              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-navy-600 to-navy-800 flex items-center justify-center text-white text-2xl font-bold select-none">
                 {getInitials(user.name)}
               </div>
               <div>
@@ -73,7 +82,7 @@ export function ProfileClient({ user }: Props) {
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <User className="w-4 h-4 text-indigo-500" />Personal Information
+              <User className="w-4 h-4 text-navy-600" />Personal Information
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">

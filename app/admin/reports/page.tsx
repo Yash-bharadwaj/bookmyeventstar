@@ -1,29 +1,45 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/firebase/server";
+import { adminDb } from "@/lib/firebase/admin";
+import { serialize } from "@/lib/firebase/firestore-utils";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminReportsClient } from "./AdminReportsClient";
 
 export default async function AdminReportsPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) redirect("/login");
-  const { data: profile } = await supabase.from("users").select("*").eq("id", user.id).single();
-  if (!profile || profile.role !== "admin") redirect("/login");
+  if (user.role !== "admin") redirect("/login");
 
-  const [{ data: enquiries }, { data: bookings }, { data: payments }, { data: coordinatorEnquiries }] = await Promise.all([
-    supabase.from("enquiries").select("status,source,created_at,city"),
-    supabase.from("bookings").select("status,event_date,total_amount,city"),
-    supabase.from("payments").select("type,amount,status,paid_at"),
-    supabase.from("enquiries").select("coordinator_id, status, coordinator:users!enquiries_coordinator_id_fkey(name)"),
+  const [enquiriesSnap, bookingsSnap, paymentsSnap, coordinatorEnquiriesSnap] = await Promise.all([
+    adminDb.collection("enquiries").select("status", "source", "created_at", "city").get(),
+    adminDb.collection("bookings").select("status", "event_date", "total_amount", "city").get(),
+    // payments now live under bookings/{id}/payments — a collection-group
+    // query reaches all of them across every booking in one shot.
+    adminDb.collectionGroup("payments").select("type", "amount", "status", "paid_at").get(),
+    adminDb.collection("enquiries").select("coordinator_id", "status").get(),
   ]);
 
-  // Build per-coordinator performance
+  const enquiries = enquiriesSnap.docs.map((d) => d.data());
+  const bookings = bookingsSnap.docs.map((d) => d.data());
+  const payments = paymentsSnap.docs.map((d) => d.data());
+  const coordinatorEnquiries = coordinatorEnquiriesSnap.docs.map((d) => d.data());
+
+  // Build per-coordinator performance — fetch names for the referenced coordinators.
+  const coordinatorIds = Array.from(
+    new Set(coordinatorEnquiries.map((e) => e.coordinator_id as string | null).filter((v): v is string => !!v))
+  );
+  const coordinatorDocs = coordinatorIds.length
+    ? await adminDb.getAll(...coordinatorIds.map((id) => adminDb.collection("users").doc(id)))
+    : [];
+  const coordinatorNameMap = new Map(
+    coordinatorDocs.map((d, i) => [coordinatorIds[i], d.exists ? (d.data()?.name as string) ?? "Unknown" : "Unknown"])
+  );
+
   const coordMap = new Map<string, { name: string; total: number; completed: number; confirmed: number; conversion: number }>();
-  for (const e of (coordinatorEnquiries ?? [])) {
-    const cid = e.coordinator_id;
+  for (const e of coordinatorEnquiries) {
+    const cid = e.coordinator_id as string | undefined;
     if (!cid) continue;
-    const rawCoord: any = e.coordinator;
-    const cname = Array.isArray(rawCoord) ? rawCoord[0]?.name ?? "Unknown" : rawCoord?.name ?? "Unknown";
+    const cname = coordinatorNameMap.get(cid) ?? "Unknown";
     if (!coordMap.has(cid)) coordMap.set(cid, { name: cname, total: 0, completed: 0, confirmed: 0, conversion: 0 });
     const entry = coordMap.get(cid)!;
     entry.total++;
@@ -36,11 +52,11 @@ export default async function AdminReportsPage() {
   })).sort((a, b) => b.total - a.total);
 
   return (
-    <DashboardLayout user={profile} title="Reports & Analytics">
+    <DashboardLayout user={serialize(user)} title="Reports & Analytics">
       <AdminReportsClient
-        enquiries={enquiries ?? []}
-        bookings={bookings ?? []}
-        payments={payments ?? []}
+        enquiries={serialize(enquiries) as any}
+        bookings={serialize(bookings) as any}
+        payments={serialize(payments) as any}
         coordinatorStats={coordinatorStats}
       />
     </DashboardLayout>

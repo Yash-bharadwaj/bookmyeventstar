@@ -1,60 +1,82 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import {
-  Star, Music, Sparkles, ArrowRight, CheckCircle2,
-  Users, Calendar, Globe, Phone, Mail, Search,
-  Mic2, Award, Heart, Zap, Shield, Clock,
+  Star, Sparkles, ArrowRight, CheckCircle2,
+  Users, Globe, Phone, Mail, Search,
+  Mic2, Award, Zap, Shield, Clock,
   Mic, Headphones, Laugh, Music2, Guitar, Wand2,
-  Megaphone, PersonStanding,
+  Megaphone, PersonStanding, Menu, X,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { createClient } from "@/lib/supabase/client";
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { formatCurrency } from "@/lib/utils";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 
 /* ─── Data ────────────────────────────────────────────────── */
 const stats = [
-  { label: "Events Managed", value: "2,400+", icon: Calendar, color: "from-violet-500 to-purple-600" },
-  { label: "Artists Listed",  value: "850+",  icon: Music,    color: "from-pink-500 to-rose-600" },
-  { label: "Happy Customers", value: "1,200+",icon: Heart,    color: "from-amber-500 to-orange-500" },
-  { label: "Cities Covered",  value: "50+",   icon: Globe,    color: "from-teal-500 to-cyan-600" },
+  { label: "Every Artist", value: "Verified", icon: Shield, color: "from-gold-500 to-gold-700" },
+  { label: "Coordinator Response", value: "2 Hours", icon: Clock, color: "from-navy-600 to-navy-800" },
+  { label: "Coverage", value: "Pan-India", icon: Globe, color: "from-gold-500 to-gold-700" },
+  { label: "Upfront Fee", value: "₹0", icon: CheckCircle2, color: "from-navy-600 to-navy-800" },
 ];
 
-const categories: { name: string; icon: LucideIcon; count: number; color: string; bg: string; iconBg: string }[] = [
-  { name: "Bollywood Singers", icon: Mic2,          count: 120, color: "from-rose-400 to-pink-600",    bg: "bg-rose-50",    iconBg: "bg-rose-100 text-rose-600" },
-  { name: "DJs",               icon: Headphones,    count: 95,  color: "from-violet-400 to-purple-600",bg: "bg-violet-50", iconBg: "bg-violet-100 text-violet-600" },
-  { name: "Comedians",         icon: Laugh,         count: 60,  color: "from-amber-400 to-orange-500", bg: "bg-amber-50",  iconBg: "bg-amber-100 text-amber-600" },
-  { name: "Anchors / Emcees",  icon: Mic,           count: 80,  color: "from-teal-400 to-cyan-600",    bg: "bg-teal-50",   iconBg: "bg-teal-100 text-teal-600" },
-  { name: "Dance Troupes",     icon: PersonStanding,count: 70,  color: "from-fuchsia-400 to-pink-600", bg: "bg-fuchsia-50",iconBg: "bg-fuchsia-100 text-fuchsia-600" },
-  { name: "Bands",             icon: Guitar,        count: 45,  color: "from-blue-400 to-indigo-600",  bg: "bg-blue-50",   iconBg: "bg-blue-100 text-blue-600" },
-  { name: "Classical Singers", icon: Music2,        count: 55,  color: "from-emerald-400 to-green-600",bg: "bg-emerald-50",iconBg: "bg-emerald-100 text-emerald-600" },
-  { name: "Magicians",         icon: Wand2,         count: 30,  color: "from-yellow-400 to-amber-500", bg: "bg-yellow-50", iconBg: "bg-yellow-100 text-yellow-600" },
+const categories: { name: string; icon: LucideIcon; color: string; bg: string; iconBg: string }[] = [
+  { name: "Bollywood Singers", icon: Mic2,          color: "from-gold-400 to-gold-600", bg: "bg-gold-50",  iconBg: "bg-gold-100 text-gold-700" },
+  { name: "DJs",               icon: Headphones,    color: "from-navy-600 to-navy-800", bg: "bg-navy-50",  iconBg: "bg-navy-100 text-navy-700" },
+  { name: "Comedians",         icon: Laugh,         color: "from-gold-400 to-gold-600", bg: "bg-gold-50",  iconBg: "bg-gold-100 text-gold-700" },
+  { name: "Anchors / Emcees",  icon: Mic,           color: "from-navy-600 to-navy-800", bg: "bg-navy-50",  iconBg: "bg-navy-100 text-navy-700" },
+  { name: "Dance Troupes",     icon: PersonStanding,color: "from-gold-400 to-gold-600", bg: "bg-gold-50",  iconBg: "bg-gold-100 text-gold-700" },
+  { name: "Bands",             icon: Guitar,        color: "from-navy-600 to-navy-800", bg: "bg-navy-50",  iconBg: "bg-navy-100 text-navy-700" },
+  { name: "Classical Singers", icon: Music2,        color: "from-gold-400 to-gold-600", bg: "bg-gold-50",  iconBg: "bg-gold-100 text-gold-700" },
+  { name: "Magicians",         icon: Wand2,         color: "from-navy-600 to-navy-800", bg: "bg-navy-50",  iconBg: "bg-navy-100 text-navy-700" },
 ];
 
 const eventTypes = ["Wedding", "Corporate", "Birthday", "Concert", "College Fest", "Private Party"];
 
 const howItWorks = [
-  { step: "01", title: "Browse & Choose", desc: "Explore 850+ verified artists by category, city, and budget. Read reviews and check availability.", icon: Search, color: "from-violet-500 to-purple-600", shadow: "shadow-violet-200" },
-  { step: "02", title: "Raise Enquiry",   desc: "Fill in your event details in 2 minutes. Our coordinator will call you within 2 hours.", icon: Mic2,    color: "from-rose-500 to-pink-600",   shadow: "shadow-rose-200" },
-  { step: "03", title: "Get Proposal",    desc: "Receive a curated proposal with handpicked artists, pricing, and availability.", icon: Sparkles, color: "from-amber-500 to-orange-500", shadow: "shadow-amber-200" },
-  { step: "04", title: "Book & Relax",    desc: "Confirm your booking, pay advance, and we handle everything till showtime.", icon: CheckCircle2, color: "from-emerald-500 to-teal-600", shadow: "shadow-emerald-200" },
+  { step: "01", title: "Browse & Choose", desc: "Explore verified artists by category, city, and budget. Check profiles and availability.", icon: Search, color: "from-gold-500 to-gold-700", shadow: "shadow-gold-200" },
+  { step: "02", title: "Raise Enquiry",   desc: "Fill in your event details in 2 minutes. Our coordinator will call you within 2 hours.", icon: Mic2,    color: "from-navy-600 to-navy-800",   shadow: "shadow-navy-200" },
+  { step: "03", title: "Get Proposal",    desc: "Receive a curated proposal with handpicked artists, pricing, and availability.", icon: Sparkles, color: "from-gold-500 to-gold-700", shadow: "shadow-gold-200" },
+  { step: "04", title: "Book & Relax",    desc: "Confirm your booking, pay advance, and we handle everything till showtime.", icon: CheckCircle2, color: "from-navy-600 to-navy-800", shadow: "shadow-navy-200" },
 ];
 
-const testimonials = [
-  { name: "Priya Sharma",  event: "Wedding Reception · Mumbai",    rating: 5, text: "Absolutely phenomenal! They arranged a top Bollywood singer for our wedding in just 3 days. Seamless experience from enquiry to performance.", avatar: "PS", color: "from-rose-400 to-pink-500" },
-  { name: "Rahul Mehta",   event: "Corporate Gala · Bengaluru",    rating: 5, text: "BookMyEventStar made our annual event unforgettable. The comedian kept 500 employees laughing all evening. Highly professional.", avatar: "RM", color: "from-violet-400 to-purple-500" },
-  { name: "Ananya Reddy",  event: "Birthday Party · Hyderabad",    rating: 5, text: "Found the perfect DJ for my 30th in under 24 hours. The coordinator was super responsive and the artist was even better than expected.", avatar: "AR", color: "from-amber-400 to-orange-500" },
+const promises = [
+  { title: "Every artist is verified", desc: "No one appears in search until our team has reviewed their profile, portfolio, and documents.", icon: Shield, color: "from-gold-500 to-gold-700" },
+  { title: "A coordinator, not a chatbot", desc: "A real person manages your enquiry end-to-end — shortlisting, negotiating, and logistics until showtime.", icon: Users, color: "from-navy-600 to-navy-800" },
+  { title: "Pricing you see upfront", desc: "Your proposal shows the artist, the price, and what's included — before you commit to anything.", icon: CheckCircle2, color: "from-gold-500 to-gold-700" },
+];
+
+const verifySteps = [
+  { title: "Artist applies", desc: "Any performer can apply with their bio, pricing, categories, and portfolio.", icon: Users },
+  { title: "Our team reviews", desc: "We check documents and portfolio quality before anyone gets approved.", icon: Shield },
+  { title: "Verified & listed", desc: "Approved artists get a Verified badge and appear in client and coordinator searches.", icon: Award },
+];
+
+const artistBenefits = [
+  "Get discovered by coordinators actively booking for real events",
+  "We handle client coordination, contracts, and logistics — you focus on performing",
+  "Free to list — no cost to create or maintain your profile",
+  "Manage your availability, bookings, and earnings from one dashboard",
+];
+
+const faqs = [
+  { q: "Is it free to submit an enquiry?", a: "Yes. Submitting an enquiry costs nothing, and there's no obligation to book anything afterward." },
+  { q: "How quickly will I hear back?", a: "A dedicated coordinator responds to every enquiry within 2 hours." },
+  { q: "How is pricing decided?", a: "Your coordinator sends a proposal with the artist and price clearly listed, so you see everything before you commit." },
+  { q: "How are artists verified?", a: "Every artist's profile, pricing, and documents are reviewed by our team before they're listed publicly." },
+  { q: "Can I change my event details after booking?", a: "Yes — your coordinator manages any changes directly with you and the artist." },
+  { q: "I'm an artist — how do I get paid?", a: "Coordinators manage settlement directly with you after the event, based on the platform's booking terms." },
 ];
 
 const features = [
-  { icon: Shield,  title: "100% Verified Artists",  desc: "Every artist is background-checked and reviewed",    color: "text-violet-600", bg: "bg-violet-50" },
-  { icon: Clock,   title: "2-Hour Response",         desc: "Expert coordinator contacts you within 2 hours",      color: "text-rose-600",   bg: "bg-rose-50" },
-  { icon: Zap,     title: "Hassle-free Booking",     desc: "End-to-end management from shortlist to showtime",    color: "text-amber-600",  bg: "bg-amber-50" },
-  { icon: Award,   title: "Best Price Guaranteed",   desc: "Direct artist pricing — no hidden commissions",       color: "text-teal-600",   bg: "bg-teal-50" },
+  { icon: Shield,  title: "100% Verified Artists",  desc: "Every artist is background-checked and reviewed",    color: "text-gold-600", bg: "bg-gold-50" },
+  { icon: Clock,   title: "2-Hour Response",         desc: "Expert coordinator contacts you within 2 hours",      color: "text-navy-700",   bg: "bg-navy-50" },
+  { icon: Zap,     title: "Hassle-free Booking",     desc: "End-to-end management from shortlist to showtime",    color: "text-gold-600",  bg: "bg-gold-50" },
+  { icon: Award,   title: "Best Price Guaranteed",   desc: "Direct artist pricing — no hidden commissions",       color: "text-navy-700",   bg: "bg-navy-50" },
 ];
 
 /* ─── Ticker ──────────────────────────────────────────────── */
@@ -73,7 +95,7 @@ const tickerItems: { label: string; icon: LucideIcon }[] = [
 function Ticker() {
   const doubled = [...tickerItems, ...tickerItems];
   return (
-    <div className="overflow-hidden bg-gradient-to-r from-violet-600 via-fuchsia-600 to-pink-600 py-3">
+    <div className="overflow-hidden navy-gradient py-3">
       <motion.div
         animate={{ x: [0, "-50%"] }}
         transition={{ repeat: Infinity, duration: 22, ease: "linear" }}
@@ -83,7 +105,7 @@ function Ticker() {
           const Icon = item.icon;
           return (
             <span key={i} className="text-white font-semibold text-sm tracking-wide flex items-center gap-2">
-              <Icon className="w-4 h-4 text-white/80 flex-shrink-0" />
+              <Icon className="w-4 h-4 text-gold-400 flex-shrink-0" />
               {item.label}
               <span className="text-white/30 ml-4">·</span>
             </span>
@@ -98,25 +120,24 @@ function Ticker() {
 function FeaturedArtists() {
   const [artists, setArtists] = useState<any[]>([]);
   useEffect(() => {
-    const supabase = createClient();
-    supabase
-      .from("artist_profiles")
-      .select("id, bio, categories, cities, base_price, rating, total_bookings, is_verified, user:users!artist_profiles_user_id_fkey(name, avatar_url)")
-      .eq("is_verified", true)
-      .eq("is_listed", true)
-      .eq("is_profile_complete", true)
-      .order("rating", { ascending: false })
-      .limit(4)
-      .then(({ data }) => { if (data) setArtists(data); });
+    // Server-mediated (not a direct client-side Firestore read) — the
+    // artist's display name lives on `users/{uid}`, which requires a signed-
+    // in caller under firestore.rules, so an anonymous homepage visitor
+    // can't read it directly. This endpoint fetches it with the Admin SDK
+    // and returns only the already-public fields.
+    fetch("/api/featured-artists")
+      .then((res) => res.json())
+      .then((json) => setArtists(json.artists ?? []))
+      .catch(() => setArtists([]));
   }, []);
 
   if (artists.length === 0) return null;
 
   const cardColors = [
-    "from-rose-400 to-pink-600",
-    "from-violet-400 to-purple-600",
-    "from-amber-400 to-orange-500",
-    "from-teal-400 to-cyan-600",
+    "from-gold-400 to-gold-600",
+    "from-navy-600 to-navy-800",
+    "from-gold-400 to-gold-600",
+    "from-navy-600 to-navy-800",
   ];
 
   return (
@@ -202,6 +223,7 @@ function FeaturedArtists() {
 /* ─── Main Page ───────────────────────────────────────────── */
 export default function LandingPage() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-white overflow-x-hidden">
@@ -213,30 +235,89 @@ export default function LandingPage() {
 
           <div className="hidden md:flex items-center gap-8">
             {[["Browse Artists", "/artists"], ["How It Works", "#how-it-works"], ["Categories", "#categories"]].map(([label, href]) => (
-              <Link key={label} href={href} className="text-sm font-medium text-gray-600 hover:text-violet-600 transition-colors">{label}</Link>
+              <Link key={label} href={href} className="text-sm font-medium text-gray-600 hover:text-gold-600 transition-colors">{label}</Link>
             ))}
           </div>
 
-          <div className="flex items-center gap-3">
-            <Link href="/login">
-              <Button variant="outline" size="sm" className="border-gray-200">Login</Button>
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Desktop actions — three distinct paths: returning user, artist onboarding, new customer */}
+            <div className="hidden md:flex items-center gap-2">
+              <Link href="/login">
+                <Button variant="outline" size="sm" className="border-gray-200">Login</Button>
+              </Link>
+              <Link href="/register?role=artist">
+                <Button variant="outline" size="sm" className="border-navy-300 text-navy-700 hover:bg-navy-50">
+                  For Artists
+                </Button>
+              </Link>
+              <Link href="/enquiry">
+                <Button size="sm" className="gold-gradient text-white hover:opacity-90 shadow-md shadow-gold-500/30">
+                  Book Now <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                </Button>
+              </Link>
+            </div>
+
+            {/* Mobile: primary CTA is always reachable, everything else lives in the menu */}
+            <Link href="/enquiry" className="md:hidden">
+              <Button size="sm" className="gold-gradient text-white shadow-md shadow-gold-500/30">Book Now</Button>
             </Link>
-            <Link href="/enquiry">
-              <Button size="sm" className="bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:opacity-90 shadow-md shadow-violet-200">
-                Book Now <ArrowRight className="w-3.5 h-3.5 ml-1" />
-              </Button>
-            </Link>
+            <button
+              type="button"
+              className="md:hidden w-9 h-9 flex-shrink-0 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+              onClick={() => setMobileMenuOpen((v) => !v)}
+              aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+              aria-expanded={mobileMenuOpen}
+            >
+              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
           </div>
         </div>
+
+        {/* Mobile menu panel */}
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="md:hidden overflow-hidden border-t border-gray-100 bg-white"
+            >
+              <div className="px-4 sm:px-6 py-4 flex flex-col gap-1">
+                {[["Browse Artists", "/artists"], ["How It Works", "#how-it-works"], ["Categories", "#categories"]].map(([label, href]) => (
+                  <Link
+                    key={label}
+                    href={href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="px-3 py-3 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    {label}
+                  </Link>
+                ))}
+                <div className="h-px bg-gray-100 my-2" />
+                <div className="grid grid-cols-2 gap-2">
+                  <Link href="/login" onClick={() => setMobileMenuOpen(false)}>
+                    <Button variant="outline" size="sm" className="w-full border-gray-200">Login</Button>
+                  </Link>
+                  <Link href="/register?role=artist" onClick={() => setMobileMenuOpen(false)}>
+                    <Button variant="outline" size="sm" className="w-full border-navy-300 text-navy-700 hover:bg-navy-50">
+                      For Artists
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </nav>
 
       {/* ── Hero ── */}
       <section className="relative pt-24 pb-0 overflow-hidden">
-        {/* Multi-color gradient background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-violet-950 via-purple-900 to-fuchsia-900" />
+        {/* Brand navy gradient background */}
+        <div className="absolute inset-0 navy-gradient" />
         {/* Decorative blobs */}
-        <div className="absolute top-0 right-0 w-[500px] h-[500px] rounded-full bg-rose-500/20 blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] rounded-full bg-cyan-500/20 blur-3xl" />
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] rounded-full bg-gold-500/20 blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] rounded-full bg-gold-400/10 blur-3xl" />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-gold-500/10 blur-3xl" />
         {/* Dot pattern */}
         <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "30px 30px" }} />
@@ -245,12 +326,12 @@ export default function LandingPage() {
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/20 bg-white/10 text-white/90 text-sm mb-6 backdrop-blur-sm">
               <Award className="w-4 h-4 text-gold-400" />
-              India&apos;s #1 Artist Booking Platform • 2,400+ Events Managed
+              Verified Artists • Expert Coordination • Pan-India
             </div>
 
             <h1 className="font-display text-4xl md:text-6xl lg:text-7xl font-bold text-white leading-tight">
               Book the{" "}
-              <span className="bg-gradient-to-r from-gold-400 via-amber-300 to-yellow-400 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-gold-300 via-gold-400 to-gold-300 bg-clip-text text-transparent">
                 Perfect Artist
               </span>
               <br />
@@ -266,17 +347,19 @@ export default function LandingPage() {
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
               className="mt-10 max-w-2xl mx-auto"
             >
-              <div className="flex items-center gap-2 bg-white rounded-2xl p-2 shadow-2xl shadow-violet-900/40 border border-white/20">
-                <Search className="w-5 h-5 text-gray-400 ml-3 flex-shrink-0" />
-                <input
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search artists — singer, DJ, comedian..."
-                  className="flex-1 bg-transparent text-gray-800 placeholder-gray-400 text-sm outline-none py-2 px-2"
-                  onKeyDown={(e) => e.key === "Enter" && (window.location.href = `/artists?q=${searchQuery}`)}
-                />
-                <Link href={`/artists${searchQuery ? `?q=${searchQuery}` : ""}`}>
-                  <button className="bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white text-sm font-semibold px-6 py-2.5 rounded-xl hover:opacity-90 transition-all shadow-md whitespace-nowrap">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-white rounded-2xl p-2 shadow-2xl shadow-navy-900/40 border border-white/20">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <Search className="w-5 h-5 text-gray-400 ml-2 flex-shrink-0" />
+                  <input
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search artists — singer, DJ, comedian..."
+                    className="min-w-0 flex-1 bg-transparent text-gray-800 placeholder-gray-400 text-sm outline-none py-2 px-2"
+                    onKeyDown={(e) => e.key === "Enter" && (window.location.href = `/artists?q=${searchQuery}`)}
+                  />
+                </div>
+                <Link href={`/artists${searchQuery ? `?q=${searchQuery}` : ""}`} className="shrink-0">
+                  <button className="w-full sm:w-auto gold-gradient text-white text-sm font-semibold px-6 py-2.5 rounded-xl hover:opacity-90 transition-all shadow-md whitespace-nowrap">
                     Search Artists
                   </button>
                 </Link>
@@ -300,13 +383,13 @@ export default function LandingPage() {
               className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4"
             >
               <Link href="/artists">
-                <Button size="lg" className="w-full sm:w-auto px-8 text-base bg-white text-violet-700 hover:bg-white/90 font-bold shadow-xl">
+                <Button variant="white" size="lg" className="w-full sm:w-auto px-8 text-base font-bold shadow-xl">
                   <Users className="w-5 h-5 mr-2" />
                   Browse All Artists
                 </Button>
               </Link>
               <Link href="/enquiry">
-                <Button size="lg" className="w-full sm:w-auto px-8 text-base bg-gradient-to-r from-gold-500 to-amber-500 text-navy-900 font-bold hover:opacity-90 shadow-xl shadow-gold-500/30 border-0">
+                <Button size="lg" className="w-full sm:w-auto px-8 text-base gold-gradient text-white font-bold hover:opacity-90 shadow-xl shadow-gold-500/30 border-0">
                   <Sparkles className="w-5 h-5 mr-2" />
                   Raise Free Enquiry
                 </Button>
@@ -378,7 +461,7 @@ export default function LandingPage() {
       <section id="categories" className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="text-center mb-12">
-            <span className="inline-block px-4 py-1.5 rounded-full bg-fuchsia-50 text-fuchsia-700 text-xs font-bold uppercase tracking-widest mb-3">
+            <span className="inline-block px-4 py-1.5 rounded-full bg-navy-100 text-navy-700 text-xs font-bold uppercase tracking-widest mb-3">
               For Every Occasion
             </span>
             <h2 className="font-display text-3xl md:text-4xl font-bold text-navy-900">
@@ -405,7 +488,6 @@ export default function LandingPage() {
                         <Icon className="w-7 h-7 group-hover:text-white transition-colors duration-300" />
                       </div>
                       <h3 className="font-bold text-sm text-navy-900 group-hover:text-white transition-colors">{cat.name}</h3>
-                      <p className="text-xs text-muted-foreground group-hover:text-white/80 transition-colors mt-1">{cat.count}+ artists</p>
                     </div>
                   </div>
                 </Link>
@@ -416,7 +498,7 @@ export default function LandingPage() {
 
           <div className="text-center mt-10">
             <Link href="/artists">
-              <Button variant="outline" size="lg" className="border-2 border-violet-200 text-violet-700 hover:bg-violet-50 px-10">
+              <Button variant="outline" size="lg" className="border-2 border-gold-300 text-gold-700 hover:bg-gold-50 px-10">
                 See All Categories <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </Link>
@@ -428,10 +510,10 @@ export default function LandingPage() {
       <FeaturedArtists />
 
       {/* ── How It Works ── */}
-      <section id="how-it-works" className="py-20 bg-gradient-to-br from-violet-50 via-fuchsia-50 to-pink-50">
+      <section id="how-it-works" className="py-20 bg-gradient-to-br from-navy-50 via-white to-gold-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="text-center mb-14">
-            <span className="inline-block px-4 py-1.5 rounded-full bg-violet-100 text-violet-700 text-xs font-bold uppercase tracking-widest mb-3">
+            <span className="inline-block px-4 py-1.5 rounded-full bg-navy-100 text-navy-700 text-xs font-bold uppercase tracking-widest mb-3">
               Simple Process
             </span>
             <h2 className="font-display text-3xl md:text-4xl font-bold text-navy-900">
@@ -451,7 +533,7 @@ export default function LandingPage() {
                 >
                   {i < howItWorks.length - 1 && (
                     <div className="hidden lg:block absolute top-10 left-full w-full h-0.5 z-0 -translate-x-6">
-                      <div className="w-full h-full border-t-2 border-dashed border-violet-200" />
+                      <div className="w-full h-full border-t-2 border-dashed border-gold-200" />
                     </div>
                   )}
                   <div className="relative z-10 bg-white rounded-2xl p-6 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border border-gray-100 text-center">
@@ -471,7 +553,7 @@ export default function LandingPage() {
 
           <div className="text-center mt-12">
             <Link href="/enquiry">
-              <Button size="lg" className="px-12 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-xl shadow-violet-200 hover:opacity-90 text-base font-bold">
+              <Button size="lg" className="px-12 gold-gradient text-white shadow-xl shadow-gold-500/30 hover:opacity-90 text-base font-bold">
                 <Sparkles className="w-5 h-5 mr-2" />
                 Start Your Enquiry — It&apos;s Free
               </Button>
@@ -480,54 +562,142 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Testimonials ── */}
+      {/* ── Why book with us ── */}
       <section className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="text-center mb-12">
-            <span className="inline-block px-4 py-1.5 rounded-full bg-amber-50 text-amber-700 text-xs font-bold uppercase tracking-widest mb-3">
-              Client Love
+            <span className="inline-block px-4 py-1.5 rounded-full bg-gold-50 text-gold-700 text-xs font-bold uppercase tracking-widest mb-3">
+              Our Promise
             </span>
             <h2 className="font-display text-3xl md:text-4xl font-bold text-navy-900">
-              What Our Clients Say
+              Why Book With BookMyEventStar
             </h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {testimonials.map((t, i) => (
-              <motion.div
-                key={t.name}
-                initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.15 }}
-              >
-                <div className="relative h-full bg-white rounded-2xl border border-gray-100 p-6 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden">
-                  <div className={`absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r ${t.color}`} />
-                  <div className="flex gap-0.5 mb-4">
-                    {Array.from({ length: t.rating }).map((_, j) => (
-                      <Star key={j} className="w-4 h-4 fill-amber-400 text-amber-400" />
-                    ))}
-                  </div>
-                  <p className="text-sm text-gray-700 leading-relaxed mb-6 italic">&ldquo;{t.text}&rdquo;</p>
-                  <div className="flex items-center gap-3">
-                    <div className={`w-11 h-11 rounded-full bg-gradient-to-br ${t.color} flex items-center justify-center text-white font-bold text-sm shadow-md`}>
-                      {t.avatar}
+            {promises.map((p, i) => {
+              const Icon = p.icon;
+              return (
+                <motion.div
+                  key={p.title}
+                  initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.15 }}
+                >
+                  <div className="relative h-full bg-white rounded-2xl border border-gray-100 p-6 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden">
+                    <div className={`absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r ${p.color}`} />
+                    <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${p.color} flex items-center justify-center shadow-md mb-4`}>
+                      <Icon className="w-6 h-6 text-white" />
                     </div>
-                    <div>
-                      <p className="font-bold text-sm text-navy-900">{t.name}</p>
-                      <p className="text-xs text-muted-foreground">{t.event}</p>
-                    </div>
+                    <p className="font-bold text-navy-900 mb-1.5">{p.title}</p>
+                    <p className="text-sm text-gray-600 leading-relaxed">{p.desc}</p>
                   </div>
-                </div>
-              </motion.div>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* ── How artists get verified ── */}
+      <section className="py-20 bg-gray-50 border-y">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          <div className="text-center mb-12">
+            <span className="inline-block px-4 py-1.5 rounded-full bg-navy-100 text-navy-700 text-xs font-bold uppercase tracking-widest mb-3">
+              Trust &amp; Safety
+            </span>
+            <h2 className="font-display text-3xl md:text-4xl font-bold text-navy-900">
+              How We Verify Every Artist
+            </h2>
+            <p className="mt-3 text-muted-foreground max-w-xl mx-auto">Nobody appears in search until they've been through this</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {verifySteps.map((s, i) => {
+              const Icon = s.icon;
+              return (
+                <motion.div
+                  key={s.title}
+                  initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.12 }}
+                  className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm text-center"
+                >
+                  <div className="w-14 h-14 rounded-2xl gold-gradient mx-auto mb-4 flex items-center justify-center shadow-lg">
+                    <Icon className="w-7 h-7 text-white" />
+                  </div>
+                  <p className="font-display font-bold text-lg text-navy-900 mb-1.5">{s.title}</p>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{s.desc}</p>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* ── FAQ ── */}
+      <section className="py-20 bg-white">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6">
+          <div className="text-center mb-10">
+            <span className="inline-block px-4 py-1.5 rounded-full bg-gold-50 text-gold-700 text-xs font-bold uppercase tracking-widest mb-3">
+              Questions
+            </span>
+            <h2 className="font-display text-3xl md:text-4xl font-bold text-navy-900">
+              Frequently Asked Questions
+            </h2>
+          </div>
+
+          <Accordion type="single" collapsible className="bg-gray-50 rounded-2xl border border-gray-100 px-6">
+            {faqs.map((f, i) => (
+              <AccordionItem key={i} value={`faq-${i}`}>
+                <AccordionTrigger className="text-navy-900">{f.q}</AccordionTrigger>
+                <AccordionContent>{f.a}</AccordionContent>
+              </AccordionItem>
             ))}
+          </Accordion>
+        </div>
+      </section>
+
+      {/* ── For Artists ── */}
+      <section className="py-20 relative overflow-hidden">
+        <div className="absolute inset-0 navy-gradient" />
+        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
+        <div className="relative max-w-5xl mx-auto px-4 sm:px-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+            <motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}>
+              <span className="inline-block px-4 py-1.5 rounded-full bg-white/10 text-white/90 text-xs font-bold uppercase tracking-widest mb-4">
+                For Performers
+              </span>
+              <h2 className="font-display text-3xl md:text-4xl font-bold text-white leading-tight">
+                Are You a Performer?
+              </h2>
+              <p className="mt-4 text-white/70">
+                Singers, DJs, comedians, dancers, anchors, bands — list your profile and let our coordinators bring the bookings to you.
+              </p>
+              <Link href="/register?role=artist">
+                <Button size="lg" className="mt-6 gold-gradient text-white font-bold shadow-xl shadow-gold-500/30 hover:opacity-90">
+                  <Mic2 className="w-5 h-5 mr-2" />
+                  Create Your Artist Profile
+                </Button>
+              </Link>
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}
+              className="space-y-3"
+            >
+              {artistBenefits.map((b) => (
+                <div key={b} className="flex items-start gap-3 bg-white/5 border border-white/10 rounded-xl p-4">
+                  <CheckCircle2 className="w-5 h-5 text-gold-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-white/90">{b}</p>
+                </div>
+              ))}
+            </motion.div>
           </div>
         </div>
       </section>
 
       {/* ── Big CTA ── */}
       <section className="py-20 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-violet-900 via-fuchsia-900 to-rose-900" />
+        <div className="absolute inset-0 navy-gradient" />
         <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
         <div className="absolute top-0 right-0 w-72 h-72 rounded-full bg-gold-400/20 blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-72 h-72 rounded-full bg-cyan-400/20 blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-72 h-72 rounded-full bg-gold-300/10 blur-3xl" />
 
         <div className="relative max-w-4xl mx-auto px-4 sm:px-6 text-center">
           <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
@@ -536,23 +706,23 @@ export default function LandingPage() {
             </div>
             <h2 className="font-display text-3xl md:text-5xl font-bold text-white">
               Ready to Make Your Event{" "}
-              <span className="bg-gradient-to-r from-gold-300 to-amber-300 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-gold-300 to-gold-400 bg-clip-text text-transparent">
                 Unforgettable?
               </span>
             </h2>
             <p className="mt-5 text-white/70 text-lg max-w-xl mx-auto">
-              Join 1,200+ happy clients. Submit a free enquiry and our coordinator will call you in 2 hours.
+              Submit a free enquiry and a dedicated coordinator will call you within 2 hours.
             </p>
 
             <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
               <Link href="/artists">
-                <Button size="lg" className="px-10 bg-white text-violet-700 font-bold hover:bg-white/90 shadow-xl text-base">
+                <Button variant="white" size="lg" className="px-10 font-bold shadow-xl text-base">
                   <Users className="w-5 h-5 mr-2" />
                   Browse Artists
                 </Button>
               </Link>
               <Link href="/enquiry">
-                <Button size="lg" className="px-10 bg-gradient-to-r from-gold-500 to-amber-500 text-navy-900 font-bold border-0 hover:opacity-90 shadow-xl shadow-gold-500/30 text-base">
+                <Button size="lg" className="px-10 gold-gradient text-white font-bold border-0 hover:opacity-90 shadow-xl shadow-gold-500/30 text-base">
                   <Sparkles className="w-5 h-5 mr-2" />
                   Get Free Quote
                 </Button>

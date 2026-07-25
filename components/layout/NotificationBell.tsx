@@ -30,7 +30,7 @@ export function NotificationBell({ userId }: NotificationBellProps) {
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 exit={{ scale: 0 }}
-                className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full gold-gradient text-navy-900 text-[10px] font-bold flex items-center justify-center"
+                className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full gold-gradient text-white text-[10px] font-bold flex items-center justify-center"
               >
                 {unreadCount > 9 ? "9+" : unreadCount}
               </motion.span>

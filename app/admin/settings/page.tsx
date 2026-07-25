@@ -1,23 +1,42 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/firebase/server";
+import { adminDb } from "@/lib/firebase/admin";
+import { serialize } from "@/lib/firebase/firestore-utils";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminSettingsClient } from "./AdminSettingsClient";
 
 export default async function AdminSettingsPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) redirect("/login");
-  const { data: profile } = await supabase.from("users").select("*").eq("id", user.id).single();
-  if (!profile || profile.role !== "admin") redirect("/login");
+  if (user.role !== "admin") redirect("/login");
 
-  const [{ data: categories }, { data: cities }] = await Promise.all([
-    supabase.from("categories").select("*").order("name"),
-    supabase.from("cities").select("*").order("name"),
+  const [categoriesSnap, citiesSnap, settingsSnap] = await Promise.all([
+    adminDb.collection("categories").orderBy("name").get(),
+    adminDb.collection("cities").orderBy("name").get(),
+    adminDb.getAll(
+      adminDb.collection("settings").doc("artist_share_pct"),
+      adminDb.collection("settings").doc("coordinator_workload_max"),
+      adminDb.collection("settings").doc("advance_payment_pct")
+    ),
   ]);
 
+  const categories = categoriesSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const cities = citiesSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+  const [artistShareDoc, workloadMaxDoc, advancePctDoc] = settingsSnap;
+  const platformSettings = {
+    artist_share_pct: Number(artistShareDoc.exists ? artistShareDoc.data()?.value : 70) || 70,
+    coordinator_workload_max: Number(workloadMaxDoc.exists ? workloadMaxDoc.data()?.value : 8) || 8,
+    advance_payment_pct: Number(advancePctDoc.exists ? advancePctDoc.data()?.value : 30) || 30,
+  };
+
   return (
-    <DashboardLayout user={profile} title="System Settings">
-      <AdminSettingsClient categories={categories ?? []} cities={cities ?? []} />
+    <DashboardLayout user={serialize(user)} title="System Settings">
+      <AdminSettingsClient
+        categories={serialize(categories) as any}
+        cities={serialize(cities) as any}
+        platformSettings={platformSettings}
+      />
     </DashboardLayout>
   );
 }

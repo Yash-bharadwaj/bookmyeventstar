@@ -7,7 +7,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatDate, formatCurrency, getStatusColor, getStatusLabel } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
+import { db } from "@/lib/firebase/client";
+import { doc, updateDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -33,17 +34,17 @@ export function ClientEnquiryDetail({ enquiry, proposals }: { enquiry: any; prop
   const handleProposalAction = async (proposalId: string, action: "accepted" | "rejected") => {
     const setter = action === "accepted" ? setAccepting : setRejecting;
     setter(proposalId);
-    const supabase = createClient();
-    await supabase.from("proposals").update({ status: action }).eq("id", proposalId);
+    await updateDoc(doc(db, "proposals", proposalId), { status: action, updated_at: serverTimestamp() });
     if (action === "accepted") {
-      await supabase.from("enquiries").update({ status: "confirmed" }).eq("id", enquiry.id);
+      await updateDoc(doc(db, "enquiries", enquiry.id), { status: "confirmed", updated_at: serverTimestamp() });
       if (enquiry.coordinator_id) {
-        await supabase.from("notifications").insert({
-          user_id: enquiry.coordinator_id,
+        await addDoc(collection(db, "users", enquiry.coordinator_id, "notifications"), {
           title: "Proposal Accepted",
           message: `Client has accepted the proposal for ${enquiry.event_type} in ${enquiry.city}. Create the booking now.`,
           type: "success",
+          is_read: false,
           link: `/coordinator/enquiries/${enquiry.id}`,
+          created_at: serverTimestamp(),
         });
       }
       toast.success("Proposal accepted! Your coordinator will finalize the booking.");
@@ -148,10 +149,10 @@ export function ClientEnquiryDetail({ enquiry, proposals }: { enquiry: any; prop
       {enquiry.coordinator && (
         <div className="rounded-2xl border p-5 space-y-3">
           <h2 className="font-semibold text-sm flex items-center gap-2">
-            <User className="w-4 h-4 text-violet-500" />Your Coordinator
+            <User className="w-4 h-4 text-navy-600" />Your Coordinator
           </h2>
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-full bg-violet-100 flex items-center justify-center text-violet-700 font-bold">
+            <div className="w-12 h-12 rounded-full bg-navy-100 flex items-center justify-center text-navy-700 font-bold">
               {enquiry.coordinator.name?.[0]?.toUpperCase()}
             </div>
             <div className="space-y-1 text-sm">
@@ -175,7 +176,7 @@ export function ClientEnquiryDetail({ enquiry, proposals }: { enquiry: any; prop
       {/* Proposals */}
       <div className="rounded-2xl border p-5 space-y-4">
         <h2 className="font-semibold text-sm flex items-center gap-2">
-          <ClipboardList className="w-4 h-4 text-cyan-500" />Proposals ({proposals.length})
+          <ClipboardList className="w-4 h-4 text-gold-500" />Proposals ({proposals.length})
         </h2>
         {proposals.length === 0 ? (
           <p className="text-sm text-muted-foreground">No proposals received yet. Your coordinator is working on it.</p>
@@ -206,7 +207,7 @@ export function ClientEnquiryDetail({ enquiry, proposals }: { enquiry: any; prop
                       </Button>
                       <Button
                         size="sm"
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                        variant="success"
                         loading={accepting === p.id}
                         onClick={() => handleProposalAction(p.id, "accepted")}
                       >

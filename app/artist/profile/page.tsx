@@ -1,27 +1,33 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/firebase/server";
+import { adminDb } from "@/lib/firebase/admin";
+import { serialize } from "@/lib/firebase/firestore-utils";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ArtistProfileClient } from "./ArtistProfileClient";
 
 export default async function ArtistProfilePage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) redirect("/login");
-  const { data: profile } = await supabase.from("users").select("*").eq("id", user.id).single();
-  if (!profile || profile.role !== "artist") redirect("/login");
+  if (user.role !== "artist") redirect("/login");
 
-  const { data: artistProfile } = await supabase.from("artist_profiles").select("*").eq("user_id", user.id).single();
-
-  const [{ data: media }, { data: categoriesData }] = await Promise.all([
-    supabase.from("artist_media").select("*").eq("artist_id", artistProfile?.id ?? ""),
-    supabase.from("categories").select("name").order("name"),
+  const [artistProfileSnap, mediaSnap, categoriesSnap] = await Promise.all([
+    adminDb.collection("artistProfiles").doc(user.id).get(),
+    adminDb.collection("artistProfiles").doc(user.id).collection("media").get(),
+    adminDb.collection("categories").orderBy("name").get(),
   ]);
 
-  const categoryNames = (categoriesData ?? []).map((c) => c.name);
+  const artistProfile = artistProfileSnap.exists ? { id: user.id, ...artistProfileSnap.data() } : null;
+  const media = mediaSnap.docs.map((d) => ({ id: d.id, artist_id: user.id, ...d.data() }));
+  const categoryNames = categoriesSnap.docs.map((d) => d.data().name as string);
 
   return (
-    <DashboardLayout user={profile} title="My Profile">
-      <ArtistProfileClient user={profile} artistProfile={artistProfile} media={media ?? []} categories={categoryNames} />
+    <DashboardLayout user={serialize(user)} title="My Profile">
+      <ArtistProfileClient
+        user={serialize(user)}
+        artistProfile={serialize(artistProfile) as any}
+        media={serialize(media) as any}
+        categories={categoryNames}
+      />
     </DashboardLayout>
   );
 }

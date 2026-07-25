@@ -14,7 +14,6 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Booking } from "@/types";
 import { formatDate, formatCurrency, getStatusColor, getStatusLabel } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 
@@ -67,17 +66,19 @@ export function ArtistBookingsClient({ bookings }: { bookings: BookingWithExtras
   const saveRequirements = async () => {
     if (!reqDialog) return;
     setSavingReq(true);
-    const supabase = createClient();
     const requirementsJson = JSON.stringify(reqForm);
-    const { error } = await supabase
-      .from("bookings")
-      .update({ special_requirements: requirementsJson })
-      .eq("id", reqDialog.id);
-    if (error) toast.error("Failed to save requirements");
-    else {
+    try {
+      const res = await fetch(`/api/artist/bookings/${reqDialog.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ special_requirements: requirementsJson }),
+      });
+      if (!res.ok) throw new Error();
       toast.success("Performance requirements saved!");
       setReqDialog(null);
       router.refresh();
+    } catch {
+      toast.error("Failed to save requirements");
     }
     setSavingReq(false);
   };
@@ -88,33 +89,23 @@ export function ArtistBookingsClient({ bookings }: { bookings: BookingWithExtras
 
   const updateBooking = async (id: string, status: "confirmed" | "cancelled", reason?: string) => {
     setUpdating(id);
-    const supabase = createClient();
-    const updatePayload: Record<string, unknown> = { status };
-    if (reason) updatePayload.cancellation_reason = reason;
-    const { error } = await supabase.from("bookings").update(updatePayload).eq("id", id);
-    if (error) {
-      toast.error("Failed to update booking");
-      setUpdating(null);
-      return;
-    }
-    toast.success(status === "confirmed" ? "Booking accepted!" : "Booking declined");
-    // Notify coordinator
-    const { data: booking } = await supabase
-      .from("bookings")
-      .select("coordinator_id, enquiry:enquiries(event_type)")
-      .eq("id", id)
-      .single();
-    if (booking?.coordinator_id) {
-      const eventType = (booking.enquiry as any)?.event_type ?? "event";
-      await supabase.from("notifications").insert({
-        user_id: booking.coordinator_id,
-        title: status === "confirmed" ? "Artist Confirmed Booking" : "Artist Declined Booking",
-        message: `Artist has ${status === "confirmed" ? "accepted" : "declined"} the booking for ${eventType}${reason ? `: "${reason}"` : ""}. ${status === "cancelled" ? "Please propose a replacement artist." : ""}`,
-        type: status === "confirmed" ? "success" : "warning",
-        link: "/coordinator/bookings",
+    try {
+      // Server-mediated: firestore.rules doesn't grant an artist a direct
+      // write path to their own booking's status (only coordinator/admin/the
+      // enquiry's client can write bookings docs), and this route also
+      // notifies the coordinator without the artist needing to read the
+      // booking back via the client SDK.
+      const res = await fetch(`/api/artist/bookings/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status, ...(reason ? { cancellation_reason: reason } : {}) }),
       });
+      if (!res.ok) throw new Error();
+      toast.success(status === "confirmed" ? "Booking accepted!" : "Booking declined");
+      router.refresh();
+    } catch {
+      toast.error("Failed to update booking");
     }
-    router.refresh();
     setUpdating(null);
   };
 
@@ -197,7 +188,8 @@ export function ArtistBookingsClient({ bookings }: { bookings: BookingWithExtras
             </Button>
             <Button
               size="sm"
-              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+              variant="success"
+              className="flex-1"
               loading={updating === b.id}
               onClick={() => updateBooking(b.id, "confirmed")}
             >

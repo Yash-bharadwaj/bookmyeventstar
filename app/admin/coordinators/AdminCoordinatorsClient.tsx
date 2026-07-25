@@ -12,7 +12,6 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { User } from "@/types";
 import { formatDate, getInitials } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 
@@ -40,26 +39,49 @@ export function AdminCoordinatorsClient({ coordinators, enquiries }: Props) {
   const [editCoord, setEditCoord] = useState<{ id: string; name: string; phone: string } | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // Admin-driven edits to ANOTHER user's `users/{uid}` doc go through this
+  // server route rather than a direct client Firestore write — firestore.rules
+  // only allows a user to update their own doc (`request.auth.uid == uid`),
+  // with no client-side admin override, by design.
+  const patchUser = async (id: string, body: Record<string, unknown>) => {
+    const res = await fetch(`/api/admin/users/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error ?? "Update failed");
+    }
+  };
+
   const saveEdit = async () => {
     if (!editCoord?.name.trim() || !editCoord?.phone.trim()) {
       toast.error("Name and phone are required");
       return;
     }
     setSaving(true);
-    const supabase = createClient();
-    const { error } = await supabase.from("users").update({ name: editCoord.name.trim(), phone: editCoord.phone.trim() }).eq("id", editCoord.id);
-    if (error) { toast.error("Failed to save changes"); }
-    else { toast.success("Coordinator updated"); setEditCoord(null); router.refresh(); }
+    try {
+      await patchUser(editCoord.id, { name: editCoord.name.trim(), phone: editCoord.phone.trim() });
+      toast.success("Coordinator updated");
+      setEditCoord(null);
+      router.refresh();
+    } catch {
+      toast.error("Failed to save changes");
+    }
     setSaving(false);
   };
 
   const toggleStatus = async (id: string, current: boolean) => {
     setToggling(id);
-    const supabase = createClient();
-    await supabase.from("users").update({ is_active: !current }).eq("id", id);
-    toast.success(current ? "Coordinator deactivated" : "Coordinator activated");
+    try {
+      await patchUser(id, { is_active: !current });
+      toast.success(current ? "Coordinator deactivated" : "Coordinator activated");
+      router.refresh();
+    } catch {
+      toast.error("Failed to update status");
+    }
     setToggling(null);
-    router.refresh();
   };
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -73,22 +95,25 @@ export function AdminCoordinatorsClient({ coordinators, enquiries }: Props) {
     if (form.password.length < 6) { toast.error("Password must be at least 6 characters"); return; }
     setCreating(true);
     try {
-      const supabase = createClient();
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email: form.email,
-        password: form.password,
-        options: { data: { name: form.name, role: "coordinator" } },
+      // Goes through the same secure, admin-gated server route used by every
+      // other account-creation path in the app (Admin SDK, service
+      // credentials) — never a client-side, unauthenticated signUp() call.
+      // The browser's session cookie rides along automatically with
+      // same-origin fetch, so the route's admin check sees the logged-in admin.
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          phone: form.phone,
+          password: form.password,
+          role: "coordinator",
+        }),
       });
-      if (signUpError) throw signUpError;
-      if (!signUpData.user) throw new Error("No user returned");
-      await supabase.from("users").upsert({
-        id: signUpData.user.id,
-        name: form.name,
-        email: form.email,
-        phone: form.phone,
-        role: "coordinator",
-        is_active: true,
-      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to create coordinator");
+
       toast.success(`${form.name} added as coordinator!`);
       setShowAdd(false);
       setForm({ name: "", email: "", phone: "", password: "" });
@@ -118,9 +143,9 @@ export function AdminCoordinatorsClient({ coordinators, enquiries }: Props) {
     <div className="p-4 md:p-6 space-y-5">
       {/* Summary banner */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="p-4 rounded-2xl border bg-indigo-50 border-indigo-100 text-center">
-          <p className="text-2xl font-display font-bold text-indigo-700">{coordinators.length}</p>
-          <p className="text-xs text-indigo-500 font-medium mt-0.5">Total Coordinators</p>
+        <div className="p-4 rounded-2xl border bg-navy-50 border-navy-100 text-center">
+          <p className="text-2xl font-display font-bold text-navy-700">{coordinators.length}</p>
+          <p className="text-xs text-navy-500 font-medium mt-0.5">Total Coordinators</p>
         </div>
         <div className="p-4 rounded-2xl border bg-amber-50 border-amber-100 text-center">
           <p className="text-2xl font-display font-bold text-amber-700">{totalActive}</p>
@@ -161,7 +186,7 @@ export function AdminCoordinatorsClient({ coordinators, enquiries }: Props) {
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-base flex-shrink-0 ${
-                    c.is_active ? "bg-indigo-100 text-indigo-700" : "bg-muted text-muted-foreground"
+                    c.is_active ? "bg-navy-100 text-navy-700" : "bg-muted text-muted-foreground"
                   }`}>
                     {getInitials(c.name)}
                   </div>
@@ -234,7 +259,7 @@ export function AdminCoordinatorsClient({ coordinators, enquiries }: Props) {
               {/* Stats */}
               <div className="mt-4 grid grid-cols-3 gap-3 pt-3 border-t">
                 <div className="text-center">
-                  <p className="text-lg font-display font-bold text-indigo-700">{c.total}</p>
+                  <p className="text-lg font-display font-bold text-navy-700">{c.total}</p>
                   <p className="text-[10px] text-muted-foreground">Total</p>
                 </div>
                 <div className="text-center">

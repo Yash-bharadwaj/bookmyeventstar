@@ -16,7 +16,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatDate, formatCurrency, getStatusColor, getStatusLabel, getInitials } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
+import { db } from "@/lib/firebase/client";
+import { doc, updateDoc, addDoc, collection, serverTimestamp } from "firebase/firestore";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -33,14 +34,14 @@ const TASK_ICONS: Record<string, LucideIcon> = {
   payment_docs: Receipt, hospitality: UtensilsCrossed,
 };
 const TASK_COLORS: Record<string, string> = {
-  artist_confirmation: "bg-rose-100 text-rose-600",
-  travel_stay: "bg-blue-100 text-blue-600",
+  artist_confirmation: "bg-gold-100 text-gold-600",
+  travel_stay: "bg-navy-100 text-navy-700",
   technical: "bg-amber-100 text-amber-600",
   payment_docs: "bg-emerald-100 text-emerald-600",
-  hospitality: "bg-orange-100 text-orange-600",
+  hospitality: "bg-gold-100 text-gold-700",
 };
 
-export function CoordinatorBookingDetail({ booking }: { booking: any }) {
+export function CoordinatorBookingDetail({ booking, artistSharePct }: { booking: any; artistSharePct: number }) {
   const router = useRouter();
   const [updatingTask, setUpdatingTask] = useState<string | null>(null);
   const [bookingStatus, setBookingStatus] = useState(booking.status);
@@ -48,9 +49,10 @@ export function CoordinatorBookingDetail({ booking }: { booking: any }) {
   // Cancellation
   const [cancellationReason, setCancellationReason] = useState("");
   const [showCancelDialog, setShowCancelDialog] = useState(false);
-  // Artist Settlement
+  // Artist Settlement — default amount follows the platform's configured
+  // artist share (Admin → Settings → Platform), not a hardcoded split.
   const [settlementAmount, setSettlementAmount] = useState(
-    String(Math.round(booking.total_amount * 0.7))
+    String(Math.round(booking.total_amount * (artistSharePct / 100)))
   );
   const [settlementNotes, setSettlementNotes] = useState("");
   const [savingSettlement, setSavingSettlement] = useState(false);
@@ -60,8 +62,10 @@ export function CoordinatorBookingDetail({ booking }: { booking: any }) {
 
   const updateTask = async (taskId: string, done: boolean) => {
     setUpdatingTask(taskId);
-    const supabase = createClient();
-    await supabase.from("tasks").update({ status: done ? "done" : "pending" }).eq("id", taskId);
+    await updateDoc(doc(db, "bookings", booking.id, "tasks", taskId), {
+      status: done ? "done" : "pending",
+      updated_at: serverTimestamp(),
+    });
     toast.success(done ? "Task complete!" : "Task reopened");
     setUpdatingTask(null);
     router.refresh();
@@ -70,12 +74,11 @@ export function CoordinatorBookingDetail({ booking }: { booking: any }) {
   const updateStatus = async (overrideStatus?: string, reason?: string) => {
     const finalStatus = overrideStatus ?? bookingStatus;
     setSavingStatus(true);
-    const supabase = createClient();
-    const updatePayload: Record<string, unknown> = { status: finalStatus };
+    const updatePayload: Record<string, unknown> = { status: finalStatus, updated_at: serverTimestamp() };
     if (finalStatus === "cancelled" && reason) updatePayload.cancellation_reason = reason;
-    await supabase.from("bookings").update(updatePayload).eq("id", booking.id);
+    await updateDoc(doc(db, "bookings", booking.id), updatePayload);
     if (finalStatus === "completed") {
-      await supabase.from("enquiries").update({ status: "completed" }).eq("id", booking.enquiry_id);
+      await updateDoc(doc(db, "enquiries", booking.enquiry_id), { status: "completed", updated_at: serverTimestamp() });
     }
     toast.success("Booking status updated!");
     setSavingStatus(false);
@@ -94,31 +97,31 @@ export function CoordinatorBookingDetail({ booking }: { booking: any }) {
       return;
     }
     setSavingSettlement(true);
-    const supabase = createClient();
-    const { error } = await supabase.from("payments").insert({
-      booking_id: booking.id,
-      type: "artist_settlement",
-      amount: Number(settlementAmount),
-      status: "paid",
-      notes: settlementNotes || `Settlement for booking ${booking.id.slice(0, 8).toUpperCase()}`,
-      paid_at: new Date().toISOString(),
-    });
-    if (error) {
-      toast.error("Failed to record settlement");
-    } else {
+    try {
+      await addDoc(collection(db, "bookings", booking.id, "payments"), {
+        type: "artist_settlement",
+        amount: Number(settlementAmount),
+        status: "paid",
+        notes: settlementNotes || `Settlement for booking ${booking.id.slice(0, 8).toUpperCase()}`,
+        paid_at: serverTimestamp(),
+        created_at: serverTimestamp(),
+      });
       // Notify artist
       if (booking.artist?.user_id) {
-        await supabase.from("notifications").insert({
-          user_id: booking.artist.user_id,
+        await addDoc(collection(db, "users", booking.artist.user_id, "notifications"), {
           title: "Payment Settled",
           message: `Your settlement of ${new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 0 }).format(Number(settlementAmount))} has been processed.`,
           type: "success",
           link: "/artist/earnings",
+          is_read: false,
+          created_at: serverTimestamp(),
         });
       }
       setExistingSettlement({ amount: Number(settlementAmount), status: "paid" });
       toast.success("Artist settlement recorded!");
       router.refresh();
+    } catch {
+      toast.error("Failed to record settlement");
     }
     setSavingSettlement(false);
   };
@@ -188,7 +191,7 @@ export function CoordinatorBookingDetail({ booking }: { booking: any }) {
         {/* Client */}
         <div className="rounded-2xl border p-5 space-y-3">
           <h2 className="font-semibold text-sm flex items-center gap-2">
-            <User className="w-4 h-4 text-violet-500" />Client
+            <User className="w-4 h-4 text-navy-600" />Client
           </h2>
           {booking.enquiry?.client ? (
             <div className="space-y-2 text-sm">
@@ -206,12 +209,12 @@ export function CoordinatorBookingDetail({ booking }: { booking: any }) {
         {/* Artist */}
         <div className="rounded-2xl border p-5 space-y-3">
           <h2 className="font-semibold text-sm flex items-center gap-2">
-            <Mic2 className="w-4 h-4 text-rose-500" />Artist
+            <Mic2 className="w-4 h-4 text-gold-600" />Artist
           </h2>
           {booking.artist ? (
             <div className="space-y-2 text-sm">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center text-rose-700 font-bold text-sm">
+                <div className="w-10 h-10 rounded-full bg-gold-100 flex items-center justify-center text-gold-700 font-bold text-sm">
                   {getInitials(booking.artist.user?.name ?? "A")}
                 </div>
                 <div>
@@ -284,12 +287,12 @@ export function CoordinatorBookingDetail({ booking }: { booking: any }) {
                   <p className="font-bold text-blue-700 mt-0.5">{formatCurrency(booking.total_amount)}</p>
                 </div>
                 <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-100">
-                  <p className="text-amber-500 font-medium">Platform Fee (~30%)</p>
-                  <p className="font-bold text-amber-700 mt-0.5">{formatCurrency(Math.round(booking.total_amount * 0.3))}</p>
+                  <p className="text-amber-500 font-medium">Platform Fee (~{100 - artistSharePct}%)</p>
+                  <p className="font-bold text-amber-700 mt-0.5">{formatCurrency(Math.round(booking.total_amount * ((100 - artistSharePct) / 100)))}</p>
                 </div>
                 <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-100">
-                  <p className="text-emerald-500 font-medium">Artist Share (~70%)</p>
-                  <p className="font-bold text-emerald-700 mt-0.5">{formatCurrency(Math.round(booking.total_amount * 0.7))}</p>
+                  <p className="text-emerald-500 font-medium">Artist Share (~{artistSharePct}%)</p>
+                  <p className="font-bold text-emerald-700 mt-0.5">{formatCurrency(Math.round(booking.total_amount * (artistSharePct / 100)))}</p>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -317,7 +320,8 @@ export function CoordinatorBookingDetail({ booking }: { booking: any }) {
               <Button
                 onClick={recordSettlement}
                 loading={savingSettlement}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                variant="success"
+                className="w-full"
               >
                 <Wallet className="w-4 h-4 mr-2" />Record Artist Settlement
               </Button>
@@ -352,7 +356,7 @@ export function CoordinatorBookingDetail({ booking }: { booking: any }) {
                 Go Back
               </Button>
               <Button
-                className="bg-red-600 hover:bg-red-700 text-white"
+                variant="destructive"
                 loading={savingStatus}
                 disabled={!cancellationReason.trim()}
                 onClick={() => updateStatus("cancelled", cancellationReason)}
@@ -373,7 +377,7 @@ export function CoordinatorBookingDetail({ booking }: { booking: any }) {
         {totalTasks > 0 && (
           <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full transition-all"
+              className="h-full bg-gradient-to-r from-navy-500 to-navy-700 rounded-full transition-all"
               style={{ width: `${(completedTasks / totalTasks) * 100}%` }}
             />
           </div>

@@ -43,7 +43,7 @@ export function SettingsClient({ user, notifications, profileLink }: Props) {
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <User className="w-4 h-4 text-indigo-500" />Account
+              <User className="w-4 h-4 text-navy-500" />Account
             </CardTitle>
           </CardHeader>
           <CardContent>

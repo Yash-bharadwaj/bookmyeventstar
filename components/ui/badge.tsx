@@ -7,14 +7,14 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        default: "gold-gradient text-navy-900",
+        default: "gold-gradient text-white",
         secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/80",
         outline: "border border-current text-foreground",
         success: "bg-emerald-100 text-emerald-700",
         warning: "bg-amber-100 text-amber-700",
         info: "bg-blue-100 text-blue-700",
-        purple: "bg-purple-100 text-purple-700",
+        purple: "bg-navy-100 text-navy-700",
       },
     },
     defaultVariants: {

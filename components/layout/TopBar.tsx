@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { LogOut, Settings, User } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { signOutEverywhere } from "@/lib/firebase/auth-client";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,8 +26,7 @@ export function TopBar({ user, title }: TopBarProps) {
   const router = useRouter();
 
   const handleLogout = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    await signOutEverywhere();
     window.location.href = "/login";
   };
 

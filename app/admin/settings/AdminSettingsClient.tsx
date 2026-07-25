@@ -13,7 +13,8 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Category, City } from "@/types";
 import { Settings } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { db } from "@/lib/firebase/client";
+import { collection, addDoc, updateDoc, deleteDoc, doc, setDoc, serverTimestamp } from "firebase/firestore";
 import toast from "react-hot-toast";
 
 const ICON_OPTIONS: { key: string; Icon: LucideIcon; label: string }[] = [
@@ -75,9 +76,11 @@ function IconPicker({ value, onChange }: { value: string; onChange: (key: string
 export function AdminSettingsClient({
   categories: initialCategories,
   cities: initialCities,
+  platformSettings,
 }: {
   categories: Category[];
   cities: City[];
+  platformSettings?: { artist_share_pct: number; coordinator_workload_max: number; advance_payment_pct: number };
 }) {
   const [categories, setCategories] = useState(initialCategories);
   const [cities, setCities] = useState(initialCities);
@@ -109,17 +112,19 @@ export function AdminSettingsClient({
   const addCategory = async () => {
     if (!newCatName.trim()) { toast.error("Category name required"); return; }
     setAddingCat(true);
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("categories")
-      .insert({ name: newCatName.trim(), icon: newCatIcon, description: newCatDesc.trim() })
-      .select().single();
-    if (error) { toast.error("Failed to add category"); }
-    else {
-      setCategories((prev) => [...prev, data as Category]);
+    try {
+      const ref = await addDoc(collection(db, "categories"), {
+        name: newCatName.trim(),
+        icon: newCatIcon,
+        description: newCatDesc.trim(),
+        created_at: serverTimestamp(),
+      });
+      setCategories((prev) => [...prev, { id: ref.id, name: newCatName.trim(), icon: newCatIcon, description: newCatDesc.trim() } as Category]);
       setNewCatName(""); setNewCatIcon(DEFAULT_ICON); setNewCatDesc("");
       setShowAddCat(false);
       toast.success("Category added!");
+    } catch {
+      toast.error("Failed to add category");
     }
     setAddingCat(false);
   };
@@ -132,14 +137,13 @@ export function AdminSettingsClient({
 
   const saveEditCat = async (id: string) => {
     setSavingCat(true);
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("categories").update({ name: editCatName.trim(), icon: editCatIcon }).eq("id", id);
-    if (error) { toast.error("Failed to update"); }
-    else {
+    try {
+      await updateDoc(doc(db, "categories", id), { name: editCatName.trim(), icon: editCatIcon });
       setCategories((prev) => prev.map((c) => c.id === id ? { ...c, name: editCatName.trim(), icon: editCatIcon } : c));
       setEditingCat(null);
       toast.success("Category updated!");
+    } catch {
+      toast.error("Failed to update");
     }
     setSavingCat(false);
   };
@@ -152,16 +156,19 @@ export function AdminSettingsClient({
     let cancelled = false;
     const tid = window.setTimeout(async () => {
       if (cancelled) return;
-      const supabase = createClient();
-      const { error } = await supabase.from("categories").delete().eq("id", id);
-      if (error) { toast.error("Failed to delete category"); setCategories((prev) => [...prev, target].sort((a, b) => a.name.localeCompare(b.name))); }
+      try {
+        await deleteDoc(doc(db, "categories", id));
+      } catch {
+        toast.error("Failed to delete category");
+        setCategories((prev) => [...prev, target].sort((a, b) => a.name.localeCompare(b.name)));
+      }
     }, 5000);
     toast(
       (t) => (
         <span className="flex items-center gap-3 text-sm">
           &ldquo;{target.name}&rdquo; deleted
           <button
-            className="font-semibold text-indigo-600 underline"
+            className="font-semibold text-navy-600 underline"
             onClick={() => { cancelled = true; clearTimeout(tid); toast.dismiss(t.id); setCategories((prev) => [...prev, target].sort((a, b) => a.name.localeCompare(b.name))); }}
           >
             Undo
@@ -176,17 +183,18 @@ export function AdminSettingsClient({
   const addCity = async () => {
     if (!newCityName.trim() || !newCityState.trim()) { toast.error("City name and state required"); return; }
     setAddingCity(true);
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("cities")
-      .insert({ name: newCityName.trim(), state: newCityState.trim() })
-      .select().single();
-    if (error) { toast.error("Failed to add city"); }
-    else {
-      setCities((prev) => [...prev, data as City]);
+    try {
+      const ref = await addDoc(collection(db, "cities"), {
+        name: newCityName.trim(),
+        state: newCityState.trim(),
+        created_at: serverTimestamp(),
+      });
+      setCities((prev) => [...prev, { id: ref.id, name: newCityName.trim(), state: newCityState.trim() } as City]);
       setNewCityName(""); setNewCityState("");
       setShowAddCity(false);
       toast.success("City added!");
+    } catch {
+      toast.error("Failed to add city");
     }
     setAddingCity(false);
   };
@@ -199,14 +207,13 @@ export function AdminSettingsClient({
 
   const saveEditCity = async (id: string) => {
     setSavingCity(true);
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("cities").update({ name: editCityName.trim(), state: editCityState.trim() }).eq("id", id);
-    if (error) { toast.error("Failed to update"); }
-    else {
+    try {
+      await updateDoc(doc(db, "cities", id), { name: editCityName.trim(), state: editCityState.trim() });
       setCities((prev) => prev.map((c) => c.id === id ? { ...c, name: editCityName.trim(), state: editCityState.trim() } : c));
       setEditingCity(null);
       toast.success("City updated!");
+    } catch {
+      toast.error("Failed to update");
     }
     setSavingCity(false);
   };
@@ -218,16 +225,19 @@ export function AdminSettingsClient({
     let cancelled = false;
     const tid = window.setTimeout(async () => {
       if (cancelled) return;
-      const supabase = createClient();
-      const { error } = await supabase.from("cities").delete().eq("id", id);
-      if (error) { toast.error("Failed to delete city"); setCities((prev) => [...prev, target].sort((a, b) => a.name.localeCompare(b.name))); }
+      try {
+        await deleteDoc(doc(db, "cities", id));
+      } catch {
+        toast.error("Failed to delete city");
+        setCities((prev) => [...prev, target].sort((a, b) => a.name.localeCompare(b.name)));
+      }
     }, 5000);
     toast(
       (t) => (
         <span className="flex items-center gap-3 text-sm">
           &ldquo;{target.name}&rdquo; deleted
           <button
-            className="font-semibold text-indigo-600 underline"
+            className="font-semibold text-navy-600 underline"
             onClick={() => { cancelled = true; clearTimeout(tid); toast.dismiss(t.id); setCities((prev) => [...prev, target].sort((a, b) => a.name.localeCompare(b.name))); }}
           >
             Undo
@@ -238,30 +248,24 @@ export function AdminSettingsClient({
     );
   };
 
-  const [artistShare, setArtistShare] = useState(70);
-  const [workloadMax, setWorkloadMax] = useState(8);
-  const [advancePct, setAdvancePct] = useState(30);
+  const [artistShare, setArtistShare] = useState(platformSettings?.artist_share_pct ?? 70);
+  const [workloadMax, setWorkloadMax] = useState(platformSettings?.coordinator_workload_max ?? 8);
+  const [advancePct, setAdvancePct] = useState(platformSettings?.advance_payment_pct ?? 30);
   const [savingPlatform, setSavingPlatform] = useState(false);
 
   const platformShare = 100 - artistShare;
 
   const savePlatformSettings = async () => {
     setSavingPlatform(true);
-    // Store in Supabase settings table (or just localStorage as a best-effort for now)
     try {
-      const supabase = createClient();
       await Promise.all([
-        supabase.from("app_settings").upsert({ key: "artist_share_pct", value: String(artistShare) }, { onConflict: "key" }),
-        supabase.from("app_settings").upsert({ key: "coordinator_workload_max", value: String(workloadMax) }, { onConflict: "key" }),
-        supabase.from("app_settings").upsert({ key: "advance_payment_pct", value: String(advancePct) }, { onConflict: "key" }),
+        setDoc(doc(db, "settings", "artist_share_pct"), { value: artistShare }, { merge: true }),
+        setDoc(doc(db, "settings", "coordinator_workload_max"), { value: workloadMax }, { merge: true }),
+        setDoc(doc(db, "settings", "advance_payment_pct"), { value: advancePct }, { merge: true }),
       ]);
       toast.success("Platform settings saved");
     } catch {
-      // Fallback: save to localStorage so other components can read
-      localStorage.setItem("bmes_artist_share_pct", String(artistShare));
-      localStorage.setItem("bmes_workload_max", String(workloadMax));
-      localStorage.setItem("bmes_advance_pct", String(advancePct));
-      toast.success("Platform settings saved (locally)");
+      toast.error("Failed to save platform settings");
     } finally {
       setSavingPlatform(false);
     }

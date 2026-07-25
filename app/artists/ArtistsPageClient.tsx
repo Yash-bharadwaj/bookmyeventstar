@@ -20,7 +20,9 @@ import {
 } from "@/components/ui/select";
 import { ArtistProfile } from "@/types";
 import { formatCurrency, getInitials, INDIA_CITIES, EVENT_TYPES } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
+import { auth, db } from "@/lib/firebase/client";
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
 import toast from "react-hot-toast";
 import { z } from "zod";
 
@@ -49,20 +51,20 @@ const quickSchema = z.object({
 });
 type QuickForm = z.infer<typeof quickSchema>;
 
-/* ── Category accent colors ─────────────────────────── */
+/* ── Category accent colors — brand rotation (gold → navy, 2-tone) ─── */
 const catColor: Record<string, string> = {
-  "Bollywood Singer": "from-rose-500 to-pink-600",
-  "DJ":               "from-violet-500 to-purple-700",
-  "Classical Singer": "from-amber-500 to-orange-500",
-  "Ghazal Singer":    "from-teal-500 to-cyan-600",
-  "Sufi Singer":      "from-indigo-500 to-blue-600",
-  "Folk Artist":      "from-emerald-500 to-green-600",
-  "Instrumentalist":  "from-yellow-500 to-amber-500",
-  "Band":             "from-blue-500 to-indigo-600",
-  "Comedian":         "from-fuchsia-500 to-pink-600",
-  "Anchor / Emcee":   "from-cyan-500 to-teal-500",
-  "Dance Troupe":     "from-pink-500 to-rose-600",
-  "Magician":         "from-purple-500 to-violet-600",
+  "Bollywood Singer": "from-gold-400 to-amber-600",
+  "DJ":               "from-navy-500 to-navy-700",
+  "Classical Singer": "from-navy-600 to-navy-800",
+  "Ghazal Singer":    "from-gold-400 to-amber-600",
+  "Sufi Singer":      "from-gold-500 to-gold-700",
+  "Folk Artist":      "from-navy-600 to-navy-800",
+  "Instrumentalist":  "from-gold-400 to-amber-600",
+  "Band":             "from-navy-500 to-navy-700",
+  "Comedian":         "from-navy-600 to-navy-800",
+  "Anchor / Emcee":   "from-gold-400 to-amber-600",
+  "Dance Troupe":     "from-gold-500 to-gold-700",
+  "Magician":         "from-navy-600 to-navy-800",
 };
 const getColor = (cats: string[]) => catColor[cats?.[0]] ?? "from-navy-800 to-navy-900";
 
@@ -91,38 +93,33 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
 
   // Pre-fill from session on open
   useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session?.user?.id) return;
-      const { data: profile } = await supabase
-        .from("users")
-        .select("name, email, phone")
-        .eq("id", session.user.id)
-        .maybeSingle();
-      if (!profile) return;
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      if (!fbUser) return;
+      const snap = await getDoc(doc(db, "users", fbUser.uid));
+      if (!snap.exists()) return;
+      const profile = snap.data();
       const digits = (profile.phone ?? "").replace(/\D/g, "").slice(-10);
-      setSessionUser({ id: session.user.id, name: profile.name ?? "", email: profile.email ?? "", phone: digits });
+      setSessionUser({ id: fbUser.uid, name: profile.name ?? "", email: profile.email ?? "", phone: digits });
       if (profile.name)  setValue("name",  profile.name);
       if (profile.email) setValue("email", profile.email);
       if (digits)        setValue("phone", digits);
     });
+    return () => unsubscribe();
   }, [setValue]);
 
   const onSubmit = async (data: QuickForm) => {
     setLoading(true);
     try {
-      const supabase = createClient();
-
       // Require login — redirect to enquiry page for unauthenticated users
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user?.id) {
+      const fbUser = auth.currentUser;
+      if (!fbUser) {
         toast("Please verify your mobile first to send an enquiry.", { icon: "ℹ️" });
         window.location.href = `/enquiry`;
         return;
       }
 
-      const { error } = await supabase.from("enquiries").insert({
-        client_id:          session.user.id,
+      await addDoc(collection(db, "enquiries"), {
+        client_id:          fbUser.uid,
         event_type:         data.event_type,
         event_date:         data.event_date,
         location:           data.city,
@@ -134,21 +131,22 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
         status:             "new",
         source:             "website",
         submitter_type:     "personal",
+        created_at:         serverTimestamp(),
+        updated_at:         serverTimestamp(),
       });
-      if (error) throw error;
 
-      // Notify all admins — non-fatal
-      const { data: admins } = await supabase.from("users").select("id").eq("role", "admin");
-      if (admins?.length) {
-        await supabase.from("notifications").insert(
-          admins.map((a) => ({
-            user_id: a.id,
-            title:   "New Enquiry Received",
-            message: `${data.name} wants to book ${artist.user.name} for ${data.event_type} in ${data.city}.`,
-            type:    "info",
-          }))
-        );
-      }
+      // Notify all admins — non-fatal. Done via a server route (Admin SDK)
+      // because firestore.rules doesn't let a client-role user list the
+      // `users` collection by role, so this can't be a direct client query.
+      fetch("/api/notify-admins", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: "New Enquiry Received",
+          message: `${data.name} wants to book ${artist.user.name} for ${data.event_type} in ${data.city}.`,
+          type: "info",
+        }),
+      }).catch(() => {});
 
       setSubmitted(true);
       toast.success("Enquiry submitted! We'll call you within 2 hours.", { duration: 5000 });
@@ -296,8 +294,8 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
             </div>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-8 h-8 rounded-lg bg-rose-50 flex items-center justify-center">
-              <MapPin className="w-4 h-4 text-rose-500" />
+            <div className="w-8 h-8 rounded-lg bg-gold-50 flex items-center justify-center">
+              <MapPin className="w-4 h-4 text-gold-500" />
             </div>
             <div>
               <p className="text-sm font-bold text-navy-900 leading-none">{artist.cities.length}</p>
@@ -306,8 +304,8 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
           </div>
           {allMedia.length > 1 && (
             <div className="flex items-center gap-1.5 ml-auto">
-              <div className="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center">
-                <Images className="w-4 h-4 text-violet-500" />
+              <div className="w-8 h-8 rounded-lg bg-navy-50 flex items-center justify-center">
+                <Images className="w-4 h-4 text-navy-600" />
               </div>
               <div>
                 <p className="text-sm font-bold text-navy-900 leading-none">{allMedia.length}</p>
@@ -342,8 +340,8 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
                   }}
                   className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-all ${
                     allMedia[activeMediaIdx]?.url === m.url
-                      ? "border-violet-500 ring-2 ring-violet-200"
-                      : "border-transparent hover:border-violet-300"
+                      ? "border-navy-600 ring-2 ring-navy-200"
+                      : "border-transparent hover:border-navy-300"
                   }`}
                 >
                   {m.type === "video" ? (
@@ -374,7 +372,7 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
           <div className="flex flex-wrap gap-1.5">
             {artist.cities.map((c) => (
               <span key={c} className="flex items-center gap-1 text-xs bg-gray-50 border rounded-full px-2.5 py-1 text-gray-700">
-                <MapPin className="w-3 h-3 text-rose-400" />{c}
+                <MapPin className="w-3 h-3 text-navy-400" />{c}
               </span>
             ))}
           </div>
@@ -506,9 +504,9 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
                 </div>
 
                 {/* Trust pill */}
-                <div className="flex items-center gap-2 p-3 rounded-xl bg-violet-50 border border-violet-100">
-                  <CheckCircle2 className="w-4 h-4 text-violet-600 flex-shrink-0" />
-                  <p className="text-xs text-violet-700">
+                <div className="flex items-center gap-2 p-3 rounded-xl bg-navy-50 border border-navy-100">
+                  <CheckCircle2 className="w-4 h-4 text-navy-600 flex-shrink-0" />
+                  <p className="text-xs text-navy-700">
                     <span className="font-semibold">{artist.user.name}</span> will be added to your enquiry automatically
                   </p>
                 </div>
@@ -588,7 +586,7 @@ export function ArtistsPageClient({ artists, initialCategory, initialCity, categ
                 placeholder="Search by name or category..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gold-500 focus:border-gold-500"
               />
             </div>
             <Select value={city} onValueChange={setCity}>
@@ -621,8 +619,8 @@ export function ArtistsPageClient({ artists, initialCategory, initialCity, categ
                 onClick={() => setCategory(c)}
                 className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all border flex-shrink-0 ${
                   category === c
-                    ? "bg-violet-600 text-white border-violet-600 shadow-md shadow-violet-200"
-                    : "bg-white text-gray-600 border-gray-200 hover:border-violet-300 hover:text-violet-600"
+                    ? "bg-navy-900 text-white border-navy-900 shadow-md shadow-navy-900/20"
+                    : "bg-white text-gray-600 border-gray-200 hover:border-navy-300 hover:text-navy-700"
                 }`}
               >
                 {c === "all" ? "All Artists" : c}
@@ -638,7 +636,7 @@ export function ArtistsPageClient({ artists, initialCategory, initialCity, categ
             {(category !== "all" || city !== "all" || search) && (
               <button
                 onClick={() => { setSearch(""); setCategory("all"); setCity("all"); }}
-                className="text-xs text-rose-600 hover:text-rose-700 font-medium underline"
+                className="text-xs text-navy-600 hover:text-navy-700 font-medium underline"
               >
                 Clear all filters
               </button>

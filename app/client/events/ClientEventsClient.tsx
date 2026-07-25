@@ -13,7 +13,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Textarea } from "@/components/ui/textarea";
 import { Booking } from "@/types";
 import { formatDate, formatCurrency, getInitials } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
+import { db } from "@/lib/firebase/client";
+import { doc, updateDoc, getDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -83,25 +84,22 @@ export function ClientEventsClient({ bookings, clientId }: { bookings: BookingWi
     }
     setCancelling(true);
     try {
-      const supabase = createClient();
-      const { error } = await supabase
-        .from("bookings")
-        .update({ status: "cancelled", cancellation_reason: cancelReason.trim() })
-        .eq("id", cancelBooking.id);
-      if (error) throw error;
+      await updateDoc(doc(db, "bookings", cancelBooking.id), {
+        status: "cancelled",
+        cancellation_reason: cancelReason.trim(),
+        updated_at: serverTimestamp(),
+      });
 
       // Notify coordinator
-      const { data: coord } = await supabase
-        .from("enquiries")
-        .select("coordinator_id")
-        .eq("id", cancelBooking.enquiry_id)
-        .maybeSingle();
-      if (coord?.coordinator_id) {
-        await supabase.from("notifications").insert({
-          user_id: coord.coordinator_id,
+      const enquirySnap = await getDoc(doc(db, "enquiries", cancelBooking.enquiry_id));
+      const coordinatorId = enquirySnap.exists() ? (enquirySnap.data() as any).coordinator_id : null;
+      if (coordinatorId) {
+        await addDoc(collection(db, "users", coordinatorId, "notifications"), {
           title: "Booking Cancellation Requested",
           message: `Client requested cancellation for ${cancelBooking.enquiry?.event_type ?? "event"} on ${formatDate(cancelBooking.event_date)}. Reason: ${cancelReason.trim()}`,
           type: "warning",
+          is_read: false,
+          created_at: serverTimestamp(),
         });
       }
 
@@ -123,8 +121,12 @@ export function ClientEventsClient({ bookings, clientId }: { bookings: BookingWi
   const submitFeedback = async () => {
     if (!selectedBooking) return;
     setSubmitting(true);
-    const supabase = createClient();
-    await supabase.from("feedback").insert({ booking_id: selectedBooking.id, client_id: clientId, rating, comment });
+    await addDoc(collection(db, "bookings", selectedBooking.id, "feedback"), {
+      client_id: clientId,
+      rating,
+      comment,
+      created_at: serverTimestamp(),
+    });
     toast.success("Thank you for your review!");
     setFeedbackOpen(false);
     setComment(""); setRating(5); setHoverRating(0);
@@ -146,7 +148,7 @@ export function ClientEventsClient({ bookings, clientId }: { bookings: BookingWi
           days <= 7 ? "border-amber-200" : ""
         }`}
       >
-        {days <= 7 && days >= 0 && <div className="h-1 bg-gradient-to-r from-amber-400 to-orange-400" />}
+        {days <= 7 && days >= 0 && <div className="h-1 bg-gradient-to-r from-amber-400 to-amber-500" />}
 
         <div className="p-4 sm:p-5 flex gap-4 sm:gap-5 items-start">
           <CountdownBadge dateStr={booking.event_date} />
@@ -160,10 +162,10 @@ export function ClientEventsClient({ bookings, clientId }: { bookings: BookingWi
             </div>
 
             {booking.artist?.user ? (
-              <div className="mt-4 p-3 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-100">
+              <div className="mt-4 p-3 rounded-xl bg-gradient-to-r from-emerald-50 to-emerald-100 border border-emerald-100">
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl gold-gradient flex items-center justify-center text-navy-900 font-bold text-sm flex-shrink-0">
+                    <div className="w-10 h-10 rounded-xl gold-gradient flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
                       {getInitials(booking.artist.user.name)}
                     </div>
                     <div>
@@ -249,7 +251,7 @@ export function ClientEventsClient({ bookings, clientId }: { bookings: BookingWi
         <div className="p-4 flex items-center justify-between flex-wrap gap-3">
           {booking.artist?.user ? (
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full gold-gradient flex items-center justify-center text-navy-900 font-bold text-xs">
+              <div className="w-9 h-9 rounded-full gold-gradient flex items-center justify-center text-white font-bold text-xs">
                 {getInitials(booking.artist.user.name)}
               </div>
               <div>
@@ -274,7 +276,8 @@ export function ClientEventsClient({ bookings, clientId }: { bookings: BookingWi
             ) : isCompleted ? (
               <Button
                 size="sm"
-                className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs"
+                variant="warning"
+                className="text-xs"
                 onClick={() => { setSelectedBooking(booking); setFeedbackOpen(true); }}
               >
                 <Star className="w-3.5 h-3.5 mr-1.5" />Leave a Review
@@ -401,7 +404,8 @@ export function ClientEventsClient({ bookings, clientId }: { bookings: BookingWi
               <Button
                 onClick={submitFeedback}
                 loading={submitting}
-                className="h-11 w-full sm:w-auto bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold"
+                variant="warning"
+                className="h-11 w-full sm:w-auto font-semibold"
               >
                 <Star className="w-4 h-4 mr-2" />Submit Review
               </Button>

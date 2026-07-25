@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatDate, formatCurrency, getStatusColor, getStatusLabel } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
+import { db } from "@/lib/firebase/client";
+import { doc, writeBatch, collection, serverTimestamp } from "firebase/firestore";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -60,16 +61,23 @@ export function AdminEnquiriesClient({ enquiries, coordinators }: Props) {
   const confirmBulkAssign = async () => {
     if (!bulkAssignCoord || bulkSelected.size === 0) return;
     setBulkAssigning(true);
-    const supabase = createClient();
     const ids = Array.from(bulkSelected);
-    await supabase.from("enquiries").update({ coordinator_id: bulkAssignCoord, status: "assigned" }).in("id", ids);
+    const batch = writeBatch(db);
+    for (const id of ids) {
+      batch.update(doc(db, "enquiries", id), { coordinator_id: bulkAssignCoord, status: "assigned", updated_at: serverTimestamp() });
+      const enq = enquiries.find((e) => e.id === id);
+      const notifRef = doc(collection(db, "users", bulkAssignCoord, "notifications"));
+      batch.set(notifRef, {
+        title: "Enquiry Assigned",
+        message: `Assigned: ${enq?.event_type ?? "Event"} in ${enq?.city ?? ""}`,
+        type: "info",
+        is_read: false,
+        link: `/coordinator/enquiries/${id}`,
+        created_at: serverTimestamp(),
+      });
+    }
+    await batch.commit();
     const coord = coordinators.find((c) => c.id === bulkAssignCoord);
-    await supabase.from("notifications").insert(
-      ids.map((id) => {
-        const enq = enquiries.find((e) => e.id === id);
-        return { user_id: bulkAssignCoord, title: "Enquiry Assigned", message: `Assigned: ${enq?.event_type ?? "Event"} in ${enq?.city ?? ""}`, type: "info" };
-      })
-    );
     toast.success(`${ids.length} ${ids.length === 1 ? "enquiry" : "enquiries"} assigned to ${coord?.name ?? "coordinator"}`);
     setBulkSelected(new Set());
     setBulkAssignCoord("");
@@ -86,17 +94,21 @@ export function AdminEnquiriesClient({ enquiries, coordinators }: Props) {
   const confirmAssign = async () => {
     if (!selectedEnquiry || !selectedCoordinator) return;
     setAssigning(true);
-    const supabase = createClient();
-    await supabase.from("enquiries")
-      .update({ coordinator_id: selectedCoordinator, status: "assigned" })
-      .eq("id", selectedEnquiry.id);
-    await supabase.from("notifications").insert({
-      user_id: selectedCoordinator,
+    const batch = writeBatch(db);
+    batch.update(doc(db, "enquiries", selectedEnquiry.id), {
+      coordinator_id: selectedCoordinator,
+      status: "assigned",
+      updated_at: serverTimestamp(),
+    });
+    batch.set(doc(collection(db, "users", selectedCoordinator, "notifications")), {
       title: "New Enquiry Assigned",
       message: `You have been assigned an enquiry for ${selectedEnquiry.event_type} in ${selectedEnquiry.city}.`,
       type: "info",
+      is_read: false,
       link: `/coordinator/enquiries/${selectedEnquiry.id}`,
+      created_at: serverTimestamp(),
     });
+    await batch.commit();
     toast.success("Coordinator assigned!");
     setAssigning(false);
     setAssignDialogOpen(false);
@@ -120,7 +132,7 @@ export function AdminEnquiriesClient({ enquiries, coordinators }: Props) {
         initial={{ opacity: 0, y: 4 }}
         animate={{ opacity: 1, y: 0 }}
         className={`flex items-center gap-3 p-3 border-b last:border-0 hover:bg-accent/20 transition-colors ${
-          isSelected ? "bg-indigo-50/60" :
+          isSelected ? "bg-navy-50/60" :
           urgency === "high" ? "bg-red-50/40" :
           urgency === "medium" ? "bg-amber-50/30" : ""
         }`}
@@ -131,7 +143,7 @@ export function AdminEnquiriesClient({ enquiries, coordinators }: Props) {
             type="checkbox"
             checked={isSelected}
             onChange={() => toggleBulkSelect(e.id)}
-            className="w-4 h-4 rounded border-gray-300 text-indigo-600 flex-shrink-0 cursor-pointer"
+            className="w-4 h-4 rounded border-gray-300 text-navy-600 flex-shrink-0 cursor-pointer"
           />
         )}
         {/* Urgency indicator */}
@@ -145,7 +157,7 @@ export function AdminEnquiriesClient({ enquiries, coordinators }: Props) {
               e.status === "confirmed" ? "bg-green-500" :
               e.status === "completed" ? "bg-emerald-400" :
               e.status === "cancelled" ? "bg-gray-300" :
-              "bg-indigo-400"
+              "bg-navy-400"
             }`} />
           )}
         </div>
@@ -183,7 +195,8 @@ export function AdminEnquiriesClient({ enquiries, coordinators }: Props) {
           ) : (
             <Button
               size="sm"
-              className="h-7 text-xs bg-indigo-600 hover:bg-indigo-700 text-white"
+              variant="secondary"
+              className="h-7 text-xs"
               onClick={() => handleAssign(e)}
             >
               <UserCheck className="w-3.5 h-3.5 mr-1" />Assign
@@ -216,25 +229,25 @@ export function AdminEnquiriesClient({ enquiries, coordinators }: Props) {
 
       {/* Bulk action bar */}
       {bulkSelected.size > 0 && (
-        <div className="flex items-center gap-3 p-3 rounded-xl bg-indigo-50 border border-indigo-200">
-          <span className="text-sm font-medium text-indigo-800">{bulkSelected.size} enquir{bulkSelected.size === 1 ? "y" : "ies"} selected</span>
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-navy-50 border border-navy-200">
+          <span className="text-sm font-medium text-navy-800">{bulkSelected.size} enquir{bulkSelected.size === 1 ? "y" : "ies"} selected</span>
           <select
             value={bulkAssignCoord}
             onChange={(e) => setBulkAssignCoord(e.target.value)}
-            className="flex-1 max-w-xs h-8 rounded-lg border border-indigo-200 text-sm px-2 bg-white text-indigo-900"
+            className="flex-1 max-w-xs h-8 rounded-lg border border-navy-200 text-sm px-2 bg-white text-navy-900"
           >
             <option value="">Select coordinator…</option>
             {coordinators.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
           <Button
             size="sm"
+            variant="secondary"
             disabled={!bulkAssignCoord || bulkAssigning}
             onClick={confirmBulkAssign}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white"
           >
             {bulkAssigning ? "Assigning…" : "Assign All"}
           </Button>
-          <button onClick={() => setBulkSelected(new Set())} className="text-xs text-indigo-500 hover:text-indigo-700 underline">
+          <button onClick={() => setBulkSelected(new Set())} className="text-xs text-navy-500 hover:text-navy-700 underline">
             Clear
           </button>
         </div>
@@ -305,13 +318,13 @@ export function AdminEnquiriesClient({ enquiries, coordinators }: Props) {
           </DialogHeader>
           {selectedEnquiry && (
             <div className="space-y-4">
-              <div className="p-4 rounded-xl bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-100 space-y-1.5 text-sm">
-                <p className="font-semibold text-indigo-700">{selectedEnquiry.event_type} — {selectedEnquiry.city}</p>
+              <div className="p-4 rounded-xl bg-gradient-to-r from-navy-50 to-gold-50 border border-navy-100 space-y-1.5 text-sm">
+                <p className="font-semibold text-navy-700">{selectedEnquiry.event_type} — {selectedEnquiry.city}</p>
                 <p className="text-muted-foreground text-xs">
                   Client: <span className="font-medium text-foreground">{selectedEnquiry.client?.name}</span>
                   {" · "}Date: {formatDate(selectedEnquiry.event_date)}
                 </p>
-                <p className="text-xs text-indigo-600 font-medium">
+                <p className="text-xs text-navy-600 font-medium">
                   Budget: {formatCurrency(selectedEnquiry.budget_min)} – {formatCurrency(selectedEnquiry.budget_max)}
                 </p>
               </div>
@@ -325,7 +338,7 @@ export function AdminEnquiriesClient({ enquiries, coordinators }: Props) {
                     {coordinators.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
                         <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold">
+                          <div className="w-6 h-6 rounded-full bg-navy-100 text-navy-700 flex items-center justify-center text-xs font-bold">
                             {c.name[0]}
                           </div>
                           <span>{c.name}</span>

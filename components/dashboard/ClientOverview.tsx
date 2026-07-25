@@ -46,7 +46,7 @@ function JourneyBar({ status }: { status: string }) {
   return (
     <div className="mt-3 space-y-2">
       <div className="flex items-center justify-between text-xs">
-        <span className="font-semibold text-indigo-700">{step?.label ?? status}</span>
+        <span className="font-semibold text-gold-700">{step?.label ?? status}</span>
         <span className="text-muted-foreground">{progress}% complete</span>
       </div>
       <div className="h-2 bg-muted rounded-full overflow-hidden">
@@ -108,7 +108,7 @@ export function ClientOverview({ enquiries, proposals, upcomingBookings, userNam
           </p>
           <div className="flex flex-col sm:flex-row gap-3 mt-5">
             <Link href="/enquiry" className="flex-1 sm:flex-none">
-              <Button size="sm" className="w-full sm:w-auto bg-gold-500 hover:bg-gold-400 text-navy-900 font-semibold h-11 sm:h-9">
+              <Button size="sm" variant="default" className="w-full sm:w-auto font-semibold h-11 sm:h-9">
                 <Sparkles className="w-4 h-4 mr-2" />Plan New Event
               </Button>
             </Link>
@@ -126,27 +126,27 @@ export function ClientOverview({ enquiries, proposals, upcomingBookings, userNam
         <motion.div
           initial={{ opacity: 0, scale: 0.97 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="relative overflow-hidden rounded-2xl border-2 border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50 p-5"
+          className="relative overflow-hidden rounded-2xl border-2 border-gold-300 bg-gradient-to-r from-gold-50 to-gold-100 p-5"
         >
-          <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-amber-200/30 -translate-y-1/2 translate-x-1/2" />
+          <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-gold-200/30 -translate-y-1/2 translate-x-1/2" />
           <div className="relative flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div className="flex items-start gap-4">
               <div className="w-12 h-12 rounded-2xl gold-gradient flex items-center justify-center flex-shrink-0 shadow-md">
-                <ClipboardList className="w-6 h-6 text-navy-900" />
+                <ClipboardList className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="font-display font-bold text-amber-900 text-base">
+                <p className="font-display font-bold text-navy-900 text-base">
                   {pendingProposals.length === 1
                     ? "Your proposal is ready to review!"
                     : `${pendingProposals.length} proposals are waiting for your decision`}
                 </p>
-                <p className="text-sm text-amber-700 mt-1">
+                <p className="text-sm text-gold-700 mt-1">
                   Our coordinator has curated the perfect artists for your event.
                 </p>
               </div>
             </div>
             <Link href="/client/proposals" className="sm:flex-shrink-0">
-              <Button className="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 text-white h-11">
+              <Button variant="warning" className="w-full sm:w-auto h-11">
                 Review Now <ArrowRight className="w-4 h-4 ml-1.5" />
               </Button>
             </Link>
@@ -192,14 +192,14 @@ export function ClientOverview({ enquiries, proposals, upcomingBookings, userNam
 
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
-                <PartyPopper className="w-4 h-4 text-amber-500" />
+                <PartyPopper className="w-4 h-4 text-gold-600" />
                 <p className="font-semibold text-sm">Upcoming Event</p>
               </div>
               <p className="font-display font-bold text-lg">{nextEvent.venue}</p>
               <p className="text-sm text-muted-foreground">{nextEvent.city} · {formatDate(nextEvent.event_date)}</p>
               {nextEvent.artist?.user && (
                 <div className="flex items-center gap-2 mt-2">
-                  <div className="w-6 h-6 rounded-full gold-gradient flex items-center justify-center text-navy-900 text-[10px] font-bold">
+                  <div className="w-6 h-6 rounded-full gold-gradient flex items-center justify-center text-white text-[10px] font-bold">
                     {getInitials(nextEvent.artist.user.name)}
                   </div>
                   <p className="text-xs text-muted-foreground">
@@ -235,7 +235,7 @@ export function ClientOverview({ enquiries, proposals, upcomingBookings, userNam
               animate={{ opacity: 1 }}
               className="rounded-2xl border-2 border-dashed border-muted p-8 text-center"
             >
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 mx-auto mb-4 flex items-center justify-center">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-gold-400 to-amber-600 mx-auto mb-4 flex items-center justify-center">
                 <Sparkles className="w-7 h-7 text-white" />
               </div>
               <p className="font-display font-semibold text-lg mb-1">Plan your first event</p>
@@ -280,7 +280,7 @@ export function ClientOverview({ enquiries, proposals, upcomingBookings, userNam
                 {enquiry.coordinator ? (
                   <div className="mt-3 flex items-center justify-between pt-3 border-t">
                     <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 text-[10px] font-bold">
+                      <div className="w-7 h-7 rounded-full bg-navy-100 flex items-center justify-center text-navy-700 text-[10px] font-bold">
                         {getInitials(enquiry.coordinator.name)}
                       </div>
                       <div>
@@ -339,11 +339,11 @@ export function ClientOverview({ enquiries, proposals, upcomingBookings, userNam
           <h3 className="font-display font-semibold text-lg">Quick Access</h3>
           <div className="space-y-2">
             {[
-              { label: "My Proposals",    sub: `${pendingProposals.length} pending`,   href: "/client/proposals", icon: ClipboardList, color: "bg-amber-100 text-amber-600",  urgent: pendingProposals.length > 0 },
-              { label: "My Events",       sub: `${upcomingBookings.length} upcoming`,  href: "/client/events",    icon: Calendar,      color: "bg-emerald-100 text-emerald-600", urgent: false },
-              { label: "Payments",        sub: "View payment status",                  href: "/client/payments",  icon: IndianRupee,   color: "bg-blue-100 text-blue-600",       urgent: false },
-              { label: "Messages",        sub: "Chat with coordinator",                href: "/client/messages",  icon: MessageSquare, color: "bg-violet-100 text-violet-600",   urgent: false },
-              { label: "Browse Artists",  sub: "Explore 500+ artists",                 href: "/artists",          icon: Mic2,          color: "bg-rose-100 text-rose-600",       urgent: false },
+              { label: "My Proposals",    sub: `${pendingProposals.length} pending`,   href: "/client/proposals", icon: ClipboardList, color: "bg-gold-100 text-gold-600",   urgent: pendingProposals.length > 0 },
+              { label: "My Events",       sub: `${upcomingBookings.length} upcoming`,  href: "/client/events",    icon: Calendar,      color: "bg-navy-100 text-navy-700",       urgent: false },
+              { label: "Payments",        sub: "View payment status",                  href: "/client/payments",  icon: IndianRupee,   color: "bg-gold-100 text-gold-600",       urgent: false },
+              { label: "Messages",        sub: "Chat with coordinator",                href: "/client/messages",  icon: MessageSquare, color: "bg-navy-100 text-navy-700",       urgent: false },
+              { label: "Browse Artists",  sub: "Explore 500+ artists",                 href: "/artists",          icon: Mic2,          color: "bg-navy-100 text-navy-700",       urgent: false },
             ].map((item) => {
               const Icon = item.icon;
               return (
@@ -351,7 +351,7 @@ export function ClientOverview({ enquiries, proposals, upcomingBookings, userNam
                   <motion.div
                     whileHover={{ x: 3 }}
                     className={`flex items-center gap-3 p-3.5 rounded-xl border transition-all hover:shadow-sm ${
-                      item.urgent ? "border-amber-300 bg-amber-50/50" : "bg-card hover:border-indigo-200"
+                      item.urgent ? "border-gold-300 bg-gold-50/50" : "bg-card hover:border-navy-200"
                     }`}
                   >
                     <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${item.color}`}>
@@ -362,7 +362,7 @@ export function ClientOverview({ enquiries, proposals, upcomingBookings, userNam
                       <p className="text-xs text-muted-foreground">{item.sub}</p>
                     </div>
                     {item.urgent && (
-                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse flex-shrink-0" />
+                      <span className="w-2 h-2 rounded-full bg-gold-500 animate-pulse flex-shrink-0" />
                     )}
                     <ChevronRight className="w-4 h-4 text-muted-foreground/50 flex-shrink-0" />
                   </motion.div>
@@ -375,7 +375,7 @@ export function ClientOverview({ enquiries, proposals, upcomingBookings, userNam
           <a href="https://wa.me/919999999999" target="_blank" rel="noopener noreferrer">
             <motion.div
               whileHover={{ scale: 1.01 }}
-              className="rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 p-4 text-white mt-4 cursor-pointer"
+              className="rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 p-4 text-white mt-4 cursor-pointer"
             >
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">

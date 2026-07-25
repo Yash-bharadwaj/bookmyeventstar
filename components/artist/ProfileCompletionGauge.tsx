@@ -33,7 +33,7 @@ export function ProfileCompletionGauge({
   return (
     <div
       className={cn(
-        "rounded-2xl border bg-gradient-to-br from-navy-900 via-navy-900 to-indigo-950 text-white shadow-lg overflow-hidden",
+        "rounded-2xl border bg-gradient-to-br from-navy-900 via-navy-900 to-navy-950 text-white shadow-lg overflow-hidden",
         className
       )}
     >

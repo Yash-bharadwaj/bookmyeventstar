@@ -11,7 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArtistProfile } from "@/types";
 import { formatCurrency, getInitials } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
+import { db } from "@/lib/firebase/client";
+import { doc, updateDoc, writeBatch } from "firebase/firestore";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 
@@ -57,15 +58,16 @@ export function AdminArtistsClient({ artists, categories }: { artists: ArtistWit
   const confirmBulkAction = async () => {
     if (!bulkAction || bulkSelected.size === 0) return;
     setBulkProcessing(true);
-    const supabase = createClient();
     const ids = Array.from(bulkSelected);
-    if (bulkAction === "verify") {
-      await supabase.from("artist_profiles").update({ is_verified: true }).in("user_id", ids);
-      toast.success(`${ids.length} artist${ids.length > 1 ? "s" : ""} verified`);
-    } else {
-      await supabase.from("artist_profiles").update({ is_listed: true }).in("user_id", ids);
-      toast.success(`${ids.length} artist${ids.length > 1 ? "s" : ""} listed`);
+    const batch = writeBatch(db);
+    const field = bulkAction === "verify" ? "is_verified" : "is_listed";
+    for (const id of ids) {
+      batch.update(doc(db, "artistProfiles", id), { [field]: true });
     }
+    await batch.commit();
+    toast.success(bulkAction === "verify"
+      ? `${ids.length} artist${ids.length > 1 ? "s" : ""} verified`
+      : `${ids.length} artist${ids.length > 1 ? "s" : ""} listed`);
     setBulkSelected(new Set());
     setBulkAction("");
     setBulkProcessing(false);
@@ -95,35 +97,35 @@ export function AdminArtistsClient({ artists, categories }: { artists: ArtistWit
 
   const toggleVerify = async (artistId: string, current: boolean) => {
     setToggling(artistId);
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("artist_profiles")
-      .update({ is_verified: !current })
-      .eq("id", artistId);
-    if (error) toast.error("Failed to update");
-    else toast.success(current ? "Artist unverified" : "Artist verified!");
+    try {
+      await updateDoc(doc(db, "artistProfiles", artistId), { is_verified: !current });
+      toast.success(current ? "Artist unverified" : "Artist verified!");
+    } catch {
+      toast.error("Failed to update");
+    }
     setToggling(null);
     router.refresh();
   };
 
   const toggleListed = async (artistId: string, currentListed: boolean) => {
     setListingToggling(artistId);
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("artist_profiles")
-      .update({ is_listed: !currentListed })
-      .eq("id", artistId);
-    if (error) toast.error("Failed to update visibility");
-    else if (!currentListed) {
-      const a = artists.find((x) => x.id === artistId);
-      if (a?.is_profile_complete && a.is_verified) {
-        toast.success("Artist listed and eligible to appear on explore once filters match.");
+    try {
+      await updateDoc(doc(db, "artistProfiles", artistId), { is_listed: !currentListed });
+      if (!currentListed) {
+        const a = artists.find((x) => x.id === artistId);
+        if (a?.is_profile_complete && a.is_verified) {
+          toast.success("Artist listed and eligible to appear on explore once filters match.");
+        } else {
+          toast.success(
+            "Listed. Explore requires a complete profile checklist, verification, and this listing toggle."
+          );
+        }
       } else {
-        toast.success(
-          "Listed. Explore requires a complete profile checklist, verification, and this listing toggle."
-        );
+        toast.success("Artist hidden from client & coordinator browse");
       }
-    } else toast.success("Artist hidden from client & coordinator browse");
+    } catch {
+      toast.error("Failed to update visibility");
+    }
     setListingToggling(null);
     router.refresh();
   };
@@ -138,7 +140,7 @@ export function AdminArtistsClient({ artists, categories }: { artists: ArtistWit
             onClick={() => setVerifyTab(tab.key)}
             className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-all flex items-center gap-2 ${
               verifyTab === tab.key
-                ? "text-indigo-700 border-b-2 border-indigo-600"
+                ? "text-navy-700 border-b-2 border-navy-600"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -224,8 +226,8 @@ export function AdminArtistsClient({ artists, categories }: { artists: ArtistWit
                   }}
                   className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
                     categoryFilter === cat
-                      ? "bg-indigo-600 text-white border-indigo-600"
-                      : "bg-background border-border text-muted-foreground hover:border-indigo-400"
+                      ? "bg-navy-600 text-white border-navy-600"
+                      : "bg-background border-border text-muted-foreground hover:border-navy-400"
                   }`}
                 >
                   {cat}
@@ -250,21 +252,21 @@ export function AdminArtistsClient({ artists, categories }: { artists: ArtistWit
         <>
           {/* Bulk action bar */}
           {bulkSelected.size > 0 && (
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-indigo-50 border border-indigo-200">
-              <span className="text-sm font-medium text-indigo-800">{bulkSelected.size} artist{bulkSelected.size > 1 ? "s" : ""} selected</span>
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-navy-50 border border-navy-200">
+              <span className="text-sm font-medium text-navy-800">{bulkSelected.size} artist{bulkSelected.size > 1 ? "s" : ""} selected</span>
               <select
                 value={bulkAction}
                 onChange={(e) => setBulkAction(e.target.value as "verify" | "list" | "")}
-                className="flex-1 max-w-[180px] h-8 rounded-lg border border-indigo-200 text-sm px-2 bg-white text-indigo-900"
+                className="flex-1 max-w-[180px] h-8 rounded-lg border border-navy-200 text-sm px-2 bg-white text-navy-900"
               >
                 <option value="">Choose action…</option>
                 <option value="verify">Verify all</option>
                 <option value="list">List all (show on browse)</option>
               </select>
-              <Button size="sm" disabled={!bulkAction || bulkProcessing} onClick={confirmBulkAction} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+              <Button size="sm" variant="secondary" disabled={!bulkAction || bulkProcessing} onClick={confirmBulkAction}>
                 {bulkProcessing ? "Processing…" : "Apply"}
               </Button>
-              <button onClick={() => setBulkSelected(new Set())} className="text-xs text-indigo-500 underline hover:text-indigo-700">Clear</button>
+              <button onClick={() => setBulkSelected(new Set())} className="text-xs text-navy-500 underline hover:text-navy-700">Clear</button>
             </div>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -275,7 +277,7 @@ export function AdminArtistsClient({ artists, categories }: { artists: ArtistWit
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.04 }}
               className={`rounded-2xl border p-4 hover:shadow-md transition-all relative ${
-                bulkSelected.has(artist.user_id) ? "ring-2 ring-indigo-400" : ""
+                bulkSelected.has(artist.user_id) ? "ring-2 ring-navy-400" : ""
               } ${!artist.is_verified ? "border-amber-200 bg-amber-50/20" : ""
               } ${!isListedProfile(artist) ? "border-dashed border-slate-300 bg-slate-50/50" : ""}`}
             >
@@ -284,13 +286,13 @@ export function AdminArtistsClient({ artists, categories }: { artists: ArtistWit
                 type="checkbox"
                 checked={bulkSelected.has(artist.user_id)}
                 onChange={() => toggleBulkSelect(artist.user_id)}
-                className="absolute top-3 left-3 w-4 h-4 rounded border-gray-300 text-indigo-600 cursor-pointer z-10"
+                className="absolute top-3 left-3 w-4 h-4 rounded border-gray-300 text-navy-600 cursor-pointer z-10"
               />
               {/* Header */}
               <div className="flex items-start justify-between gap-3 mb-3 pl-6">
                 <div className="flex items-center gap-3">
                   <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-sm flex-shrink-0 ${
-                    artist.is_verified ? "gold-gradient text-navy-900" : "bg-muted text-muted-foreground"
+                    artist.is_verified ? "gold-gradient text-white" : "bg-muted text-muted-foreground"
                   }`}>
                     {getInitials(artist.user.name)}
                   </div>
@@ -310,11 +312,11 @@ export function AdminArtistsClient({ artists, categories }: { artists: ArtistWit
                     </span>
                   )}
                   {artist.is_profile_complete === true ? (
-                    <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-violet-100 text-violet-800 font-semibold">
+                    <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-navy-100 text-navy-800 font-semibold">
                       Profile complete
                     </span>
                   ) : (
-                    <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 font-semibold">
+                    <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold">
                       Profile incomplete
                     </span>
                   )}
@@ -362,7 +364,7 @@ export function AdminArtistsClient({ artists, categories }: { artists: ArtistWit
                   </div>
                   <span className="text-muted-foreground">{artist.total_bookings} bookings</span>
                 </div>
-                <span className="font-semibold text-indigo-700">{formatCurrency(artist.base_price)}</span>
+                <span className="font-semibold text-navy-700">{formatCurrency(artist.base_price)}</span>
               </div>
 
               {/* Actions */}
