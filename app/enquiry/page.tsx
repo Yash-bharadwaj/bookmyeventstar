@@ -42,6 +42,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { OtpInput } from "@/components/ui/otp-input";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import {
   Select,
@@ -85,6 +86,7 @@ export default function EnquiryPage() {
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState("");
   const [otpBusy, setOtpBusy] = useState(false);
+  const [otpError, setOtpError] = useState(false);
   const [resendIn, setResendIn] = useState(0);
   const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
   const [phoneVerified, setPhoneVerified] = useState(false);
@@ -197,11 +199,12 @@ export default function EnquiryPage() {
     }
   };
 
-  const handleVerifyOtp = async () => {
-    if (!confirmationResult || !otpCode.trim()) { toast.error("Enter the OTP code"); return; }
+  const handleVerifyOtp = async (codeOverride?: string) => {
+    const code = (codeOverride ?? otpCode).trim();
+    if (!confirmationResult || code.length !== 6) { toast.error("Enter the 6-digit code"); return; }
     setOtpBusy(true);
     try {
-      const cred = await confirmationResult.confirm(otpCode.trim());
+      const cred = await confirmationResult.confirm(code);
       const isNewUser = getAdditionalUserInfo(cred)?.isNewUser ?? false;
       const d = phoneDigits.replace(/\D/g, "");
 
@@ -218,6 +221,9 @@ export default function EnquiryPage() {
     } catch (err) {
       console.error("[enquiry] confirm OTP failed:", err);
       toast.error("Incorrect OTP — please try again.");
+      setOtpError(true);
+      setOtpCode("");
+      setTimeout(() => setOtpError(false), 500);
     } finally {
       setOtpBusy(false);
     }
@@ -423,7 +429,7 @@ export default function EnquiryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-navy-900 via-navy-800 to-navy-950 flex items-center justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))] overflow-hidden">
+    <div className="relative min-h-screen bg-gradient-to-br from-navy-900 via-navy-800 to-navy-950 flex items-center justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))] overflow-hidden">
       <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full bg-gold-500/5 blur-3xl pointer-events-none" />
       <div id="recaptcha-container" />
 
@@ -576,17 +582,16 @@ export default function EnquiryPage() {
                             </div>
 
                             {otpSent && (
-                              <div className="flex gap-2 items-start">
-                                <Input
-                                  type="text"
-                                  inputMode="numeric"
-                                  placeholder="6-digit code"
-                                  maxLength={6}
-                                  className="text-center tracking-[0.3em] font-semibold"
+                              <div className="space-y-2">
+                                <OtpInput
                                   value={otpCode}
-                                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                                  onChange={setOtpCode}
+                                  onComplete={(code) => handleVerifyOtp(code)}
+                                  disabled={otpBusy}
+                                  error={otpError}
+                                  autoFocus
                                 />
-                                <Button type="button" onClick={handleVerifyOtp} loading={otpBusy} className="shrink-0">
+                                <Button type="button" onClick={() => handleVerifyOtp()} loading={otpBusy} className="w-full">
                                   Verify
                                 </Button>
                               </div>

@@ -11,6 +11,7 @@ import { sendPhoneOtp, resetRecaptcha, signOutEverywhere } from "@/lib/firebase/
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { OtpInput } from "@/components/ui/otp-input";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 
 type Step = "identifier" | "emailSent" | "otp" | "newPassword" | "done";
@@ -23,6 +24,7 @@ export default function ForgotPasswordPage() {
   // Phone-path state
   const [otpCode, setOtpCode] = useState("");
   const [otpBusy, setOtpBusy] = useState(false);
+  const [otpError, setOtpError] = useState(false);
   const [resendIn, setResendIn] = useState(0);
   const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
 
@@ -101,14 +103,15 @@ export default function ForgotPasswordPage() {
     }
   };
 
-  const verifyOtp = async () => {
-    if (!confirmationResult || !otpCode.trim()) {
-      toast.error("Enter the OTP code");
+  const verifyOtp = async (codeOverride?: string) => {
+    const code = (codeOverride ?? otpCode).trim();
+    if (!confirmationResult || code.length !== 6) {
+      toast.error("Enter the 6-digit code");
       return;
     }
     setOtpBusy(true);
     try {
-      const cred = await confirmationResult.confirm(otpCode.trim());
+      const cred = await confirmationResult.confirm(code);
       const isNewUser = getAdditionalUserInfo(cred)?.isNewUser ?? false;
       if (isNewUser) {
         // This number was never linked as a verified phone credential on the
@@ -132,6 +135,9 @@ export default function ForgotPasswordPage() {
     } catch (err) {
       console.error("[forgot-password] OTP confirm failed:", err);
       toast.error("Incorrect OTP — please try again.");
+      setOtpError(true);
+      setOtpCode("");
+      setTimeout(() => setOtpError(false), 500);
     } finally {
       setOtpBusy(false);
     }
@@ -282,17 +288,16 @@ export default function ForgotPasswordPage() {
               </p>
 
               <div className="mt-6 space-y-4">
-                <div className="flex gap-2 items-start">
-                  <Input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="6-digit code"
-                    maxLength={6}
-                    className="text-center tracking-[0.3em] font-semibold"
+                <div className="space-y-2">
+                  <OtpInput
                     value={otpCode}
-                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    onChange={setOtpCode}
+                    onComplete={(code) => verifyOtp(code)}
+                    disabled={otpBusy}
+                    error={otpError}
+                    autoFocus
                   />
-                  <Button type="button" onClick={verifyOtp} loading={otpBusy} className="shrink-0">
+                  <Button type="button" onClick={() => verifyOtp()} loading={otpBusy} className="w-full">
                     Verify
                   </Button>
                 </div>
