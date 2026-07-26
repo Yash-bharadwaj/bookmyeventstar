@@ -36,7 +36,7 @@ export function otpEmailHtml(code: string) {
   `;
 }
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://bookmyeventstar.vercel.app";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://bookmyeventstar.com";
 
 /**
  * One generic shell reused for every "you have a notification" email —
