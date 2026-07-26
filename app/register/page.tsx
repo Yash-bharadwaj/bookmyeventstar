@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
-  Mail, Lock, User, Phone, Eye, EyeOff, CalendarCheck, Mic2, Globe, Info, CheckCircle2,
+  Mail, Lock, User, Phone, Eye, EyeOff, CalendarCheck, Mic2, Globe, CheckCircle2,
   Smartphone, ShieldCheck,
 } from "lucide-react";
 import toast from "react-hot-toast";
@@ -41,11 +41,11 @@ function RegisterForm() {
   const isArtist = selectedRole === "artist";
 
   return (
-    <div className="min-h-screen flex">
+    <div className="h-screen flex overflow-hidden">
       <div id="recaptcha-container" />
 
       {/* Left panel — role-aware branding, desktop only */}
-      <div className="hidden lg:flex lg:w-1/2 navy-gradient relative overflow-hidden flex-col items-center justify-center p-12">
+      <div className="hidden lg:flex lg:w-1/2 h-full navy-gradient relative overflow-hidden flex-col items-center justify-center p-10">
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full bg-gold-500/10 blur-3xl" />
         <motion.div
           key={selectedRole}
@@ -54,33 +54,33 @@ function RegisterForm() {
           transition={{ duration: 0.5 }}
           className="relative text-center max-w-sm"
         >
-          <div className="flex justify-center mb-8">
-            <BrandLogo href="/" size="xl" priority />
+          <div className="flex justify-center mb-6">
+            <BrandLogo href="/" size="lg" priority />
           </div>
 
           {isArtist ? (
             <>
-              <p className="text-white/70 text-lg">
+              <p className="text-white/70">
                 List your profile and let our coordinators bring the bookings to you.
               </p>
-              <div className="mt-10 space-y-3 text-left">
+              <div className="mt-6 space-y-2.5 text-left">
                 {ARTIST_PANEL_BENEFITS.map((b) => (
-                  <div key={b} className="flex items-start gap-3 glass rounded-xl p-3.5">
+                  <div key={b} className="flex items-start gap-3 glass rounded-xl p-3">
                     <CheckCircle2 className="w-4 h-4 text-gold-400 flex-shrink-0 mt-0.5" />
-                    <p className="text-sm text-white/90">{b}</p>
+                    <p className="text-xs text-white/90 leading-snug">{b}</p>
                   </div>
                 ))}
               </div>
             </>
           ) : (
             <>
-              <p className="text-white/70 text-lg">
+              <p className="text-white/70">
                 India&apos;s premier artist management and event booking platform
               </p>
-              <div className="mt-10 grid grid-cols-2 gap-4 text-left">
+              <div className="mt-6 grid grid-cols-2 gap-3 text-left">
                 {CLIENT_PANEL_STATS.map(([val, label]) => (
-                  <div key={label} className="glass rounded-xl p-4">
-                    <p className="font-display text-2xl font-bold text-white">{val}</p>
+                  <div key={label} className="glass rounded-xl p-3.5">
+                    <p className="font-display text-xl font-bold text-white">{val}</p>
                     <p className="text-white/60 text-xs mt-0.5">{label}</p>
                   </div>
                 ))}
@@ -91,22 +91,22 @@ function RegisterForm() {
       </div>
 
       {/* Right panel — form */}
-      <div className="flex-1 flex items-center justify-center p-6 bg-white">
+      <div className="flex-1 h-full overflow-y-auto flex items-center justify-center p-6 bg-white">
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.5 }}
-          className="w-full max-w-md"
+          className="w-full max-w-md py-6"
         >
-          <div className="lg:hidden mb-8 flex justify-center">
-            <BrandLogo href="/" size="xl" priority />
+          <div className="lg:hidden mb-6 flex justify-center">
+            <BrandLogo href="/" size="lg" priority />
           </div>
 
-          <h2 className="font-display text-3xl font-bold text-navy-900">Create your account</h2>
-          <p className="text-muted-foreground mt-2">Join thousands using BookMyEventStar</p>
+          <h2 className="font-display text-2xl font-bold text-navy-900">Create your account</h2>
+          <p className="text-muted-foreground text-sm mt-1">Join thousands using BookMyEventStar</p>
 
           {/* Role selector */}
-          <div className="mt-6 grid grid-cols-2 gap-3">
+          <div className="mt-4 grid grid-cols-2 gap-3">
             {[
               { value: "client", label: "I want to book artists", icon: CalendarCheck, color: "text-gold-600 bg-gold-50" },
               { value: "artist", label: "I am an artist", icon: Mic2, color: "text-navy-700 bg-navy-50" },
@@ -115,7 +115,7 @@ function RegisterForm() {
               return (
                 <label
                   key={opt.value}
-                  className={`relative flex flex-col items-center gap-2 p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                  className={`relative flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 cursor-pointer transition-all ${
                     selectedRole === opt.value ? "border-gold-500 bg-gold-50" : "border-border hover:border-gold-300"
                   }`}
                 >
@@ -125,8 +125,8 @@ function RegisterForm() {
                     checked={selectedRole === opt.value}
                     onChange={() => setSelectedRole(opt.value as "client" | "artist")}
                   />
-                  <div className={`w-10 h-10 rounded-xl ${opt.color} flex items-center justify-center`}>
-                    <Icon className="w-5 h-5" />
+                  <div className={`w-9 h-9 rounded-xl ${opt.color} flex items-center justify-center`}>
+                    <Icon className="w-4 h-4" />
                   </div>
                   <span className="text-xs font-medium text-center leading-tight">{opt.label}</span>
                 </label>
@@ -136,7 +136,7 @@ function RegisterForm() {
 
           {selectedRole === "client" ? <ClientRegisterForm /> : <ArtistRegisterForm />}
 
-          <p className="mt-5 text-center text-sm text-muted-foreground">
+          <p className="mt-4 text-center text-sm text-muted-foreground">
             Already have an account?{" "}
             <Link href="/login" className="text-gold-600 font-medium hover:text-gold-700">
               Sign in
@@ -187,48 +187,28 @@ function ArtistRegisterForm() {
   };
 
   return (
-    <>
-      <motion.div
-        initial={{ opacity: 0, height: 0 }}
-        animate={{ opacity: 1, height: "auto" }}
-        className="mt-4 rounded-xl border border-navy-200 bg-navy-50 p-3.5 space-y-2"
-      >
-        <p className="text-xs font-semibold text-navy-900 flex items-center gap-1.5">
-          <Info className="w-3.5 h-3.5 flex-shrink-0" />What happens after you register?
-        </p>
-        <ul className="space-y-1.5">
-          {[
-            "Complete your artist profile — bio, categories, cities, portfolio photos",
-            "Your profile is reviewed and verified by our team",
-            "Once verified, you appear in client and coordinator searches",
-          ].map((step, i) => (
-            <li key={i} className="flex items-start gap-2 text-[11px] text-navy-800">
-              <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-navy-600" />
-              {step}
-            </li>
-          ))}
-        </ul>
-      </motion.div>
-
-      <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-4">
-        <div className="space-y-1.5">
+    <form onSubmit={handleSubmit(onSubmit)} className="mt-4 space-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="space-y-1">
           <Label>Full Name</Label>
           <Input placeholder="John Doe" icon={<User className="w-4 h-4" />} error={errors.name?.message} {...register("name")} />
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           <Label>Email Address</Label>
           <Input type="email" placeholder="you@example.com" icon={<Mail className="w-4 h-4" />} error={errors.email?.message} {...register("email")} />
         </div>
-        <div className="space-y-1.5">
-          <Label>Mobile Number</Label>
-          <div className="flex gap-2">
-            <div className="flex items-center px-3 rounded-xl border bg-muted text-sm text-muted-foreground font-medium gap-1.5">
-              <Globe className="w-3.5 h-3.5" />+91
-            </div>
-            <Input type="tel" placeholder="9876543210" maxLength={10} icon={<Phone className="w-4 h-4" />} error={errors.phone?.message} {...register("phone")} />
+      </div>
+      <div className="space-y-1">
+        <Label>Mobile Number</Label>
+        <div className="flex gap-2">
+          <div className="flex items-center px-3 rounded-xl border bg-muted text-sm text-muted-foreground font-medium gap-1.5">
+            <Globe className="w-3.5 h-3.5" />+91
           </div>
+          <Input type="tel" placeholder="9876543210" maxLength={10} icon={<Phone className="w-4 h-4" />} error={errors.phone?.message} {...register("phone")} />
         </div>
-        <div className="space-y-1.5">
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="space-y-1">
           <Label>Password</Label>
           <div className="relative">
             <Input
@@ -244,16 +224,16 @@ function ArtistRegisterForm() {
             </button>
           </div>
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           <Label>Confirm Password</Label>
           <Input type="password" placeholder="Re-enter password" icon={<Lock className="w-4 h-4" />} error={errors.confirmPassword?.message} {...register("confirmPassword")} />
         </div>
+      </div>
 
-        <Button type="submit" loading={loading} className="w-full mt-2" size="lg">
-          Create Account
-        </Button>
-      </form>
-    </>
+      <Button type="submit" loading={loading} className="w-full mt-1" size="lg">
+        Create Account
+      </Button>
+    </form>
   );
 }
 
@@ -364,18 +344,20 @@ function ClientRegisterForm() {
   };
 
   return (
-    <form onSubmit={onSubmit} className="mt-6 space-y-4">
-      <div className="space-y-1.5">
-        <Label>Full Name</Label>
-        <Input placeholder="Jane Doe" icon={<User className="w-4 h-4" />} value={name} onChange={(e) => setName(e.target.value)} />
-      </div>
-      <div className="space-y-1.5">
-        <Label>Email Address</Label>
-        <Input type="email" placeholder="you@example.com" icon={<Mail className="w-4 h-4" />} value={email} onChange={(e) => setEmail(e.target.value)} />
+    <form onSubmit={onSubmit} className="mt-4 space-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label>Full Name</Label>
+          <Input placeholder="Jane Doe" icon={<User className="w-4 h-4" />} value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div className="space-y-1">
+          <Label>Email Address</Label>
+          <Input type="email" placeholder="you@example.com" icon={<Mail className="w-4 h-4" />} value={email} onChange={(e) => setEmail(e.target.value)} />
+        </div>
       </div>
 
       {!phoneVerified ? (
-        <div className="rounded-2xl border border-gold-200 bg-gold-50/50 p-4 space-y-3">
+        <div className="rounded-2xl border border-gold-200 bg-gold-50/50 p-3.5 space-y-2.5">
           <p className="text-xs font-medium text-gold-700 flex items-center gap-1.5">
             <ShieldCheck className="w-3.5 h-3.5" />Verify your mobile number
           </p>
@@ -441,9 +423,9 @@ function ClientRegisterForm() {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden space-y-4"
+            className="overflow-hidden grid grid-cols-1 sm:grid-cols-2 gap-3"
           >
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <Label>Password</Label>
               <div className="relative">
                 <Input
@@ -460,7 +442,7 @@ function ClientRegisterForm() {
                 </button>
               </div>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <Label>Confirm Password</Label>
               <Input type="password" placeholder="Re-enter password" icon={<Lock className="w-4 h-4" />} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" />
             </div>
@@ -468,7 +450,7 @@ function ClientRegisterForm() {
         )}
       </AnimatePresence>
 
-      <Button type="submit" loading={loading} disabled={!phoneVerified} className="w-full mt-2" size="lg">
+      <Button type="submit" loading={loading} disabled={!phoneVerified} className="w-full mt-1" size="lg">
         Create Account
       </Button>
     </form>
