@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Star, MapPin, IndianRupee, CheckCircle2, Check, Plus, X,
   SlidersHorizontal, ArrowUpDown, Phone, Mail,
-  Calendar, Sparkles, ArrowRight, Mic2, Send,
+  Calendar, Sparkles, ArrowRight, Mic2, Send, Ban, CalendarClock,
   User, Award, BookOpen, ImageIcon, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatCurrency, getInitials, formatDate } from "@/lib/utils";
+import { checkArtistsAvailability, AvailabilityStatus } from "@/lib/availability";
 import { useRouter } from "next/navigation";
 
 interface Artist {
@@ -69,6 +70,19 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
   const [photoIdx, setPhotoIdx]           = useState(0);
 
   const allCities = useMemo(() => uniqueCities(artists), [artists]);
+
+  // ── Availability for the selected enquiry's event date ──
+  const [availabilityMap, setAvailabilityMap] = useState<Record<string, AvailabilityStatus>>({});
+
+  useEffect(() => {
+    if (!enquiry?.event_date) return;
+    let cancelled = false;
+    const ids = artists.map((a) => a.id);
+    checkArtistsAvailability(ids, enquiry.event_date).then((result) => {
+      if (!cancelled) setAvailabilityMap(result);
+    });
+    return () => { cancelled = true; };
+  }, [enquiry?.event_date, artists]);
 
   // ── When enquiry changes, auto-apply its city + budget ──
   const applyEnquiryContext = (id: string) => {
@@ -128,8 +142,18 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
       return 0;
     });
 
+    // When shortlisting for a specific event date, surface free artists
+    // first rather than burying them under blocked/booked ones.
+    if (enquiry) {
+      const rank = (id: string) => {
+        const status = availabilityMap[id];
+        return status === "blocked" || status === "booked" ? 1 : 0;
+      };
+      list = [...list].sort((a, b) => rank(a.id) - rank(b.id));
+    }
+
     return list;
-  }, [artists, search, categories, cities, minRating, minPrice, maxPrice, verifiedOnly, sortBy]);
+  }, [artists, search, categories, cities, minRating, minPrice, maxPrice, verifiedOnly, sortBy, enquiry, availabilityMap]);
 
   const shortlistedArtists = artists.filter((a) => shortlisted.has(a.id));
 
@@ -471,6 +495,7 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
             const photo = primaryPhoto(artist);
             const withinBudget = enquiry && artist.base_price <= enquiry.budget_max;
             const overBudget   = enquiry && artist.base_price > enquiry.budget_max;
+            const availability = enquiry ? availabilityMap[artist.id] : undefined;
 
             return (
               <motion.div
@@ -508,14 +533,26 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                       </div>
                     )}
 
-                    {/* Budget fit badge */}
+                    {/* Budget fit + availability badges, stacked top-left */}
                     {enquiry && (
-                      <div className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-semibold backdrop-blur-sm ${
-                        withinBudget
-                          ? "bg-emerald-500/90 text-white"
-                          : "bg-red-500/90 text-white"
-                      }`}>
-                        {withinBudget ? "Within budget" : "Over budget"}
+                      <div className="absolute top-2 left-2 flex flex-col gap-1 items-start">
+                        <div className={`px-2 py-0.5 rounded-full text-[10px] font-semibold backdrop-blur-sm ${
+                          withinBudget
+                            ? "bg-emerald-500/90 text-white"
+                            : "bg-red-500/90 text-white"
+                        }`}>
+                          {withinBudget ? "Within budget" : "Over budget"}
+                        </div>
+                        {availability === "blocked" && (
+                          <div className="px-2 py-0.5 rounded-full text-[10px] font-semibold backdrop-blur-sm bg-red-500/90 text-white flex items-center gap-1">
+                            <Ban className="w-2.5 h-2.5" />Blocked this date
+                          </div>
+                        )}
+                        {availability === "booked" && (
+                          <div className="px-2 py-0.5 rounded-full text-[10px] font-semibold backdrop-blur-sm bg-amber-500/90 text-white flex items-center gap-1">
+                            <CalendarClock className="w-2.5 h-2.5" />Booked this date
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -625,6 +662,7 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
           const photos = a.media.filter((m) => m.type === "photo");
           const isShortlisted = shortlisted.has(a.id);
           const withinBudget = enquiry ? a.base_price <= enquiry.budget_max : null;
+          const availability = enquiry ? availabilityMap[a.id] : undefined;
           const social = (a as any).social_links ?? {};
 
           return (
@@ -866,6 +904,18 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                             <span className="text-muted-foreground">City match</span>
                             <span className={`font-semibold ${a.cities.includes(enquiry.city) ? "text-emerald-700" : "text-amber-600"}`}>
                               {a.cities.includes(enquiry.city) ? `Available in ${enquiry.city}` : `Not listed in ${enquiry.city}`}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">On {formatDate(enquiry.event_date)}</span>
+                            <span className={`font-semibold flex items-center gap-1 ${
+                              availability === "blocked" ? "text-red-600"
+                              : availability === "booked" ? "text-amber-600"
+                              : "text-emerald-700"
+                            }`}>
+                              {availability === "blocked" && <><Ban className="w-3 h-3" />Blocked by artist</>}
+                              {availability === "booked" && <><CalendarClock className="w-3 h-3" />Already booked</>}
+                              {(availability === "available" || availability === undefined) && <><Check className="w-3 h-3" />Available</>}
                             </span>
                           </div>
                         </div>

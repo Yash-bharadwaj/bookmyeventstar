@@ -20,6 +20,7 @@ import { Proposal } from "@/types";
 import { formatDate, formatCurrency, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { db } from "@/lib/firebase/client";
 import { notifyUser } from "@/lib/notifications/client";
+import { checkArtistsAvailability, AvailabilityStatus } from "@/lib/availability";
 import {
   collection, doc, addDoc, updateDoc, getDoc, getDocs,
   query, where, serverTimestamp, writeBatch,
@@ -84,8 +85,8 @@ export function CoordinatorProposalsClient({
   const [selectedArtists, setSelectedArtists] = useState<SelectedArtist[]>([
     { artistId: "", name: "", price: 0, notes: "" },
   ]);
-  // Artist date conflict map: artistId → true if booked on event date
-  const [conflictMap, setConflictMap] = useState<Record<string, boolean>>({});
+  // Artist availability map for the selected enquiry's event date
+  const [availabilityMap, setAvailabilityMap] = useState<Record<string, AvailabilityStatus>>({});
 
   // ── Booking form ──
   const [venue, setVenue] = useState("");
@@ -101,7 +102,7 @@ export function CoordinatorProposalsClient({
   );
 
   // Filter artists to those who serve the enquiry's city (or all if no city match)
-  const suggestedArtists = useMemo(() => {
+  const suggestedArtistsUnsorted = useMemo(() => {
     if (!selectedEnquiry) return artists;
     const city = selectedEnquiry.city.toLowerCase();
     const matching = artists.filter((a) =>
@@ -109,6 +110,34 @@ export function CoordinatorProposalsClient({
     );
     return matching.length > 0 ? matching : artists;
   }, [selectedEnquiry, artists]);
+
+  // Fetch availability for every candidate artist as soon as an enquiry
+  // (and thus an event date) is picked, so the dropdown itself can show
+  // who's actually free — not just warn after the fact once selected.
+  useEffect(() => {
+    const eventDate = selectedEnquiry?.event_date;
+    if (!eventDate) return;
+    let cancelled = false;
+    const idsToCheck = suggestedArtistsUnsorted.map((a) => a.id).filter((id) => !(id in availabilityMap));
+    if (idsToCheck.length === 0) return;
+    checkArtistsAvailability(idsToCheck, eventDate).then((result) => {
+      if (!cancelled) setAvailabilityMap((prev) => ({ ...prev, ...result }));
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEnquiry?.event_date, suggestedArtistsUnsorted]);
+
+  // Available artists first, so the most useful options aren't buried below
+  // blocked/booked ones in a long list.
+  const suggestedArtists = useMemo(() => {
+    if (!selectedEnquiry) return suggestedArtistsUnsorted;
+    const rank = (id: string) => {
+      const status = availabilityMap[id];
+      if (status === "blocked" || status === "booked") return 1;
+      return 0;
+    };
+    return [...suggestedArtistsUnsorted].sort((a, b) => rank(a.id) - rank(b.id));
+  }, [suggestedArtistsUnsorted, availabilityMap, selectedEnquiry]);
 
   const handleEnquirySelect = (id: string) => {
     setSelectedEnquiryId(id);
@@ -130,22 +159,14 @@ export function CoordinatorProposalsClient({
           : s
       )
     );
-    // Check availability on event date. artistId here IS the artist's uid
-    // (artistProfiles doc id == artist uid == bookings.artist_id), so no
-    // extra lookup is needed to resolve a separate "user_id" field.
+    // Availability is pre-fetched for the whole suggested list once an
+    // enquiry is picked (see the effect above); this covers the rare case
+    // where an artist was added to the list after that fetch already ran.
     const eventDate = enquiries.find((e) => e.id === selectedEnquiryId)?.event_date;
-    if (artistId && eventDate && !(artistId in conflictMap)) {
-      (async () => {
-        const snap = await getDocs(
-          query(
-            collection(db, "bookings"),
-            where("artist_id", "==", artistId),
-            where("event_date", "==", eventDate)
-          )
-        );
-        const hasConflict = snap.docs.some((d) => d.data().status !== "cancelled");
-        setConflictMap((prev) => ({ ...prev, [artistId]: hasConflict }));
-      })();
+    if (artistId && eventDate && !(artistId in availabilityMap)) {
+      checkArtistsAvailability([artistId], eventDate).then((result) =>
+        setAvailabilityMap((prev) => ({ ...prev, ...result }))
+      );
     }
   };
 
@@ -822,23 +843,35 @@ export function CoordinatorProposalsClient({
                           <SelectValue placeholder="Search and pick an artist…" />
                         </SelectTrigger>
                         <SelectContent className="max-h-64">
-                          {suggestedArtists.map((a) => (
-                            <SelectItem key={a.id} value={a.id}>
-                              <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-full bg-navy-100 text-navy-700 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
-                                  {(a.user?.name ?? "A")[0]}
+                          {suggestedArtists.map((a) => {
+                            const status = availabilityMap[a.id];
+                            return (
+                              <SelectItem key={a.id} value={a.id}>
+                                <div className="flex items-center gap-2">
+                                  <div className="w-6 h-6 rounded-full bg-navy-100 text-navy-700 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                                    {(a.user?.name ?? "A")[0]}
+                                  </div>
+                                  <span className="font-medium text-sm">{a.user?.name}</span>
+                                  <span className="text-xs text-muted-foreground">·</span>
+                                  <span className="text-xs text-muted-foreground">{a.categories.slice(0, 2).join(", ")}</span>
+                                  <span className="text-xs text-muted-foreground">·</span>
+                                  <span className="flex items-center gap-0.5 text-xs text-amber-600">
+                                    <Star className="w-3 h-3 fill-amber-400" />{a.rating.toFixed(1)}
+                                  </span>
+                                  <span className="text-xs font-semibold text-navy-600">{formatCurrency(a.base_price)}</span>
+                                  {status === "blocked" && (
+                                    <span className="text-[10px] text-red-600 font-semibold">· Blocked</span>
+                                  )}
+                                  {status === "booked" && (
+                                    <span className="text-[10px] text-amber-600 font-semibold">· Booked</span>
+                                  )}
+                                  {status === "available" && (
+                                    <span className="text-[10px] text-emerald-600 font-semibold">· Available</span>
+                                  )}
                                 </div>
-                                <span className="font-medium text-sm">{a.user?.name}</span>
-                                <span className="text-xs text-muted-foreground">·</span>
-                                <span className="text-xs text-muted-foreground">{a.categories.slice(0, 2).join(", ")}</span>
-                                <span className="text-xs text-muted-foreground">·</span>
-                                <span className="flex items-center gap-0.5 text-xs text-amber-600">
-                                  <Star className="w-3 h-3 fill-amber-400" />{a.rating.toFixed(1)}
-                                </span>
-                                <span className="text-xs font-semibold text-navy-600">{formatCurrency(a.base_price)}</span>
-                              </div>
-                            </SelectItem>
-                          ))}
+                              </SelectItem>
+                            );
+                          })}
                         </SelectContent>
                       </Select>
                     </div>
@@ -857,12 +890,17 @@ export function CoordinatorProposalsClient({
                         <span className="text-[10px] text-muted-foreground flex items-center gap-1">
                           <CheckCircle className="w-3 h-3 text-emerald-500" />Verified · {pickedArtist.total_bookings} bookings
                         </span>
-                        {conflictMap[slot.artistId] === true && (
-                          <span className="text-[10px] text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
+                        {availabilityMap[slot.artistId] === "booked" && (
+                          <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
                             ⚠️ Already booked on this date
                           </span>
                         )}
-                        {conflictMap[slot.artistId] === false && (
+                        {availabilityMap[slot.artistId] === "blocked" && (
+                          <span className="text-[10px] text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
+                            🚫 Marked unavailable by artist on this date
+                          </span>
+                        )}
+                        {availabilityMap[slot.artistId] === "available" && (
                           <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
                             ✓ Available on event date
                           </span>
