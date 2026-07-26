@@ -41,6 +41,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("[email-otp/send] error:", err);
+    // Resend's shared test sender (no verified domain yet) can only deliver
+    // to the account owner's own address — every other recipient hits this
+    // exact 403. "Try again" would be misleading since retrying can't help;
+    // say what's actually true instead.
+    const message = err instanceof Error ? err.message : "";
+    if (message.includes("You can only send testing emails")) {
+      return NextResponse.json(
+        { error: "Email delivery isn't set up for real inboxes yet — this platform's sender domain isn't verified. Contact the site admin." },
+        { status: 503 }
+      );
+    }
     return NextResponse.json({ error: "Could not send the code — please try again." }, { status: 500 });
   }
 }
