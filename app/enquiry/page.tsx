@@ -31,7 +31,7 @@ import {
   collection, doc, getDoc, getDocs, addDoc, updateDoc,
   query, where, getCountFromServer, Timestamp,
 } from "firebase/firestore";
-import { getAdditionalUserInfo, type ConfirmationResult } from "firebase/auth";
+import { getAdditionalUserInfo, onAuthStateChanged, type ConfirmationResult } from "firebase/auth";
 import { auth, db } from "@/lib/firebase/client";
 import {
   sendPhoneOtp, linkPasswordCredential, syncSessionCookie,
@@ -51,6 +51,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { EVENT_TYPES, INDIA_CITIES } from "@/lib/utils";
+import { notifyAllAdmins } from "@/lib/notifications/client";
 
 const ENQUIRY_STEPS = [
   { title: "Your details", subtitle: "Who is booking this event?" },
@@ -123,9 +124,8 @@ export default function EnquiryPage() {
     } catch { /* non-fatal */ }
   }, []);
 
-  const syncFromSession = useCallback(async () => {
+  const syncFromSession = useCallback(async (user: { uid: string } | null) => {
     try {
-      const user = auth.currentUser;
       if (user) {
         const snap = await getDoc(doc(db, "users", user.uid));
         const profile = snap.exists() ? snap.data() : null;
@@ -147,7 +147,16 @@ export default function EnquiryPage() {
     setSessionReady(true);
   }, [reset, checkDailyLimit]);
 
-  useEffect(() => { syncFromSession(); }, [syncFromSession]);
+  useEffect(() => {
+    // auth.currentUser is null until Firebase Auth finishes restoring the
+    // persisted session after a fresh page load — reading it synchronously
+    // here would incorrectly treat an already-logged-in client as a new
+    // visitor on every hard navigation to this page. onAuthStateChanged's
+    // first callback fires once that restoration completes (with the real
+    // user, or null if there truly isn't one).
+    const unsubscribe = onAuthStateChanged(auth, (user) => { syncFromSession(user); });
+    return () => unsubscribe();
+  }, [syncFromSession]);
 
   useEffect(() => {
     getDocs(collection(db, "categories")).then((snap) => {
@@ -327,7 +336,7 @@ export default function EnquiryPage() {
       const budgetMax =
         data.budget_max && data.budget_max >= data.budget_min ? data.budget_max : data.budget_min;
 
-      await addDoc(collection(db, "enquiries"), {
+      const enquiryRef = await addDoc(collection(db, "enquiries"), {
         client_id: clientId,
         event_type: data.event_type,
         event_date: data.event_date,
@@ -343,6 +352,13 @@ export default function EnquiryPage() {
         created_at: Timestamp.now(),
         updated_at: Timestamp.now(),
       });
+
+      notifyAllAdmins({
+        title: "New Enquiry Received",
+        message: `${data.name.trim()} submitted a ${data.event_type} enquiry in ${data.city}.`,
+        type: "info",
+        link: `/admin/enquiries/${enquiryRef.id}`,
+      }).catch(() => {});
 
       setSubmitted(true);
     } catch (err) {

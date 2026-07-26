@@ -13,6 +13,7 @@ import {
   requestMessageNotificationPermission,
   showIncomingMessageAlert,
 } from "@/lib/incoming-message-alert";
+import { notifyUser } from "@/lib/notifications/client";
 
 interface Message {
   id: string;
@@ -138,7 +139,17 @@ export function ClientMessagesClient({ enquiries, currentUserId, currentUserName
       created_at: serverTimestamp(),
     });
     // The onSnapshot listener above picks this up automatically — no
-    // optimistic append needed.
+    // optimistic append needed. The persistent notification below is
+    // separate — it's what lets the coordinator find out even if they
+    // aren't on the messages page right now.
+    if (selectedEnquiry?.coordinator?.id) {
+      notifyUser(selectedEnquiry.coordinator.id, {
+        title: `New message from ${currentUserName}`,
+        message: newMessage.trim(),
+        type: "info",
+        link: "/coordinator/messages",
+      }).catch(() => {});
+    }
     setNewMessage("");
     setSending(false);
     inputRef.current?.focus();

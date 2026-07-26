@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Proposal } from "@/types";
 import { formatDate, formatCurrency, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { db } from "@/lib/firebase/client";
+import { notifyUser } from "@/lib/notifications/client";
 import {
   collection, doc, addDoc, updateDoc, getDoc, getDocs,
   query, where, serverTimestamp, writeBatch,
@@ -226,10 +227,10 @@ export function CoordinatorProposalsClient({
     const enqSnap = await getDoc(doc(db, "enquiries", enquiryId));
     const enq = enqSnap.exists() ? (enqSnap.data() as any) : null;
     if (enq?.client_id) {
-      await addDoc(collection(db, "users", enq.client_id, "notifications"), {
+      await notifyUser(enq.client_id, {
         title: "Proposal Ready for Review",
         message: `Your proposal for ${enq.event_type} is ready. Please review the artist options.`,
-        type: "success", link: "/client/proposals", is_read: false, created_at: serverTimestamp(),
+        type: "success", link: "/client/proposals",
       });
     }
     toast.success("Proposal sent to client!");
@@ -335,22 +336,20 @@ export function CoordinatorProposalsClient({
       const enqSnap = await getDoc(doc(db, "enquiries", proposal.enquiry_id));
       const enq = enqSnap.exists() ? (enqSnap.data() as any) : null;
       if (enq?.client_id) {
-        await addDoc(collection(db, "users", enq.client_id, "notifications"), {
+        await notifyUser(enq.client_id, {
           title: "Booking Confirmed!",
           message: `Your ${enq.event_type} booking has been created. Artist confirmation pending.`,
-          type: "success", link: "/client/events", is_read: false, created_at: serverTimestamp(),
+          type: "success", link: "/client/events",
         });
       }
       // Notify the selected artist. selectedBookingArtistId IS the artist's
       // uid (artistProfiles doc id == the artist's users/{uid} doc id), so no
       // extra lookup is needed to resolve a separate "user_id" field.
-      await addDoc(collection(db, "users", selectedBookingArtistId, "notifications"), {
+      await notifyUser(selectedBookingArtistId, {
         title: "New Booking Request",
         message: `You have a new booking request for ${enq?.event_type ?? "an event"} in ${bookingCity} on ${proposal.enquiry?.event_date ? new Date(proposal.enquiry.event_date).toLocaleDateString("en-IN") : ""}. Please accept or decline.`,
         type: "info",
         link: "/artist/bookings",
-        is_read: false,
-        created_at: serverTimestamp(),
       });
 
       toast.success("Booking created! Artist has been notified to confirm.");

@@ -12,7 +12,8 @@ import { BrandLogo } from "@/components/brand/BrandLogo";
 import { Proposal } from "@/types";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { db } from "@/lib/firebase/client";
-import { doc, updateDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { notifyUser } from "@/lib/notifications/client";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 
@@ -85,13 +86,11 @@ export function ClientProposalsClient({ proposals }: Props) {
       await updateDoc(doc(db, "enquiries", enquiryId), { status: "confirmed", updated_at: serverTimestamp() });
 
       if (proposal?.coordinator_id) {
-        await addDoc(collection(db, "users", proposal.coordinator_id, "notifications"), {
+        await notifyUser(proposal.coordinator_id, {
           title: "🎉 Proposal Accepted — Create Booking",
           message: `${proposal.enquiry?.event_type ?? "Event"} booking confirmed${preferredName ? `. Client prefers ${preferredName}` : ""}. Please create the booking now.`,
           type: "success",
-          is_read: false,
           link: `/coordinator/proposals`,
-          created_at: serverTimestamp(),
         });
       }
       toast.success("Booking confirmed! Our coordinator will call you shortly.", { duration: 5000 });
@@ -104,12 +103,26 @@ export function ClientProposalsClient({ proposals }: Props) {
   };
 
   const rejectProposal = async (proposalId: string) => {
+    const proposal = proposals.find((p) => p.id === proposalId);
     setRejecting(proposalId);
     try {
       await updateDoc(doc(db, "proposals", proposalId), { status: "rejected", updated_at: serverTimestamp() });
       setConfirmDecline(null);
       let undone = false;
-      const tid = window.setTimeout(() => { if (!undone) router.refresh(); }, 6000);
+      const tid = window.setTimeout(() => {
+        if (undone) return;
+        router.refresh();
+        // Only notify once the undo window has passed — no point alerting
+        // the coordinator about a decline the client immediately reversed.
+        if (proposal?.coordinator_id) {
+          notifyUser(proposal.coordinator_id, {
+            title: "Proposal Declined",
+            message: `Client declined the proposal for ${proposal.enquiry?.event_type ?? "the event"}. Consider sending a revised proposal.`,
+            type: "warning",
+            link: "/coordinator/proposals",
+          }).catch(() => {});
+        }
+      }, 6000);
       toast(
         (t) => (
           <span className="flex items-center gap-3 text-sm">

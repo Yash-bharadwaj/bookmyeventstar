@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { User } from "@/types";
 import { formatDate, getInitials } from "@/lib/utils";
+import { notifyUser } from "@/lib/notifications/client";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 
@@ -76,6 +77,10 @@ export function AdminCoordinatorsClient({ coordinators, enquiries }: Props) {
     setToggling(id);
     try {
       await patchUser(id, { is_active: !current });
+      await notifyUser(id, current
+        ? { title: "Account Deactivated", message: "Your coordinator account has been deactivated by an admin. Contact support if this is unexpected.", type: "warning" }
+        : { title: "Account Activated", message: "Your coordinator account is active again.", type: "success" }
+      ).catch(() => {});
       toast.success(current ? "Coordinator deactivated" : "Coordinator activated");
       router.refresh();
     } catch {
@@ -203,6 +208,7 @@ export function AdminCoordinatorsClient({ coordinators, enquiries }: Props) {
                 <div className="flex gap-1 flex-shrink-0">
                   <Button
                     size="sm" variant="ghost"
+                    aria-label={`Edit ${c.name}`}
                     onClick={() => setEditCoord({ id: c.id, name: c.name, phone: c.phone })}
                   >
                     <Pencil className="w-4 h-4 text-muted-foreground" />
@@ -211,6 +217,7 @@ export function AdminCoordinatorsClient({ coordinators, enquiries }: Props) {
                     size="sm"
                     variant="ghost"
                     disabled={toggling === c.id}
+                    aria-label={c.is_active ? `Deactivate ${c.name}` : `Activate ${c.name}`}
                     onClick={() => toggleStatus(c.id, c.is_active)}
                   >
                     {c.is_active

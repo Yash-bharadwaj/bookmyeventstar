@@ -10,6 +10,7 @@ import { db } from "@/lib/firebase/client";
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, Timestamp } from "firebase/firestore";
 import { formatDateTime, getInitials, cn } from "@/lib/utils";
 import { requestMessageNotificationPermission } from "@/lib/incoming-message-alert";
+import { notifyUser } from "@/lib/notifications/client";
 
 interface Message {
   id: string;
@@ -132,7 +133,17 @@ export function CoordinatorMessagesClient({ enquiries, currentUserId, currentUse
         content: newMessage.trim(),
         created_at: serverTimestamp(),
       });
-      // The onSnapshot listener above picks this up automatically.
+      // The onSnapshot listener above picks this up automatically. The
+      // persistent notification below is separate — it's what lets the
+      // client find out even if they aren't on the messages page right now.
+      if (selectedEnquiry?.client?.id) {
+        notifyUser(selectedEnquiry.client.id, {
+          title: `New message from ${currentUserName}`,
+          message: newMessage.trim(),
+          type: "info",
+          link: "/client/messages",
+        }).catch(() => {});
+      }
     } catch (error) {
       console.error("Send error:", error);
     }

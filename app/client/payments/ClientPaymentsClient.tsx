@@ -15,6 +15,7 @@ import { Payment } from "@/types";
 import { formatCurrency, formatDate, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { db } from "@/lib/firebase/client";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { notifyUser } from "@/lib/notifications/client";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 
@@ -27,6 +28,7 @@ interface Booking {
   venue: string;
   city: string;
   status: string;
+  coordinator_id?: string | null;
   enquiry?: { event_type: string } | null;
 }
 
@@ -80,6 +82,14 @@ export function ClientPaymentsClient({ bookings, payments: initialPayments }: Pr
           created_at: new Date().toISOString(),
         } as Payment,
       ]);
+      if (payDialog.booking.coordinator_id) {
+        notifyUser(payDialog.booking.coordinator_id, {
+          title: "Payment Recorded",
+          message: `Client recorded a ${payDialog.type} payment of ${formatCurrency(Number(payAmount))} for ${payDialog.booking.enquiry?.event_type ?? "a booking"}.`,
+          type: "success",
+          link: `/coordinator/bookings/${payDialog.booking.id}`,
+        }).catch(() => {});
+      }
       toast.success("Payment recorded successfully!");
       setPayDialog(null);
       router.refresh();

@@ -18,6 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { formatDate, formatCurrency, getStatusColor, getStatusLabel, getInitials } from "@/lib/utils";
 import { db } from "@/lib/firebase/client";
 import { doc, updateDoc, addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { notifyUser } from "@/lib/notifications/client";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -80,6 +81,53 @@ export function CoordinatorBookingDetail({ booking, artistSharePct }: { booking:
     if (finalStatus === "completed") {
       await updateDoc(doc(db, "enquiries", booking.enquiry_id), { status: "completed", updated_at: serverTimestamp() });
     }
+
+    // Both sides of the booking need to know it was cancelled or completed —
+    // neither the client nor the artist otherwise has a way to find out.
+    if (finalStatus === "cancelled" || finalStatus === "completed") {
+      const eventType = booking.enquiry?.event_type ?? "your event";
+      const clientId = booking.enquiry?.client?.id;
+      const artistId = booking.artist?.user_id;
+      const notifications: Promise<void>[] = [];
+      if (finalStatus === "cancelled") {
+        const suffix = reason ? `: "${reason}"` : ".";
+        if (clientId) {
+          notifications.push(notifyUser(clientId, {
+            title: "Booking Cancelled",
+            message: `Your booking for ${eventType} has been cancelled${suffix}`,
+            type: "warning",
+            link: "/client/events",
+          }));
+        }
+        if (artistId) {
+          notifications.push(notifyUser(artistId, {
+            title: "Booking Cancelled",
+            message: `Your booking for ${eventType} has been cancelled${suffix}`,
+            type: "warning",
+            link: "/artist/bookings",
+          }));
+        }
+      } else {
+        if (clientId) {
+          notifications.push(notifyUser(clientId, {
+            title: "Event Completed",
+            message: `Your ${eventType} is marked complete. We'd love your feedback!`,
+            type: "success",
+            link: "/client/events",
+          }));
+        }
+        if (artistId) {
+          notifications.push(notifyUser(artistId, {
+            title: "Event Completed",
+            message: `${eventType} is marked complete. Settlement will follow.`,
+            type: "success",
+            link: "/artist/earnings",
+          }));
+        }
+      }
+      await Promise.all(notifications).catch(() => {});
+    }
+
     toast.success("Booking status updated!");
     setSavingStatus(false);
     setShowCancelDialog(false);
@@ -106,15 +154,12 @@ export function CoordinatorBookingDetail({ booking, artistSharePct }: { booking:
         paid_at: serverTimestamp(),
         created_at: serverTimestamp(),
       });
-      // Notify artist
       if (booking.artist?.user_id) {
-        await addDoc(collection(db, "users", booking.artist.user_id, "notifications"), {
+        await notifyUser(booking.artist.user_id, {
           title: "Payment Settled",
           message: `Your settlement of ${new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 0 }).format(Number(settlementAmount))} has been processed.`,
           type: "success",
           link: "/artist/earnings",
-          is_read: false,
-          created_at: serverTimestamp(),
         });
       }
       setExistingSettlement({ amount: Number(settlementAmount), status: "paid" });

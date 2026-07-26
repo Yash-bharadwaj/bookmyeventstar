@@ -11,7 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatDate, formatCurrency, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { db } from "@/lib/firebase/client";
-import { doc, writeBatch, collection, serverTimestamp } from "firebase/firestore";
+import { doc, writeBatch, serverTimestamp } from "firebase/firestore";
+import { notifyUserInBatch } from "@/lib/notifications/client";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -66,14 +67,11 @@ export function AdminEnquiriesClient({ enquiries, coordinators }: Props) {
     for (const id of ids) {
       batch.update(doc(db, "enquiries", id), { coordinator_id: bulkAssignCoord, status: "assigned", updated_at: serverTimestamp() });
       const enq = enquiries.find((e) => e.id === id);
-      const notifRef = doc(collection(db, "users", bulkAssignCoord, "notifications"));
-      batch.set(notifRef, {
+      notifyUserInBatch(batch, bulkAssignCoord, {
         title: "Enquiry Assigned",
         message: `Assigned: ${enq?.event_type ?? "Event"} in ${enq?.city ?? ""}`,
         type: "info",
-        is_read: false,
         link: `/coordinator/enquiries/${id}`,
-        created_at: serverTimestamp(),
       });
     }
     await batch.commit();
@@ -100,13 +98,11 @@ export function AdminEnquiriesClient({ enquiries, coordinators }: Props) {
       status: "assigned",
       updated_at: serverTimestamp(),
     });
-    batch.set(doc(collection(db, "users", selectedCoordinator, "notifications")), {
+    notifyUserInBatch(batch, selectedCoordinator, {
       title: "New Enquiry Assigned",
       message: `You have been assigned an enquiry for ${selectedEnquiry.event_type} in ${selectedEnquiry.city}.`,
       type: "info",
-      is_read: false,
       link: `/coordinator/enquiries/${selectedEnquiry.id}`,
-      created_at: serverTimestamp(),
     });
     await batch.commit();
     toast.success("Coordinator assigned!");

@@ -13,6 +13,7 @@ import { ArtistProfile } from "@/types";
 import { formatCurrency, getInitials } from "@/lib/utils";
 import { db } from "@/lib/firebase/client";
 import { doc, updateDoc, writeBatch } from "firebase/firestore";
+import { notifyUser, notifyUserInBatch } from "@/lib/notifications/client";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 
@@ -63,6 +64,10 @@ export function AdminArtistsClient({ artists, categories }: { artists: ArtistWit
     const field = bulkAction === "verify" ? "is_verified" : "is_listed";
     for (const id of ids) {
       batch.update(doc(db, "artistProfiles", id), { [field]: true });
+      notifyUserInBatch(batch, id, bulkAction === "verify"
+        ? { title: "You're Verified! 🎉", message: "Your artist profile has been verified by our team. Complete your checklist to start appearing in searches.", type: "success", link: "/artist/profile" }
+        : { title: "Profile Listed", message: "Your profile is now listed and can appear in searches once your checklist and verification are complete.", type: "success", link: "/artist/profile" }
+      );
     }
     await batch.commit();
     toast.success(bulkAction === "verify"
@@ -99,6 +104,20 @@ export function AdminArtistsClient({ artists, categories }: { artists: ArtistWit
     setToggling(artistId);
     try {
       await updateDoc(doc(db, "artistProfiles", artistId), { is_verified: !current });
+      await notifyUser(artistId, current
+        ? {
+            title: "Verification Removed",
+            message: "Your artist verification has been removed, so your profile won't appear in client or coordinator searches until it's restored.",
+            type: "warning",
+            link: "/artist/profile",
+          }
+        : {
+            title: "You're Verified! 🎉",
+            message: "Your artist profile has been verified by our team. Complete your checklist to start appearing in searches.",
+            type: "success",
+            link: "/artist/profile",
+          }
+      ).catch(() => {});
       toast.success(current ? "Artist unverified" : "Artist verified!");
     } catch {
       toast.error("Failed to update");
@@ -111,6 +130,20 @@ export function AdminArtistsClient({ artists, categories }: { artists: ArtistWit
     setListingToggling(artistId);
     try {
       await updateDoc(doc(db, "artistProfiles", artistId), { is_listed: !currentListed });
+      await notifyUser(artistId, currentListed
+        ? {
+            title: "Profile Hidden",
+            message: "Your profile has been hidden from client and coordinator searches by our team.",
+            type: "warning",
+            link: "/artist/profile",
+          }
+        : {
+            title: "Profile Listed",
+            message: "Your profile is now listed and can appear in searches once your checklist and verification are complete.",
+            type: "success",
+            link: "/artist/profile",
+          }
+      ).catch(() => {});
       if (!currentListed) {
         const a = artists.find((x) => x.id === artistId);
         if (a?.is_profile_complete && a.is_verified) {

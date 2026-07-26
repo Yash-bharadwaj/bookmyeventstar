@@ -14,22 +14,32 @@ export function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
-export function formatDate(date: string | Date): string {
+// A Firestore serverTimestamp() field reads back as null/undefined in the
+// brief moment between an optimistic local write and the server's ack (e.g.
+// a live onSnapshot listener rendering a just-created notification) — both
+// formatters need to survive that instead of throwing "Invalid time value".
+export function formatDate(date: string | Date | null | undefined): string {
+  if (!date) return "—";
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return "—";
   return new Intl.DateTimeFormat("en-IN", {
     day: "numeric",
     month: "short",
     year: "numeric",
-  }).format(new Date(date));
+  }).format(d);
 }
 
-export function formatDateTime(date: string | Date): string {
+export function formatDateTime(date: string | Date | null | undefined): string {
+  if (!date) return "Just now";
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return "Just now";
   return new Intl.DateTimeFormat("en-IN", {
     day: "numeric",
     month: "short",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(new Date(date));
+  }).format(d);
 }
 
 export function getInitials(name: string): string {

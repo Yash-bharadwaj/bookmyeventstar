@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { formatDate, formatCurrency, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { db } from "@/lib/firebase/client";
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { notifyUser } from "@/lib/notifications/client";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -51,11 +52,24 @@ export function CoordinatorEnquiryDetail({ enquiry, proposals, coordinatorId }: 
   const saveUpdate = async () => {
     setSaving(true);
     try {
+      const statusChanged = status !== enquiry.status;
       await updateDoc(doc(db, "enquiries", enquiry.id), {
         status,
         other_requirements: notes,
         updated_at: serverTimestamp(),
       });
+      // The client's own enquiry page shows this same pipeline as a status
+      // tracker — notify them so it's not something they only discover by
+      // checking back manually.
+      if (statusChanged && enquiry.client_id) {
+        const label = STATUS_FLOW.find((s) => s.key === status)?.label ?? status;
+        await notifyUser(enquiry.client_id, {
+          title: "Enquiry Update",
+          message: `Your ${enquiry.event_type} enquiry is now: ${label}.`,
+          type: "info",
+          link: `/client/enquiries/${enquiry.id}`,
+        }).catch(() => {});
+      }
       toast.success("Enquiry updated!");
     } catch {
       toast.error("Failed to save");

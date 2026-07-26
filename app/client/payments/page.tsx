@@ -50,6 +50,7 @@ export default async function ClientPaymentsPage() {
       venue: data.venue,
       city: data.city,
       status: data.status,
+      coordinator_id: data.coordinator_id ?? null,
       enquiry: enq ? { event_type: enq.event_type } : null,
     };
   });

@@ -8,7 +8,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { formatDate, formatCurrency, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { db } from "@/lib/firebase/client";
-import { doc, updateDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { notifyUser } from "@/lib/notifications/client";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -38,17 +39,23 @@ export function ClientEnquiryDetail({ enquiry, proposals }: { enquiry: any; prop
     if (action === "accepted") {
       await updateDoc(doc(db, "enquiries", enquiry.id), { status: "confirmed", updated_at: serverTimestamp() });
       if (enquiry.coordinator_id) {
-        await addDoc(collection(db, "users", enquiry.coordinator_id, "notifications"), {
+        await notifyUser(enquiry.coordinator_id, {
           title: "Proposal Accepted",
           message: `Client has accepted the proposal for ${enquiry.event_type} in ${enquiry.city}. Create the booking now.`,
           type: "success",
-          is_read: false,
           link: `/coordinator/enquiries/${enquiry.id}`,
-          created_at: serverTimestamp(),
         });
       }
       toast.success("Proposal accepted! Your coordinator will finalize the booking.");
     } else {
+      if (enquiry.coordinator_id) {
+        await notifyUser(enquiry.coordinator_id, {
+          title: "Proposal Declined",
+          message: `Client declined the proposal for ${enquiry.event_type} in ${enquiry.city}. Consider sending a revised proposal.`,
+          type: "warning",
+          link: `/coordinator/enquiries/${enquiry.id}`,
+        }).catch(() => {});
+      }
       toast.success("Proposal declined.");
     }
     setter(null);

@@ -15,6 +15,7 @@ import { Booking } from "@/types";
 import { formatDate, formatCurrency, getInitials } from "@/lib/utils";
 import { db } from "@/lib/firebase/client";
 import { doc, updateDoc, getDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { notifyUser } from "@/lib/notifications/client";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -94,12 +95,11 @@ export function ClientEventsClient({ bookings, clientId }: { bookings: BookingWi
       const enquirySnap = await getDoc(doc(db, "enquiries", cancelBooking.enquiry_id));
       const coordinatorId = enquirySnap.exists() ? (enquirySnap.data() as any).coordinator_id : null;
       if (coordinatorId) {
-        await addDoc(collection(db, "users", coordinatorId, "notifications"), {
+        await notifyUser(coordinatorId, {
           title: "Booking Cancellation Requested",
           message: `Client requested cancellation for ${cancelBooking.enquiry?.event_type ?? "event"} on ${formatDate(cancelBooking.event_date)}. Reason: ${cancelReason.trim()}`,
           type: "warning",
-          is_read: false,
-          created_at: serverTimestamp(),
+          link: "/coordinator/bookings",
         });
       }
 

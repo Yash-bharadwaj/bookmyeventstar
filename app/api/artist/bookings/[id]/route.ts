@@ -3,6 +3,7 @@ import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { cookies } from "next/headers";
 import { SESSION_COOKIE_NAME } from "@/lib/firebase/session";
+import { notifyUserServer } from "@/lib/notifications/server";
 
 /**
  * Artist-driven booking updates (accept/decline a request, submit performance
@@ -65,13 +66,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
           eventType = enquirySnap.data()?.event_type ?? "event";
         }
         const reason = typeof body.cancellation_reason === "string" ? body.cancellation_reason : undefined;
-        await adminDb.collection("users").doc(coordinatorId).collection("notifications").add({
+        await notifyUserServer(coordinatorId, {
           title: notifyStatus === "confirmed" ? "Artist Confirmed Booking" : "Artist Declined Booking",
           message: `Artist has ${notifyStatus === "confirmed" ? "accepted" : "declined"} the booking for ${eventType}${reason ? `: "${reason}"` : ""}. ${notifyStatus === "cancelled" ? "Please propose a replacement artist." : ""}`,
           type: notifyStatus === "confirmed" ? "success" : "warning",
-          is_read: false,
           link: "/coordinator/bookings",
-          created_at: FieldValue.serverTimestamp(),
         });
       }
     }
