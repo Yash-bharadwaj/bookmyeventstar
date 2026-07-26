@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { OtpInput } from "@/components/ui/otp-input";
+import { ResendTimer } from "@/components/ui/resend-timer";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 
 const CLIENT_PANEL_STATS: [string, string][] = [
@@ -316,14 +317,7 @@ function ArtistRegisterForm() {
                 </Button>
               </div>
               <div className="flex items-center justify-between text-xs">
-                <button
-                  type="button"
-                  className="text-gold-700 font-medium disabled:text-muted-foreground"
-                  disabled={resendIn > 0 || otpBusy}
-                  onClick={handleSendOtp}
-                >
-                  {resendIn > 0 ? `Resend in ${resendIn}s` : "Resend code"}
-                </button>
+                <ResendTimer seconds={resendIn} totalSeconds={45} onResend={handleSendOtp} disabled={otpBusy} />
                 <button type="button" className="text-muted-foreground hover:text-navy-900" onClick={() => setOtpSent(false)}>
                   Edit email
                 </button>
@@ -332,9 +326,21 @@ function ArtistRegisterForm() {
           )}
         </div>
       ) : (
-        <div className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-700 text-xs font-medium px-3 py-2 rounded-xl">
-          <ShieldCheck className="w-3.5 h-3.5" />{email} verified
-        </div>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.85, y: 4 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ type: "spring", stiffness: 400, damping: 22 }}
+          className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-700 text-xs font-medium px-3 py-2 rounded-xl"
+        >
+          <motion.span
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.15, type: "spring", stiffness: 500, damping: 15 }}
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+          </motion.span>
+          {email} verified
+        </motion.div>
       )}
 
       <AnimatePresence>
@@ -567,14 +573,7 @@ function ClientRegisterForm() {
                 </Button>
               </div>
               <div className="flex items-center justify-between text-xs">
-                <button
-                  type="button"
-                  className="text-gold-700 font-medium disabled:text-muted-foreground"
-                  disabled={resendIn > 0 || otpBusy}
-                  onClick={handleSendOtp}
-                >
-                  {resendIn > 0 ? `Resend in ${resendIn}s` : "Resend code"}
-                </button>
+                <ResendTimer seconds={resendIn} totalSeconds={45} onResend={handleSendOtp} disabled={otpBusy} />
                 <button type="button" className="text-muted-foreground hover:text-navy-900" onClick={() => { setOtpSent(false); setOtpCode(""); }}>
                   Edit email
                 </button>
@@ -583,9 +582,21 @@ function ClientRegisterForm() {
           )}
         </div>
       ) : (
-        <div className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-700 text-xs font-medium px-3 py-2 rounded-xl">
-          <ShieldCheck className="w-3.5 h-3.5" />{email} verified
-        </div>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.85, y: 4 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ type: "spring", stiffness: 400, damping: 22 }}
+          className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-700 text-xs font-medium px-3 py-2 rounded-xl"
+        >
+          <motion.span
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.15, type: "spring", stiffness: 500, damping: 15 }}
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+          </motion.span>
+          {email} verified
+        </motion.div>
       )}
 
       <AnimatePresence>
