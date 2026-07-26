@@ -94,6 +94,14 @@ export function CoordinatorProposalsClient({
   const [totalAmount, setTotalAmount] = useState("");
   const [advanceAmount, setAdvanceAmount] = useState("");
   const [selectedBookingArtistId, setSelectedBookingArtistId] = useState("");
+  // Set when a proposal already has an auto-created draft booking (from the
+  // client accepting) — submitting then updates that doc instead of
+  // creating a new one. Keyed by proposal_id → { bookingId, ...fields, auto_created }.
+  const [editingBookingId, setEditingBookingId] = useState<string | null>(null);
+  const [existingBookingMap, setExistingBookingMap] = useState<Record<string, {
+    id: string; venue: string; city: string; total_amount: number; advance_amount: number;
+    artist_id: string; auto_created?: boolean;
+  }>>({});
 
   // Derive the selected enquiry object
   const selectedEnquiry = useMemo(
@@ -189,6 +197,33 @@ export function CoordinatorProposalsClient({
     setSelectedEnquiryId(""); setContent(""); setValidityDate(addDays(DEFAULT_VALIDITY_DAYS));
     setSelectedArtists([{ artistId: "", name: "", price: 0, notes: "" }]);
   };
+
+  // Look up any booking already auto-created for an accepted proposal (from
+  // the client's accept action), so the "Create Booking" card can offer to
+  // review/confirm it instead of creating a duplicate.
+  useEffect(() => {
+    const acceptedIds = proposals.filter((p) => p.status === "accepted").map((p) => p.id);
+    if (acceptedIds.length === 0) { setExistingBookingMap({}); return; }
+    let cancelled = false;
+    (async () => {
+      const map: typeof existingBookingMap = {};
+      for (let i = 0; i < acceptedIds.length; i += 30) {
+        const chunk = acceptedIds.slice(i, i + 30);
+        const snap = await getDocs(query(collection(db, "bookings"), where("proposal_id", "in", chunk)));
+        snap.docs.forEach((d) => {
+          const data = d.data();
+          map[data.proposal_id] = {
+            id: d.id, venue: data.venue, city: data.city,
+            total_amount: data.total_amount, advance_amount: data.advance_amount,
+            artist_id: data.artist_id, auto_created: data.auto_created,
+          };
+        });
+      }
+      if (!cancelled) setExistingBookingMap(map);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proposals]);
 
   // Read localStorage on mount (coming from shortlist page) OR URL param (coming from re-propose flow)
   useEffect(() => {
@@ -314,42 +349,59 @@ export function CoordinatorProposalsClient({
       const totalAmt = Number(totalAmount);
       const advanceAmt = Number(advanceAmount);
 
-      const bookingRef = doc(collection(db, "bookings"));
-      const batch = writeBatch(db);
-      batch.set(bookingRef, {
-        enquiry_id: proposal.enquiry_id,
-        coordinator_id: coordinatorId,
-        artist_id: selectedBookingArtistId,
-        event_date: proposal.enquiry?.event_date,
-        venue,
-        city: bookingCity,
-        total_amount: totalAmt,
-        advance_amount: advanceAmt,
-        balance_amount: totalAmt - advanceAmt,
-        status: "pending",
-        // Use client's actual event requirements (other_requirements from enquiry), not the coordinator's proposal message
-        special_requirements: (proposal as any).enquiry?.other_requirements ?? null,
-        created_at: serverTimestamp(),
-        updated_at: serverTimestamp(),
-      });
-
-      // Replaces the old Postgres trigger: every new booking gets these 5
-      // checklist tasks created in the same write path, atomically.
-      const taskTypes = ["artist_confirmation", "travel_stay", "technical", "payment_docs", "hospitality"] as const;
-      taskTypes.forEach((type) => {
-        const taskRef = doc(collection(bookingRef, "tasks"));
-        batch.set(taskRef, {
-          type,
+      if (editingBookingId) {
+        // A draft booking already exists (auto-created when the client
+        // accepted) — this just fills in the real venue/payment split and
+        // clears the auto_created flag; the checklist tasks already exist.
+        await updateDoc(doc(db, "bookings", editingBookingId), {
+          artist_id: selectedBookingArtistId,
+          venue,
+          city: bookingCity,
+          total_amount: totalAmt,
+          advance_amount: advanceAmt,
+          balance_amount: totalAmt - advanceAmt,
+          auto_created: false,
+          updated_at: serverTimestamp(),
+        });
+      } else {
+        const bookingRef = doc(collection(db, "bookings"));
+        const batch = writeBatch(db);
+        batch.set(bookingRef, {
+          proposal_id: proposal.id,
+          enquiry_id: proposal.enquiry_id,
+          coordinator_id: coordinatorId,
+          artist_id: selectedBookingArtistId,
+          event_date: proposal.enquiry?.event_date,
+          venue,
+          city: bookingCity,
+          total_amount: totalAmt,
+          advance_amount: advanceAmt,
+          balance_amount: totalAmt - advanceAmt,
           status: "pending",
-          notes: "",
-          due_date: null,
-          assigned_to: null,
+          // Use client's actual event requirements (other_requirements from enquiry), not the coordinator's proposal message
+          special_requirements: (proposal as any).enquiry?.other_requirements ?? null,
           created_at: serverTimestamp(),
           updated_at: serverTimestamp(),
         });
-      });
 
-      await batch.commit();
+        // Replaces the old Postgres trigger: every new booking gets these 5
+        // checklist tasks created in the same write path, atomically.
+        const taskTypes = ["artist_confirmation", "travel_stay", "technical", "payment_docs", "hospitality"] as const;
+        taskTypes.forEach((type) => {
+          const taskRef = doc(collection(bookingRef, "tasks"));
+          batch.set(taskRef, {
+            type,
+            status: "pending",
+            notes: "",
+            due_date: null,
+            assigned_to: null,
+            created_at: serverTimestamp(),
+            updated_at: serverTimestamp(),
+          });
+        });
+
+        await batch.commit();
+      }
 
       await updateDoc(doc(db, "enquiries", proposal.enquiry_id), { status: "confirmed", updated_at: serverTimestamp() });
 
@@ -375,6 +427,7 @@ export function CoordinatorProposalsClient({
 
       toast.success("Booking created! Artist has been notified to confirm.");
       setShowBooking(null);
+      setEditingBookingId(null);
       setVenue(""); setBookingCity(""); setTotalAmount(""); setAdvanceAmount(""); setSelectedBookingArtistId("");
       router.refresh();
     } catch {
@@ -435,31 +488,60 @@ export function CoordinatorProposalsClient({
                 <Send className="w-3.5 h-3.5 mr-1.5" />Send to Client
               </Button>
             )}
-            {p.status === "accepted" && (
-              <Button size="sm" variant="outline" className="border-emerald-300 text-emerald-700"
-                onClick={() => {
-                  setShowBooking(p);
-                  setBookingCity(p.enquiry?.city ?? "");
-                  setTotalAmount(String(p.quoted_price));
-                  setAdvanceAmount(String(Math.round(p.quoted_price * 0.3)));
-                  const list = (p.artists_proposed as any[]) ?? [];
-                  // Pre-fill with client's chosen artist (if set), else single artist, else empty
-                  const clientChoice = (p as any).client_chosen_artist_id;
-                  if (clientChoice) setSelectedBookingArtistId(clientChoice);
-                  else if (list.length === 1) setSelectedBookingArtistId(list[0].artist_id);
-                  else setSelectedBookingArtistId("");
-                  // Pre-fill quoted price of chosen artist
-                  if (clientChoice) {
-                    const chosen = list.find((a: any) => a.artist_id === clientChoice);
-                    if (chosen?.quoted_price) {
-                      setTotalAmount(String(chosen.quoted_price));
-                      setAdvanceAmount(String(Math.round(chosen.quoted_price * 0.3)));
+            {p.status === "accepted" && (() => {
+              const existing = existingBookingMap[p.id];
+
+              // Booking already reviewed and confirmed — nothing left to do here.
+              if (existing && existing.auto_created === false) {
+                return (
+                  <span className="text-[11px] px-2.5 py-1 rounded-full font-semibold bg-emerald-100 text-emerald-700 flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" />Booking confirmed
+                  </span>
+                );
+              }
+
+              return (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className={existing ? "border-amber-300 text-amber-700" : "border-emerald-300 text-emerald-700"}
+                  onClick={() => {
+                    setShowBooking(p);
+                    if (existing) {
+                      // Draft already auto-created on accept — load its real
+                      // values so the coordinator is confirming, not re-guessing.
+                      setEditingBookingId(existing.id);
+                      setBookingCity(existing.city || p.enquiry?.city || "");
+                      setVenue(existing.venue ?? "");
+                      setTotalAmount(String(existing.total_amount ?? p.quoted_price));
+                      setAdvanceAmount(String(existing.advance_amount ?? Math.round(p.quoted_price * 0.3)));
+                      setSelectedBookingArtistId(existing.artist_id ?? "");
+                      return;
                     }
-                  }
-                }}>
-                <Building2 className="w-3.5 h-3.5 mr-1.5" />Create Booking
-              </Button>
-            )}
+                    setEditingBookingId(null);
+                    setBookingCity(p.enquiry?.city ?? "");
+                    setTotalAmount(String(p.quoted_price));
+                    setAdvanceAmount(String(Math.round(p.quoted_price * 0.3)));
+                    const list = (p.artists_proposed as any[]) ?? [];
+                    // Pre-fill with client's chosen artist (if set), else single artist, else empty
+                    const clientChoice = (p as any).client_chosen_artist_id;
+                    if (clientChoice) setSelectedBookingArtistId(clientChoice);
+                    else if (list.length === 1) setSelectedBookingArtistId(list[0].artist_id);
+                    else setSelectedBookingArtistId("");
+                    // Pre-fill quoted price of chosen artist
+                    if (clientChoice) {
+                      const chosen = list.find((a: any) => a.artist_id === clientChoice);
+                      if (chosen?.quoted_price) {
+                        setTotalAmount(String(chosen.quoted_price));
+                        setAdvanceAmount(String(Math.round(chosen.quoted_price * 0.3)));
+                      }
+                    }
+                  }}>
+                  <Building2 className="w-3.5 h-3.5 mr-1.5" />
+                  {existing ? "Review & Confirm Booking" : "Create Booking"}
+                </Button>
+              );
+            })()}
           </div>
         </div>
         {artists_list.length > 0 && (
@@ -1013,11 +1095,16 @@ export function CoordinatorProposalsClient({
       {/* ══════════════════════════════════════════
           CREATE BOOKING DIALOG
       ══════════════════════════════════════════ */}
-      <Dialog open={!!showBooking} onOpenChange={(o) => { if (!o) { setShowBooking(null); setSelectedBookingArtistId(""); } }}>
+      <Dialog open={!!showBooking} onOpenChange={(o) => { if (!o) { setShowBooking(null); setSelectedBookingArtistId(""); setEditingBookingId(null); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-display">Create Booking</DialogTitle>
+            <DialogTitle className="font-display">{editingBookingId ? "Confirm Booking" : "Create Booking"}</DialogTitle>
           </DialogHeader>
+          {editingBookingId && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 -mt-1">
+              This booking was auto-created from the client&apos;s acceptance. Confirm the venue and payment split below — the artist is notified once you save.
+            </p>
+          )}
           {showBooking && (
             <div className="space-y-4 mt-2">
               {/* Event summary */}
@@ -1154,7 +1241,7 @@ export function CoordinatorProposalsClient({
               )}
 
               <div className="flex gap-3 justify-end pt-2 border-t">
-                <Button variant="outline" onClick={() => setShowBooking(null)}>Cancel</Button>
+                <Button variant="outline" onClick={() => { setShowBooking(null); setEditingBookingId(null); }}>Cancel</Button>
                 <Button onClick={() => createBooking(showBooking!)} loading={creatingBooking}>
                   <Building2 className="w-4 h-4 mr-2" />Confirm Booking
                 </Button>

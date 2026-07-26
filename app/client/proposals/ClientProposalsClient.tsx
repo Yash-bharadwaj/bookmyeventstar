@@ -76,24 +76,21 @@ export function ClientProposalsClient({ proposals }: Props) {
     try {
       // Save preference if client indicated one, otherwise coordinator picks best fit
       const preferredArtistId = chosenArtist[proposalId] ?? null;
-      const preferredName = artists.find((a: any) => a.artist_id === preferredArtistId)?.name;
 
-      await updateDoc(doc(db, "proposals", proposalId), {
-        status: "accepted",
-        client_chosen_artist_id: preferredArtistId,
-        updated_at: serverTimestamp(),
+      // Proposal/enquiry status + the auto-drafted booking are all written
+      // server-side (Admin SDK) — firestore.rules only allows a `bookings`
+      // create from a coordinator/admin, so a client-side write here would
+      // silently fail the security-rules check.
+      const res = await fetch(`/api/proposals/${proposalId}/accept`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ preferredArtistId }),
       });
-      await updateDoc(doc(db, "enquiries", enquiryId), { status: "confirmed", updated_at: serverTimestamp() });
-
-      if (proposal?.coordinator_id) {
-        const payload = {
-          title: "🎉 Proposal Accepted — Create Booking",
-          message: `${proposal.enquiry?.event_type ?? "Event"} booking confirmed${preferredName ? `. Client prefers ${preferredName}` : ""}. Please create the booking now.`,
-          link: `/coordinator/proposals`,
-        };
-        await notifyUser(proposal.coordinator_id, { ...payload, type: "success" });
-        emailUser(proposal.coordinator_id, payload);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Failed to accept proposal");
       }
+
       toast.success("Booking confirmed! Our coordinator will call you shortly.", { duration: 5000 });
       router.refresh();
     } catch {
