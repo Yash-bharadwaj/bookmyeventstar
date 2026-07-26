@@ -246,8 +246,8 @@ export default function LandingPage() {
                 <Button variant="outline" size="sm" className="border-gray-200">Login</Button>
               </Link>
               <Link href="/register?role=artist">
-                <Button variant="outline" size="sm" className="border-navy-300 text-navy-700 hover:bg-navy-50">
-                  For Artists
+                <Button variant="secondary" size="sm">
+                  Join as Artist
                 </Button>
               </Link>
               <Link href="/enquiry">
@@ -300,8 +300,8 @@ export default function LandingPage() {
                     <Button variant="outline" size="sm" className="w-full border-gray-200">Login</Button>
                   </Link>
                   <Link href="/register?role=artist" onClick={() => setMobileMenuOpen(false)}>
-                    <Button variant="outline" size="sm" className="w-full border-navy-300 text-navy-700 hover:bg-navy-50">
-                      For Artists
+                    <Button variant="secondary" size="sm" className="w-full">
+                      Join as Artist
                     </Button>
                   </Link>
                 </div>

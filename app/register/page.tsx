@@ -20,22 +20,90 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 
+const CLIENT_PANEL_STATS: [string, string][] = [
+  ["Verified", "Every Artist"],
+  ["2 Hours", "Coordinator Response"],
+  ["Pan-India", "Coverage"],
+  ["₹0", "Upfront Fee"],
+];
+
+const ARTIST_PANEL_BENEFITS = [
+  "Get discovered by coordinators actively booking for real events",
+  "We handle client coordination, contracts, and logistics",
+  "Free to list — no cost to create or maintain your profile",
+  "Manage availability, bookings, and earnings from one dashboard",
+];
+
 function RegisterForm() {
   const searchParams = useSearchParams();
   const initialRole = searchParams.get("role") === "artist" ? "artist" : "client";
   const [selectedRole, setSelectedRole] = useState<"client" | "artist">(initialRole);
+  const isArtist = selectedRole === "artist";
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-navy-900 via-navy-800 to-navy-950 p-6">
+    <div className="min-h-screen flex">
       <div id="recaptcha-container" />
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md">
-        <div className="bg-white rounded-3xl shadow-2xl p-8">
-          <div className="mb-6 flex justify-start">
-            <BrandLogo href="/" size="lg" />
+
+      {/* Left panel — role-aware branding, desktop only */}
+      <div className="hidden lg:flex lg:w-1/2 navy-gradient relative overflow-hidden flex-col items-center justify-center p-12">
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full bg-gold-500/10 blur-3xl" />
+        <motion.div
+          key={selectedRole}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="relative text-center max-w-sm"
+        >
+          <div className="flex justify-center mb-8">
+            <BrandLogo href="/" size="xl" priority />
           </div>
 
-          <h2 className="font-display text-2xl font-bold text-navy-900">Create your account</h2>
-          <p className="text-muted-foreground text-sm mt-1">Join thousands using BookMyEventStar</p>
+          {isArtist ? (
+            <>
+              <p className="text-white/70 text-lg">
+                List your profile and let our coordinators bring the bookings to you.
+              </p>
+              <div className="mt-10 space-y-3 text-left">
+                {ARTIST_PANEL_BENEFITS.map((b) => (
+                  <div key={b} className="flex items-start gap-3 glass rounded-xl p-3.5">
+                    <CheckCircle2 className="w-4 h-4 text-gold-400 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-white/90">{b}</p>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-white/70 text-lg">
+                India&apos;s premier artist management and event booking platform
+              </p>
+              <div className="mt-10 grid grid-cols-2 gap-4 text-left">
+                {CLIENT_PANEL_STATS.map(([val, label]) => (
+                  <div key={label} className="glass rounded-xl p-4">
+                    <p className="font-display text-2xl font-bold text-white">{val}</p>
+                    <p className="text-white/60 text-xs mt-0.5">{label}</p>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </motion.div>
+      </div>
+
+      {/* Right panel — form */}
+      <div className="flex-1 flex items-center justify-center p-6 bg-white">
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.5 }}
+          className="w-full max-w-md"
+        >
+          <div className="lg:hidden mb-8 flex justify-center">
+            <BrandLogo href="/" size="xl" priority />
+          </div>
+
+          <h2 className="font-display text-3xl font-bold text-navy-900">Create your account</h2>
+          <p className="text-muted-foreground mt-2">Join thousands using BookMyEventStar</p>
 
           {/* Role selector */}
           <div className="mt-6 grid grid-cols-2 gap-3">
@@ -74,8 +142,8 @@ function RegisterForm() {
               Sign in
             </Link>
           </p>
-        </div>
-      </motion.div>
+        </motion.div>
+      </div>
     </div>
   );
 }
