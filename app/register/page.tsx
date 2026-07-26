@@ -361,19 +361,22 @@ function ClientRegisterForm() {
           <p className="text-xs font-medium text-gold-700 flex items-center gap-1.5">
             <ShieldCheck className="w-3.5 h-3.5" />Verify your mobile number
           </p>
-          <div className="flex gap-2">
-            <div className="flex items-center px-3 rounded-xl border bg-muted text-sm font-medium text-muted-foreground whitespace-nowrap">+91</div>
-            <Input
-              type="tel"
-              inputMode="numeric"
-              placeholder="9876543210"
-              icon={<Smartphone className="w-4 h-4" />}
-              value={phoneDigits}
-              disabled={otpSent}
-              onChange={(e) => setPhoneDigits(e.target.value.replace(/\D/g, "").slice(0, 10))}
-            />
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <div className="flex items-center px-3 rounded-xl border bg-muted text-sm font-medium text-muted-foreground whitespace-nowrap shrink-0">+91</div>
+              <Input
+                type="tel"
+                inputMode="numeric"
+                placeholder="9876543210"
+                icon={<Smartphone className="w-4 h-4" />}
+                value={phoneDigits}
+                disabled={otpSent}
+                onChange={(e) => setPhoneDigits(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                className="min-w-0"
+              />
+            </div>
             {!otpSent && (
-              <Button type="button" onClick={handleSendOtp} loading={otpBusy} className="shrink-0 whitespace-nowrap">
+              <Button type="button" onClick={handleSendOtp} loading={otpBusy} className="w-full">
                 Send code
               </Button>
             )}
