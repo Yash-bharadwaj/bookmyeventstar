@@ -18,7 +18,12 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
     const decoded = await adminAuth.verifyIdToken(token);
     const snap = await adminDb.collection("users").doc(decoded.uid).get();
     if (!snap.exists) return null;
-    return { id: decoded.uid, ...(snap.data() as Omit<User, "id">) };
+    const data = snap.data() as Omit<User, "id">;
+    // Deactivated mid-session (the /api/auth/session check only blocks NEW
+    // logins) — treat as logged out so every layout.tsx's redirect kicks in
+    // on their next navigation.
+    if (data.is_active === false) return null;
+    return { id: decoded.uid, ...data };
   } catch {
     return null;
   }

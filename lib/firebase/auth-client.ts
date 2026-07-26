@@ -11,11 +11,15 @@ import {
 import { auth } from "./client";
 
 export async function syncSessionCookie(idToken: string) {
-  await fetch("/api/auth/session", {
+  const res = await fetch("/api/auth/session", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ idToken }),
   });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error ?? "Could not start your session — please try again.");
+  }
 }
 
 export async function clearSessionCookie() {
@@ -24,7 +28,14 @@ export async function clearSessionCookie() {
 
 export async function signInWithEmail(email: string, password: string): Promise<UserCredential> {
   const cred = await signInWithEmailAndPassword(auth, email, password);
-  await syncSessionCookie(await cred.user.getIdToken());
+  try {
+    await syncSessionCookie(await cred.user.getIdToken());
+  } catch (err) {
+    // The server refused the session (e.g. account deactivated) — don't
+    // leave the client half-signed-in via Firebase Auth's own persistence.
+    await firebaseSignOut(auth).catch(() => {});
+    throw err;
+  }
   return cred;
 }
 

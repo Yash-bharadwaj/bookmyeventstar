@@ -5,6 +5,8 @@ import { SESSION_COOKIE_NAME } from "@/lib/firebase/session";
 
 const mockState = vi.hoisted(() => ({
   verifyResult: "ok" as "ok" | "throw",
+  userDocExists: true,
+  isActive: true as boolean | undefined,
 }));
 
 vi.mock("@/lib/firebase/admin", () => ({
@@ -13,6 +15,16 @@ vi.mock("@/lib/firebase/admin", () => ({
       if (mockState.verifyResult === "throw") throw new Error("invalid token");
       return { uid: "user-123", token };
     },
+  },
+  adminDb: {
+    collection: () => ({
+      doc: () => ({
+        get: async () => ({
+          exists: mockState.userDocExists,
+          data: () => ({ is_active: mockState.isActive }),
+        }),
+      }),
+    }),
   },
 }));
 
@@ -25,6 +37,8 @@ function req(body: Record<string, unknown>) {
 
 beforeEach(() => {
   mockState.verifyResult = "ok";
+  mockState.userDocExists = true;
+  mockState.isActive = true;
 });
 
 describe("POST /api/auth/session", () => {
@@ -45,6 +59,26 @@ describe("POST /api/auth/session", () => {
     const cookie = res.cookies.get(SESSION_COOKIE_NAME);
     expect(cookie?.value).toBe("good-token");
     expect(cookie?.httpOnly).toBe(true);
+  });
+
+  it("allows a user with no user doc yet (defense in depth elsewhere handles that case)", async () => {
+    mockState.userDocExists = false;
+    const res = await POST(req({ idToken: "good-token" }));
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects a deactivated account and does not set a cookie", async () => {
+    mockState.isActive = false;
+    const res = await POST(req({ idToken: "good-token" }));
+    expect(res.status).toBe(403);
+    const cookie = res.cookies.get(SESSION_COOKIE_NAME);
+    expect(cookie).toBeUndefined();
+  });
+
+  it("treats a missing is_active field as active (older docs predate the field)", async () => {
+    mockState.isActive = undefined;
+    const res = await POST(req({ idToken: "good-token" }));
+    expect(res.status).toBe(200);
   });
 });
 

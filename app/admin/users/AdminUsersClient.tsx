@@ -4,18 +4,20 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import {
-  Search, Download, UserPlus, Pencil, Trash2, ToggleLeft, ToggleRight,
+  Search, Download, UserPlus, Pencil, Trash2, Loader2,
   ChevronLeft, ChevronRight, ShieldCheck, Eye, EyeOff as EyeOffIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { formatDate, getInitials } from "@/lib/utils";
 
 interface RegisteredUser {
@@ -211,6 +213,7 @@ export function AdminUsersClient({ users }: { users: RegisteredUser[] }) {
   };
 
   return (
+    <TooltipProvider delayDuration={200}>
     <div className="p-4 md:p-6 space-y-4">
       {/* Summary + actions */}
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -300,37 +303,71 @@ export function AdminUsersClient({ users }: { users: RegisteredUser[] }) {
                       <Badge variant={u.role === "artist" ? "purple" : "info"} className="capitalize">{u.role}</Badge>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex flex-wrap items-center gap-1">
-                        <Badge variant={u.is_active ? "success" : "secondary"}>{u.is_active ? "Active" : "Inactive"}</Badge>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex items-center gap-2">
+                              {toggling === u.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                              ) : (
+                                <Switch
+                                  checked={u.is_active}
+                                  onCheckedChange={() => toggleActive(u)}
+                                  aria-label={u.is_active ? `Deactivate ${u.name}` : `Activate ${u.name}`}
+                                />
+                              )}
+                              <span className={`text-xs font-semibold ${u.is_active ? "text-emerald-700" : "text-muted-foreground"}`}>
+                                {u.is_active ? "Active" : "Inactive"}
+                              </span>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">
+                            {u.is_active
+                              ? "Can sign in and use the platform normally. Toggle off to deactivate — this blocks sign-in immediately."
+                              : "Deactivated — can't sign in. Toggle on to restore access."}
+                          </TooltipContent>
+                        </Tooltip>
                         {u.role === "artist" && u.is_verified && (
-                          <span title="Verified"><ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /></span>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                            </TooltipTrigger>
+                            <TooltipContent side="top">Verified by admin — shows a trust badge on their public profile</TooltipContent>
+                          </Tooltip>
                         )}
                         {u.role === "artist" && (
-                          <span title={u.is_listed ? "Listed" : "Hidden"}>
-                            {u.is_listed ? <Eye className="w-3.5 h-3.5 text-blue-500" /> : <EyeOffIcon className="w-3.5 h-3.5 text-muted-foreground" />}
-                          </span>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              {u.is_listed
+                                ? <Eye className="w-3.5 h-3.5 text-blue-500" />
+                                : <EyeOffIcon className="w-3.5 h-3.5 text-muted-foreground" />}
+                            </TooltipTrigger>
+                            <TooltipContent side="top">
+                              {u.is_listed ? "Listed — appears in client/coordinator search results" : "Hidden — not shown in search results"}
+                            </TooltipContent>
+                          </Tooltip>
                         )}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{formatDate(u.created_at)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        <Button size="sm" variant="ghost" aria-label={`Edit ${u.name}`} onClick={() => openEdit(u)}>
-                          <Pencil className="w-4 h-4 text-muted-foreground" />
-                        </Button>
-                        <Button
-                          size="sm" variant="ghost"
-                          disabled={toggling === u.id}
-                          aria-label={u.is_active ? `Deactivate ${u.name}` : `Activate ${u.name}`}
-                          onClick={() => toggleActive(u)}
-                        >
-                          {u.is_active
-                            ? <ToggleRight className="w-4 h-4 text-emerald-600" />
-                            : <ToggleLeft className="w-4 h-4 text-muted-foreground" />}
-                        </Button>
-                        <Button size="sm" variant="ghost" aria-label={`Delete ${u.name}`} onClick={() => setDeleteTarget(u)}>
-                          <Trash2 className="w-4 h-4 text-destructive" />
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button size="sm" variant="ghost" aria-label={`Edit ${u.name}`} onClick={() => openEdit(u)}>
+                              <Pencil className="w-4 h-4 text-muted-foreground" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">Edit name, email, or phone</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button size="sm" variant="ghost" aria-label={`Delete ${u.name}`} onClick={() => setDeleteTarget(u)}>
+                              <Trash2 className="w-4 h-4 text-destructive" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">Permanently delete this account</TooltipContent>
+                        </Tooltip>
                       </div>
                     </td>
                   </tr>
@@ -462,5 +499,6 @@ export function AdminUsersClient({ users }: { users: RegisteredUser[] }) {
         </DialogContent>
       </Dialog>
     </div>
+    </TooltipProvider>
   );
 }
