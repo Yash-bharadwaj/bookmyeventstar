@@ -328,17 +328,23 @@ export function AdminEnquiriesClient({ enquiries, coordinators }: Props) {
                 <label className="text-sm font-medium">Select Coordinator</label>
                 <Select value={selectedCoordinator} onValueChange={setSelectedCoordinator}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Choose a coordinator..." />
+                    {selectedCoordinator ? (
+                      <span className="truncate">
+                        {coordinators.find((c) => c.id === selectedCoordinator)?.name}
+                      </span>
+                    ) : (
+                      <SelectValue placeholder="Choose a coordinator..." />
+                    )}
                   </SelectTrigger>
                   <SelectContent>
                     {coordinators.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-navy-100 text-navy-700 flex items-center justify-center text-xs font-bold">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-6 h-6 rounded-full bg-navy-100 text-navy-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
                             {c.name[0]}
                           </div>
-                          <span>{c.name}</span>
-                          <span className="text-muted-foreground text-xs">· {c.email}</span>
+                          <span className="flex-shrink-0">{c.name}</span>
+                          <span className="text-muted-foreground text-xs truncate">· {c.email}</span>
                         </div>
                       </SelectItem>
                     ))}
