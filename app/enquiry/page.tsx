@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Calendar,
   MapPin,
-  DollarSign,
+  IndianRupee,
   User,
   Mail,
   Lock,
@@ -886,8 +886,10 @@ export default function EnquiryPage() {
                         <Label>Minimum budget (₹) *</Label>
                         <Input
                           type="number"
-                          placeholder="50000"
-                          icon={<DollarSign className="w-4 h-4" />}
+                          inputMode="numeric"
+                          min={0}
+                          placeholder="e.g. 50,000"
+                          icon={<IndianRupee className="w-4 h-4" />}
                           error={errors.budget_min?.message}
                           {...register("budget_min")}
                         />
@@ -896,8 +898,10 @@ export default function EnquiryPage() {
                         <Label>Maximum budget (₹)</Label>
                         <Input
                           type="number"
+                          inputMode="numeric"
+                          min={0}
                           placeholder="Same as min if unsure"
-                          icon={<DollarSign className="w-4 h-4" />}
+                          icon={<IndianRupee className="w-4 h-4" />}
                           error={errors.budget_max?.message}
                           {...register("budget_max")}
                         />

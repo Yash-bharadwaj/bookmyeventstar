@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { motion } from "framer-motion";
-import { Camera, Plus, X, Save, Star, CheckCircle2, Upload, Loader2, Image as ImageIcon, Video, EyeOff, AlertCircle } from "lucide-react";
+import { Camera, Plus, X, Save, Star, CheckCircle2, Upload, Loader2, Image as ImageIcon, Video, EyeOff, AlertCircle, IndianRupee } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -420,7 +420,9 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
               <Label>Base Price (₹) — Starting from *</Label>
               <Input
                 type="number"
-                placeholder="e.g. 50000"
+                inputMode="numeric"
+                placeholder="e.g. 50,000"
+                icon={<IndianRupee className="w-4 h-4" />}
                 min={1000}
                 step={500}
                 error={errors.base_price?.message}
