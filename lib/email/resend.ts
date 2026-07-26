@@ -1,9 +1,9 @@
 const RESEND_API_URL = "https://api.resend.com/emails";
 
-// Resend's shared onboarding@resend.dev sender — works with zero domain
-// setup, meant for low-volume/testing use. Swap to a verified custom domain
-// address here once one is set up; no other code needs to change.
-const FROM_ADDRESS = "BookMyEventStar <onboarding@resend.dev>";
+// bookmyeventstar.com verified in Resend (2026-07-26) — was
+// onboarding@resend.dev (shared test sender, could only deliver to the
+// Resend account owner's own address) until the domain was set up.
+const FROM_ADDRESS = "BookMyEventStar <noreply@bookmyeventstar.com>";
 
 export async function sendEmail({ to, subject, html }: { to: string; subject: string; html: string }) {
   const apiKey = process.env.RESEND_API_KEY;
