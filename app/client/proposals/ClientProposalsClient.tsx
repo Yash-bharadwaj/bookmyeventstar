@@ -13,7 +13,7 @@ import { Proposal } from "@/types";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { db } from "@/lib/firebase/client";
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
-import { notifyUser } from "@/lib/notifications/client";
+import { notifyUser, emailUser } from "@/lib/notifications/client";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 
@@ -86,12 +86,13 @@ export function ClientProposalsClient({ proposals }: Props) {
       await updateDoc(doc(db, "enquiries", enquiryId), { status: "confirmed", updated_at: serverTimestamp() });
 
       if (proposal?.coordinator_id) {
-        await notifyUser(proposal.coordinator_id, {
+        const payload = {
           title: "🎉 Proposal Accepted — Create Booking",
           message: `${proposal.enquiry?.event_type ?? "Event"} booking confirmed${preferredName ? `. Client prefers ${preferredName}` : ""}. Please create the booking now.`,
-          type: "success",
           link: `/coordinator/proposals`,
-        });
+        };
+        await notifyUser(proposal.coordinator_id, { ...payload, type: "success" });
+        emailUser(proposal.coordinator_id, payload);
       }
       toast.success("Booking confirmed! Our coordinator will call you shortly.", { duration: 5000 });
       router.refresh();
@@ -115,12 +116,13 @@ export function ClientProposalsClient({ proposals }: Props) {
         // Only notify once the undo window has passed — no point alerting
         // the coordinator about a decline the client immediately reversed.
         if (proposal?.coordinator_id) {
-          notifyUser(proposal.coordinator_id, {
+          const payload = {
             title: "Proposal Declined",
             message: `Client declined the proposal for ${proposal.enquiry?.event_type ?? "the event"}. Consider sending a revised proposal.`,
-            type: "warning",
             link: "/coordinator/proposals",
-          }).catch(() => {});
+          };
+          notifyUser(proposal.coordinator_id, { ...payload, type: "warning" }).catch(() => {});
+          emailUser(proposal.coordinator_id, payload);
         }
       }, 6000);
       toast(

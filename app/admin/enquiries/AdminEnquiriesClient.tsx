@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { formatDate, formatCurrency, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { db } from "@/lib/firebase/client";
 import { doc, writeBatch, serverTimestamp } from "firebase/firestore";
-import { notifyUserInBatch } from "@/lib/notifications/client";
+import { notifyUserInBatch, emailUser } from "@/lib/notifications/client";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -77,6 +77,13 @@ export function AdminEnquiriesClient({ enquiries, coordinators }: Props) {
     await batch.commit();
     const coord = coordinators.find((c) => c.id === bulkAssignCoord);
     toast.success(`${ids.length} ${ids.length === 1 ? "enquiry" : "enquiries"} assigned to ${coord?.name ?? "coordinator"}`);
+    // One summary email rather than one per enquiry — a bulk assign of
+    // several enquiries at once shouldn't flood the coordinator's inbox.
+    emailUser(bulkAssignCoord, {
+      title: "New enquiries assigned to you",
+      message: `${ids.length} ${ids.length === 1 ? "enquiry has" : "enquiries have"} just been assigned to you.`,
+      link: "/coordinator/enquiries",
+    });
     setBulkSelected(new Set());
     setBulkAssignCoord("");
     setBulkAssigning(false);
@@ -105,6 +112,11 @@ export function AdminEnquiriesClient({ enquiries, coordinators }: Props) {
       link: `/coordinator/enquiries/${selectedEnquiry.id}`,
     });
     await batch.commit();
+    emailUser(selectedCoordinator, {
+      title: "New Enquiry Assigned",
+      message: `You have been assigned an enquiry for ${selectedEnquiry.event_type} in ${selectedEnquiry.city}.`,
+      link: `/coordinator/enquiries/${selectedEnquiry.id}`,
+    });
     toast.success("Coordinator assigned!");
     setAssigning(false);
     setAssignDialogOpen(false);

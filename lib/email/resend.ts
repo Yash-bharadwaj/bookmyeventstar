@@ -35,3 +35,23 @@ export function otpEmailHtml(code: string) {
     </div>
   `;
 }
+
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://bookmyeventstar.vercel.app";
+
+/**
+ * One generic shell reused for every "you have a notification" email —
+ * new registration, new enquiry, enquiry assigned, proposal response. Same
+ * title/message/link shape as the in-app NotifyPayload, so any call site
+ * that already builds one for the bell icon can reuse it verbatim for email.
+ */
+export function notificationEmailHtml({ message, link }: { message: string; link?: string }) {
+  const button = link
+    ? `<a href="${SITE_URL}${link}" style="display:inline-block;margin-top:20px;background:#c8850f;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:10px 20px;border-radius:10px;">View details</a>`
+    : "";
+  return `
+    <div style="font-family:-apple-system,Helvetica,Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#10161c;">
+      <p style="font-size:15px;line-height:1.5;margin:0;">${message}</p>
+      ${button}
+    </div>
+  `;
+}

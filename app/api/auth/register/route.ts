@@ -4,6 +4,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { cookies } from "next/headers";
 import { SESSION_COOKIE_NAME } from "@/lib/firebase/session";
 import { verifyEmailVerification } from "@/lib/email/verification-token";
+import { notifyAllAdminsServer } from "@/lib/notifications/server";
 
 const PRIVILEGED_ROLES = ["coordinator", "admin"];
 
@@ -115,6 +116,17 @@ export async function POST(req: NextRequest) {
       await adminAuth.deleteUser(userId).catch(() => {});
       console.error("[register] profile write failed:", err);
       return NextResponse.json({ error: "Failed to create profile. Please try again." }, { status: 500 });
+    }
+
+    // Only for genuine self-registration — an admin adding a user from
+    // Admin > Users already knows about it, no need to notify themselves.
+    if ((role === "client" || role === "artist") && callerRole !== "admin") {
+      notifyAllAdminsServer({
+        title: `New ${role} registered — ${name}`,
+        message: `${name} (${email}, ${phone_e164}) just created a ${role} account.`,
+        type: "info",
+        link: "/admin/users",
+      }).catch((err) => console.error("[register] admin notify failed:", err));
     }
 
     return NextResponse.json({ success: true });

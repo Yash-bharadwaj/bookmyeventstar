@@ -51,3 +51,17 @@ export async function notifyAllAdmins(payload: NotifyPayload): Promise<void> {
     body: JSON.stringify(payload),
   }).catch(() => {});
 }
+
+/**
+ * Email counterpart to notifyUser, for the handful of "major event" cases
+ * that should also land in the recipient's inbox, not just the bell icon
+ * (e.g. an enquiry assignment, a proposal response). Best-effort — never
+ * throws, so a failed send never blocks the action that triggered it.
+ */
+export async function emailUser(uid: string, payload: NotifyPayload): Promise<void> {
+  await fetch("/api/notifications/email", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ uid, ...payload }),
+  }).catch(() => {});
+}
