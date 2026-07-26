@@ -45,3 +45,4 @@ node_modules/sharp
 
 # Ad-hoc audit scratch (screenshots/scripts)
 .claude-audit/
+.env*

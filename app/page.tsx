@@ -355,10 +355,10 @@ export default function LandingPage() {
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search artists — singer, DJ, comedian..."
                     className="min-w-0 flex-1 bg-transparent text-gray-800 placeholder-gray-400 text-sm outline-none py-2 px-2"
-                    onKeyDown={(e) => e.key === "Enter" && (window.location.href = `/artists?q=${searchQuery}`)}
+                    onKeyDown={(e) => e.key === "Enter" && (window.location.href = `/artists?search=${encodeURIComponent(searchQuery)}`)}
                   />
                 </div>
-                <Link href={`/artists${searchQuery ? `?q=${searchQuery}` : ""}`} className="shrink-0">
+                <Link href={`/artists${searchQuery ? `?search=${encodeURIComponent(searchQuery)}` : ""}`} className="shrink-0">
                   <button className="w-full sm:w-auto gold-gradient text-white text-sm font-semibold px-6 py-2.5 rounded-xl hover:opacity-90 transition-all shadow-md whitespace-nowrap">
                     Search Artists
                   </button>
