@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -11,9 +11,7 @@ import {
   Smartphone, ShieldCheck,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { getAdditionalUserInfo, type ConfirmationResult } from "firebase/auth";
-import { auth } from "@/lib/firebase/client";
-import { signInWithEmail, sendPhoneOtp, resetRecaptcha, linkPasswordCredential, syncSessionCookie } from "@/lib/firebase/auth-client";
+import { signInWithEmail } from "@/lib/firebase/auth-client";
 import { registerSchema, RegisterFormData } from "@/lib/validations/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,8 +41,6 @@ function RegisterForm() {
 
   return (
     <div className="h-screen flex overflow-hidden">
-      <div id="recaptcha-container" />
-
       {/* Left panel — role-aware branding, desktop only */}
       <div className="hidden lg:flex lg:w-1/2 h-full navy-gradient relative overflow-hidden flex-col items-center justify-center p-10">
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full bg-gold-500/10 blur-3xl" />
@@ -239,10 +235,10 @@ function ArtistRegisterForm() {
 }
 
 /**
- * Client signup — same verified-phone trust level as /enquiry's inline
- * signup, instead of the old unverified-phone email+password flow. Both
- * paths create the same `client` role, so both now require a real OTP
- * before the account exists.
+ * Client signup — email is the verified channel (phone-auth SMS is
+ * unreliable without Firebase billing enabled, and separately unreliable to
+ * Indian numbers even with it). Phone is still collected as contact info,
+ * just no longer proven — email verification gates account creation instead.
  */
 function ClientRegisterForm() {
   const router = useRouter();
@@ -258,25 +254,34 @@ function ClientRegisterForm() {
   const [otpBusy, setOtpBusy] = useState(false);
   const [otpError, setOtpError] = useState(false);
   const [resendIn, setResendIn] = useState(0);
-  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
-  const [phoneVerified, setPhoneVerified] = useState(false);
-  const [verifiedUid, setVerifiedUid] = useState("");
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [verificationToken, setVerificationToken] = useState("");
+  const [verificationExpires, setVerificationExpires] = useState(0);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const t = setInterval(() => setResendIn((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(t);
+  }, [resendIn]);
+
   const handleSendOtp = async () => {
-    const d = phoneDigits.replace(/\D/g, "");
-    if (!/^[6-9]\d{9}$/.test(d)) { toast.error("Enter a valid 10-digit mobile number"); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { toast.error("Enter a valid email address first"); return; }
     setOtpBusy(true);
     try {
-      const result = await sendPhoneOtp(`+91${d}`);
-      setConfirmationResult(result);
+      const res = await fetch("/api/auth/email-otp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const json = await res.json();
+      if (!res.ok) { toast.error(json.error ?? "Could not send the code — please try again."); return; }
       setOtpSent(true);
-      setResendIn(60);
-      toast.success("OTP sent to your mobile");
+      setResendIn(45);
+      toast.success("Code sent to your email");
     } catch (err) {
-      console.error("[register] sendPhoneOtp failed:", err);
-      resetRecaptcha();
-      toast.error("Could not send OTP — please check the number and try again.");
+      console.error("[register] email-otp send failed:", err);
+      toast.error("Could not send the code — please try again.");
     } finally {
       setOtpBusy(false);
     }
@@ -284,25 +289,29 @@ function ClientRegisterForm() {
 
   const handleVerifyOtp = async (codeOverride?: string) => {
     const code = (codeOverride ?? otpCode).trim();
-    if (!confirmationResult || code.length !== 6) { toast.error("Enter the 6-digit code"); return; }
+    if (code.length !== 6) { toast.error("Enter the 6-digit code"); return; }
     setOtpBusy(true);
     try {
-      const cred = await confirmationResult.confirm(code);
-      const isNewUser = getAdditionalUserInfo(cred)?.isNewUser ?? false;
-      if (!isNewUser) {
-        toast("You already have an account. Redirecting to login…", { icon: "ℹ️" });
-        window.location.href = `/login?phone=${phoneDigits.replace(/\D/g, "")}`;
+      const res = await fetch("/api/auth/email-otp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), code }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.verified) {
+        toast.error(json.error ?? "Incorrect code — please try again.");
+        setOtpError(true);
+        setOtpCode("");
+        setTimeout(() => setOtpError(false), 500);
         return;
       }
-      setVerifiedUid(cred.user.uid);
-      setPhoneVerified(true);
-      toast.success("Mobile number verified");
+      setVerificationToken(json.token);
+      setVerificationExpires(json.expires);
+      setEmailVerified(true);
+      toast.success("Email verified");
     } catch (err) {
-      console.error("[register] OTP confirm failed:", err);
-      toast.error("Incorrect OTP — please try again.");
-      setOtpError(true);
-      setOtpCode("");
-      setTimeout(() => setOtpError(false), 500);
+      console.error("[register] email-otp verify failed:", err);
+      toast.error("Something went wrong — please try again.");
     } finally {
       setOtpBusy(false);
     }
@@ -311,33 +320,38 @@ function ClientRegisterForm() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || name.trim().length < 2) { toast.error("Enter your name"); return; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { toast.error("Enter a valid email address"); return; }
+    const digits = phoneDigits.replace(/\D/g, "");
+    if (!/^[6-9]\d{9}$/.test(digits)) { toast.error("Enter a valid 10-digit mobile number"); return; }
     if (password.length < 8) { toast.error("Password must be at least 8 characters"); return; }
     if (password !== confirmPassword) { toast.error("Passwords do not match"); return; }
 
     setLoading(true);
     try {
-      const digits = phoneDigits.replace(/\D/g, "");
-      const res = await fetch("/api/auth/phone-signup", {
+      const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uid: verifiedUid, name: name.trim(), email: email.trim(), phone: digits }),
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim(),
+          phone: digits,
+          password,
+          role: "client",
+          emailVerificationToken: verificationToken,
+          emailVerificationExpires: verificationExpires,
+        }),
       });
       const json = await res.json();
       if (!res.ok) {
         if (res.status === 409) {
           toast("You already have an account. Redirecting to login…", { icon: "ℹ️" });
-          window.location.href = `/login?phone=${digits}`;
+          window.location.href = `/login?email=${encodeURIComponent(email.trim())}`;
           return;
         }
         toast.error(json.error ?? "Could not create your account — please try again.");
         return;
       }
 
-      await linkPasswordCredential(`${digits}@phone.bmes.app`, password);
-      const freshToken = await auth.currentUser!.getIdToken(true);
-      await syncSessionCookie(freshToken);
-
+      await signInWithEmail(email.trim(), password);
       toast.success("Account created! Welcome to BookMyEventStar.");
       router.push("/client");
       router.refresh();
@@ -357,30 +371,36 @@ function ClientRegisterForm() {
           <Input placeholder="Jane Doe" icon={<User className="w-4 h-4" />} value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div className="space-y-1">
-          <Label>Email Address</Label>
-          <Input type="email" placeholder="you@example.com" icon={<Mail className="w-4 h-4" />} value={email} onChange={(e) => setEmail(e.target.value)} />
+          <Label>Mobile Number</Label>
+          <div className="flex gap-2">
+            <div className="flex items-center px-3 rounded-xl border bg-muted text-sm font-medium text-muted-foreground whitespace-nowrap shrink-0">+91</div>
+            <Input
+              type="tel"
+              inputMode="numeric"
+              placeholder="9876543210"
+              icon={<Smartphone className="w-4 h-4" />}
+              value={phoneDigits}
+              onChange={(e) => setPhoneDigits(e.target.value.replace(/\D/g, "").slice(0, 10))}
+              className="min-w-0"
+            />
+          </div>
         </div>
       </div>
 
-      {!phoneVerified ? (
+      {!emailVerified ? (
         <div className="rounded-2xl border border-gold-200 bg-gold-50/50 p-3.5 space-y-2.5">
           <p className="text-xs font-medium text-gold-700 flex items-center gap-1.5">
-            <ShieldCheck className="w-3.5 h-3.5" />Verify your mobile number
+            <ShieldCheck className="w-3.5 h-3.5" />Verify your email
           </p>
           <div className="space-y-2">
-            <div className="flex gap-2">
-              <div className="flex items-center px-3 rounded-xl border bg-muted text-sm font-medium text-muted-foreground whitespace-nowrap shrink-0">+91</div>
-              <Input
-                type="tel"
-                inputMode="numeric"
-                placeholder="9876543210"
-                icon={<Smartphone className="w-4 h-4" />}
-                value={phoneDigits}
-                disabled={otpSent}
-                onChange={(e) => setPhoneDigits(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                className="min-w-0"
-              />
-            </div>
+            <Input
+              type="email"
+              placeholder="you@example.com"
+              icon={<Mail className="w-4 h-4" />}
+              value={email}
+              disabled={otpSent}
+              onChange={(e) => setEmail(e.target.value)}
+            />
             {!otpSent && (
               <Button type="button" onClick={handleSendOtp} loading={otpBusy} className="w-full">
                 Send code
@@ -412,7 +432,7 @@ function ClientRegisterForm() {
                   {resendIn > 0 ? `Resend in ${resendIn}s` : "Resend code"}
                 </button>
                 <button type="button" className="text-muted-foreground hover:text-navy-900" onClick={() => { setOtpSent(false); setOtpCode(""); }}>
-                  Edit number
+                  Edit email
                 </button>
               </div>
             </>
@@ -420,12 +440,12 @@ function ClientRegisterForm() {
         </div>
       ) : (
         <div className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-700 text-xs font-medium px-3 py-2 rounded-xl">
-          <ShieldCheck className="w-3.5 h-3.5" />+91 {phoneDigits} verified
+          <ShieldCheck className="w-3.5 h-3.5" />{email} verified
         </div>
       )}
 
       <AnimatePresence>
-        {phoneVerified && (
+        {emailVerified && (
           <motion.div
             key="password-fields"
             initial={{ opacity: 0, height: 0 }}
@@ -458,7 +478,7 @@ function ClientRegisterForm() {
         )}
       </AnimatePresence>
 
-      <Button type="submit" loading={loading} disabled={!phoneVerified} className="w-full mt-1" size="lg">
+      <Button type="submit" loading={loading} disabled={!emailVerified} className="w-full mt-1" size="lg">
         Create Account
       </Button>
     </form>

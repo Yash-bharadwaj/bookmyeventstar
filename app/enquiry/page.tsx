@@ -31,12 +31,9 @@ import {
   collection, doc, getDoc, getDocs, addDoc, updateDoc,
   query, where, getCountFromServer, Timestamp,
 } from "firebase/firestore";
-import { getAdditionalUserInfo, onAuthStateChanged, type ConfirmationResult } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebase/client";
-import {
-  sendPhoneOtp, linkPasswordCredential, syncSessionCookie,
-  signOutEverywhere, resetRecaptcha,
-} from "@/lib/firebase/auth-client";
+import { signInWithEmail, signOutEverywhere } from "@/lib/firebase/auth-client";
 import { enquiryFormSchema, EnquiryFormValues } from "@/lib/validations/enquiry";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -82,15 +79,16 @@ export default function EnquiryPage() {
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  // Real phone verification (OTP once at signup — see auth-client.ts)
+  // Email verification (OTP once at signup — phone-auth SMS is unreliable
+  // without Firebase billing, so email is the verified channel instead)
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState("");
   const [otpBusy, setOtpBusy] = useState(false);
   const [otpError, setOtpError] = useState(false);
   const [resendIn, setResendIn] = useState(0);
-  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
-  const [phoneVerified, setPhoneVerified] = useState(false);
-  const [verifiedUid, setVerifiedUid] = useState("");
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [verificationToken, setVerificationToken] = useState("");
+  const [verificationExpires, setVerificationExpires] = useState(0);
 
   // Enquiry wizard state
   const [step, setStep] = useState(0);
@@ -181,19 +179,23 @@ export default function EnquiryPage() {
   };
 
   const handleSendOtp = async () => {
-    const d = phoneDigits.replace(/\D/g, "");
-    if (!/^[6-9]\d{9}$/.test(d)) { toast.error("Enter a valid 10-digit mobile number"); return; }
+    const email = watch("email")?.trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast.error("Enter a valid email address first"); return; }
     setOtpBusy(true);
     try {
-      const result = await sendPhoneOtp(`+91${d}`);
-      setConfirmationResult(result);
+      const res = await fetch("/api/auth/email-otp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const json = await res.json();
+      if (!res.ok) { toast.error(json.error ?? "Could not send the code — please try again."); return; }
       setOtpSent(true);
-      setResendIn(60);
-      toast.success("OTP sent to your mobile");
+      setResendIn(45);
+      toast.success("Code sent to your email");
     } catch (err) {
-      console.error("[enquiry] sendPhoneOtp failed:", err);
-      resetRecaptcha();
-      toast.error("Could not send OTP — please check the number and try again.");
+      console.error("[enquiry] email-otp send failed:", err);
+      toast.error("Could not send the code — please try again.");
     } finally {
       setOtpBusy(false);
     }
@@ -201,29 +203,30 @@ export default function EnquiryPage() {
 
   const handleVerifyOtp = async (codeOverride?: string) => {
     const code = (codeOverride ?? otpCode).trim();
-    if (!confirmationResult || code.length !== 6) { toast.error("Enter the 6-digit code"); return; }
+    if (code.length !== 6) { toast.error("Enter the 6-digit code"); return; }
+    const email = watch("email")?.trim();
     setOtpBusy(true);
     try {
-      const cred = await confirmationResult.confirm(code);
-      const isNewUser = getAdditionalUserInfo(cred)?.isNewUser ?? false;
-      const d = phoneDigits.replace(/\D/g, "");
-
-      if (!isNewUser) {
-        toast("You already have an account. Redirecting to login…", { icon: "ℹ️" });
-        await signOutEverywhere();
-        window.location.href = `/login?phone=${d}`;
+      const res = await fetch("/api/auth/email-otp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.verified) {
+        toast.error(json.error ?? "Incorrect code — please try again.");
+        setOtpError(true);
+        setOtpCode("");
+        setTimeout(() => setOtpError(false), 500);
         return;
       }
-
-      setVerifiedUid(cred.user.uid);
-      setPhoneVerified(true);
-      toast.success("Mobile number verified");
+      setVerificationToken(json.token);
+      setVerificationExpires(json.expires);
+      setEmailVerified(true);
+      toast.success("Email verified");
     } catch (err) {
-      console.error("[enquiry] confirm OTP failed:", err);
-      toast.error("Incorrect OTP — please try again.");
-      setOtpError(true);
-      setOtpCode("");
-      setTimeout(() => setOtpError(false), 500);
+      console.error("[enquiry] email-otp verify failed:", err);
+      toast.error("Something went wrong — please try again.");
     } finally {
       setOtpBusy(false);
     }
@@ -237,7 +240,9 @@ export default function EnquiryPage() {
     if (!valid) return;
 
     if (step === 0 && !hasSession) {
-      if (!phoneVerified) { toast.error("Please verify your mobile number first"); return; }
+      const d = phoneDigits.replace(/\D/g, "");
+      if (!/^[6-9]\d{9}$/.test(d)) { toast.error("Enter a valid 10-digit mobile number"); return; }
+      if (!emailVerified) { toast.error("Please verify your email first"); return; }
       if (password.length < 8) { toast.error("Password must be at least 8 characters"); return; }
       if (password !== confirmPassword) { toast.error("Passwords do not match"); return; }
       if (isEventManager) {
@@ -260,8 +265,8 @@ export default function EnquiryPage() {
 
       // Brand-new visitor — finish account setup, then continue
       if (!clientId) {
-        if (!phoneVerified || !verifiedUid) {
-          toast.error("Please verify your mobile number first");
+        if (!emailVerified) {
+          toast.error("Please verify your email first");
           setStep(0);
           return;
         }
@@ -269,14 +274,17 @@ export default function EnquiryPage() {
 
         let res: Response;
         try {
-          res = await fetch("/api/auth/phone-signup", {
+          res = await fetch("/api/auth/register", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              uid: verifiedUid,
               name: data.name,
               email: data.email,
               phone: d,
+              password,
+              role: "client",
+              emailVerificationToken: verificationToken,
+              emailVerificationExpires: verificationExpires,
               isEventManager,
               companyName:     isEventManager ? companyName     : undefined,
               instagramHandle: isEventManager ? instagramHandle : undefined,
@@ -292,27 +300,16 @@ export default function EnquiryPage() {
         if (!res.ok) {
           if (res.status === 409) {
             toast("You already have an account. Redirecting to login…", { icon: "ℹ️" });
-            window.location.href = `/login?phone=${d}`;
+            window.location.href = `/login?email=${encodeURIComponent(data.email)}`;
             return;
           }
           toast.error(json.error ?? "Could not create your account — please try again.");
           return;
         }
 
-        try {
-          await linkPasswordCredential(`${d}@phone.bmes.app`, password);
-        } catch (err) {
-          console.error("[enquiry] linkPasswordCredential failed:", err);
-          toast.success("Account created! Redirecting you to sign in…");
-          window.location.href = `/login?phone=${d}`;
-          return;
-        }
-
-        const freshToken = await auth.currentUser!.getIdToken(true); // force refresh to pick up the role claim
-        await syncSessionCookie(freshToken);
-
+        const cred = await signInWithEmail(data.email, password);
         setPhonePreview(maskPhone(d));
-        clientId = verifiedUid;
+        clientId = cred.user.uid;
       }
 
       const todayStart = new Date();
@@ -431,7 +428,6 @@ export default function EnquiryPage() {
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-navy-900 via-navy-800 to-navy-950 flex items-center justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))] overflow-hidden">
       <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full bg-gold-500/5 blur-3xl pointer-events-none" />
-      <div id="recaptcha-container" />
 
       <div className="relative w-full max-w-2xl">
         <div className="text-center mb-8">
@@ -544,6 +540,7 @@ export default function EnquiryPage() {
                           placeholder="you@example.com"
                           icon={<Mail className="w-4 h-4" />}
                           error={errors.email?.message}
+                          disabled={!hasSession && otpSent}
                           {...register("email")}
                         />
                       </div>
@@ -551,35 +548,36 @@ export default function EnquiryPage() {
 
                     {!hasSession && (
                       <>
-                        {!phoneVerified ? (
+                        <div className="space-y-1.5">
+                          <Label>Mobile Number *</Label>
+                          <div className="flex gap-2">
+                            <div className="flex items-center px-3 rounded-xl border bg-muted text-sm font-medium text-muted-foreground whitespace-nowrap shrink-0">
+                              +91
+                            </div>
+                            <Input
+                              type="tel"
+                              inputMode="numeric"
+                              autoComplete="tel-national"
+                              placeholder="9876543210"
+                              icon={<Smartphone className="w-4 h-4" />}
+                              value={phoneDigits}
+                              onChange={(e) => setPhoneDigits(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                              className="min-w-0"
+                            />
+                          </div>
+                        </div>
+
+                        {!emailVerified ? (
                           <div className="rounded-2xl border border-gold-200 bg-gold-50/50 p-4 space-y-3">
                             <p className="text-xs font-medium text-gold-700 flex items-center gap-1.5">
                               <ShieldCheck className="w-3.5 h-3.5" />
-                              Verify your mobile number
+                              Verify your email
                             </p>
-                            <div className="space-y-2">
-                              <div className="flex gap-2">
-                                <div className="flex items-center px-3 rounded-xl border bg-muted text-sm font-medium text-muted-foreground whitespace-nowrap shrink-0">
-                                  +91
-                                </div>
-                                <Input
-                                  type="tel"
-                                  inputMode="numeric"
-                                  autoComplete="tel-national"
-                                  placeholder="9876543210"
-                                  icon={<Smartphone className="w-4 h-4" />}
-                                  value={phoneDigits}
-                                  disabled={otpSent}
-                                  onChange={(e) => setPhoneDigits(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                                  className="min-w-0"
-                                />
-                              </div>
-                              {!otpSent && (
-                                <Button type="button" onClick={handleSendOtp} loading={otpBusy} className="w-full">
-                                  Send code
-                                </Button>
-                              )}
-                            </div>
+                            {!otpSent && (
+                              <Button type="button" onClick={handleSendOtp} loading={otpBusy} className="w-full">
+                                Send code
+                              </Button>
+                            )}
 
                             {otpSent && (
                               <div className="space-y-2">
@@ -611,7 +609,7 @@ export default function EnquiryPage() {
                                   className="text-muted-foreground hover:text-navy-900"
                                   onClick={() => { setOtpSent(false); setOtpCode(""); }}
                                 >
-                                  Edit number
+                                  Edit email
                                 </button>
                               </div>
                             )}
@@ -619,11 +617,11 @@ export default function EnquiryPage() {
                         ) : (
                           <div className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-700 text-xs font-medium px-3 py-2 rounded-xl">
                             <ShieldCheck className="w-3.5 h-3.5" />
-                            +91 {phoneDigits} verified
+                            {watch("email")} verified
                           </div>
                         )}
 
-                        {phoneVerified && (
+                        {emailVerified && (
                           <>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                               <div className="space-y-1.5">

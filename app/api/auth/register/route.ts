@@ -3,12 +3,16 @@ import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { cookies } from "next/headers";
 import { SESSION_COOKIE_NAME } from "@/lib/firebase/session";
+import { verifyEmailVerification } from "@/lib/email/verification-token";
 
 const PRIVILEGED_ROLES = ["coordinator", "admin"];
 
 export async function POST(req: NextRequest) {
   try {
-    const { name, email, phone, password, role } = await req.json();
+    const {
+      name, email, phone, password, role, emailVerificationToken, emailVerificationExpires,
+      isEventManager, companyName, instagramHandle, websiteUrl,
+    } = await req.json();
 
     // Basic server-side validation
     if (!name || !email || !password || !phone || !role) {
@@ -16,6 +20,15 @@ export async function POST(req: NextRequest) {
     }
     if (!["client", "artist", "coordinator", "admin"].includes(role)) {
       return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+    }
+
+    const isManager = role === "client" && Boolean(isEventManager);
+    const companyStr = String(companyName ?? "").trim() || null;
+    const igStr = String(instagramHandle ?? "").trim().replace(/^@/, "") || null;
+    const websiteStr = String(websiteUrl ?? "").trim() || null;
+    if (isManager) {
+      if (!companyStr) return NextResponse.json({ error: "Enter your company / agency name." }, { status: 400 });
+      if (!igStr) return NextResponse.json({ error: "Instagram handle is required." }, { status: 400 });
     }
 
     // Creating a coordinator or admin account is a privileged action — the
@@ -31,6 +44,12 @@ export async function POST(req: NextRequest) {
       if (callerRole !== "admin") {
         return NextResponse.json({ error: "Only admins can create this account type." }, { status: 403 });
       }
+    }
+
+    // Clients must prove ownership of their email via the OTP flow first —
+    // the token here is only minted by a successful /api/auth/email-otp/verify.
+    if (role === "client" && !verifyEmailVerification(email, emailVerificationToken, emailVerificationExpires)) {
+      return NextResponse.json({ error: "Please verify your email before creating an account." }, { status: 403 });
     }
 
     let userId: string;
@@ -60,6 +79,12 @@ export async function POST(req: NextRequest) {
         phone: phone_e164,
         role,
         is_active: true,
+        ...(role === "client" && {
+          is_event_manager: isManager,
+          company_name: companyStr,
+          instagram_handle: igStr,
+          website_url: websiteStr,
+        }),
         created_at: FieldValue.serverTimestamp(),
         updated_at: FieldValue.serverTimestamp(),
       });
