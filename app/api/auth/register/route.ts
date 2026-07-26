@@ -49,11 +49,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Only admins can create this account type." }, { status: 403 });
     }
 
-    // Clients must prove ownership of their email via the OTP flow first —
-    // the token here is only minted by a successful /api/auth/email-otp/verify.
-    // An admin creating the account directly (Admin > Users) is trusted and
-    // skips this — there's no self-service OTP step in that flow.
-    if (role === "client" && callerRole !== "admin" && !verifyEmailVerification(email, emailVerificationToken, emailVerificationExpires)) {
+    // Clients and artists must both prove ownership of their email via the
+    // OTP flow first — the token here is only minted by a successful
+    // /api/auth/email-otp/verify. An admin creating the account directly
+    // (Admin > Users) is trusted and skips this — there's no self-service
+    // OTP step in that flow.
+    if ((role === "client" || role === "artist") && callerRole !== "admin" && !verifyEmailVerification(email, emailVerificationToken, emailVerificationExpires)) {
       return NextResponse.json({ error: "Please verify your email before creating an account." }, { status: 403 });
     }
 

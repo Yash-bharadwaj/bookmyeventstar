@@ -146,28 +146,107 @@ function RegisterForm() {
 }
 
 /**
- * Artist signup — unchanged from before: email + password via
- * /api/auth/register (Admin SDK), no phone verification. Artists are
- * reviewed/verified by the platform before listing regardless, so the
- * identity bar here is intentionally different from the client path.
+ * Artist signup — email is the verified channel, same as the client path:
+ * phone is collected (validated as a real Indian mobile number) but not
+ * proven, email ownership is proven via OTP before the account exists.
+ * Artists still go through a separate admin verification/listing gate
+ * afterward — this only closes the "anyone can type in an email they don't
+ * own" gap at signup time.
  */
 function ArtistRegisterForm() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const { register, handleSubmit, formState: { errors } } = useForm<RegisterFormData>({
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [otpBusy, setOtpBusy] = useState(false);
+  const [otpError, setOtpError] = useState(false);
+  const [resendIn, setResendIn] = useState(0);
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [verificationToken, setVerificationToken] = useState("");
+  const [verificationExpires, setVerificationExpires] = useState(0);
+
+  const { register, handleSubmit, watch, formState: { errors } } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
     defaultValues: { role: "artist" },
   });
+  const email = watch("email");
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const t = setInterval(() => setResendIn((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(t);
+  }, [resendIn]);
+
+  const handleSendOtp = async () => {
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast.error("Enter a valid email address first"); return; }
+    setOtpBusy(true);
+    try {
+      const res = await fetch("/api/auth/email-otp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const json = await res.json();
+      if (!res.ok) { toast.error(json.error ?? "Could not send the code — please try again."); return; }
+      setOtpSent(true);
+      setResendIn(45);
+      toast.success("Code sent to your email");
+    } catch (err) {
+      console.error("[register-artist] email-otp send failed:", err);
+      toast.error("Could not send the code — please try again.");
+    } finally {
+      setOtpBusy(false);
+    }
+  };
+
+  const handleVerifyOtp = async (codeOverride?: string) => {
+    const code = (codeOverride ?? otpCode).trim();
+    if (code.length !== 6) { toast.error("Enter the 6-digit code"); return; }
+    setOtpBusy(true);
+    try {
+      const res = await fetch("/api/auth/email-otp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.verified) {
+        toast.error(json.error ?? "Incorrect code — please try again.");
+        setOtpError(true);
+        setOtpCode("");
+        setTimeout(() => setOtpError(false), 500);
+        return;
+      }
+      setVerificationToken(json.token);
+      setVerificationExpires(json.expires);
+      setEmailVerified(true);
+      toast.success("Email verified");
+    } catch (err) {
+      console.error("[register-artist] email-otp verify failed:", err);
+      toast.error("Something went wrong — please try again.");
+    } finally {
+      setOtpBusy(false);
+    }
+  };
 
   const onSubmit = async (data: RegisterFormData) => {
+    if (!emailVerified) { toast.error("Please verify your email first"); return; }
     setLoading(true);
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: data.name, email: data.email, phone: data.phone, password: data.password, role: "artist" }),
+        body: JSON.stringify({
+          name: data.name,
+          email: data.email,
+          phone: data.phone,
+          password: data.password,
+          role: "artist",
+          emailVerificationToken: verificationToken,
+          emailVerificationExpires: verificationExpires,
+        }),
       });
       const result = await res.json();
       if (!res.ok) throw new Error(result.error ?? "Registration failed");
@@ -191,43 +270,108 @@ function ArtistRegisterForm() {
           <Input placeholder="John Doe" icon={<User className="w-4 h-4" />} error={errors.name?.message} {...register("name")} />
         </div>
         <div className="space-y-1">
-          <Label>Email Address</Label>
-          <Input type="email" placeholder="you@example.com" icon={<Mail className="w-4 h-4" />} error={errors.email?.message} {...register("email")} />
-        </div>
-      </div>
-      <div className="space-y-1">
-        <Label>Mobile Number</Label>
-        <div className="flex gap-2">
-          <div className="flex items-center px-3 rounded-xl border bg-muted text-sm text-muted-foreground font-medium gap-1.5">
-            <Globe className="w-3.5 h-3.5" />+91
+          <Label>Mobile Number</Label>
+          <div className="flex gap-2">
+            <div className="flex items-center px-3 rounded-xl border bg-muted text-sm text-muted-foreground font-medium gap-1.5 shrink-0">
+              <Globe className="w-3.5 h-3.5" />+91
+            </div>
+            <Input type="tel" placeholder="9876543210" maxLength={10} icon={<Phone className="w-4 h-4" />} error={errors.phone?.message} className="min-w-0" {...register("phone")} />
           </div>
-          <Input type="tel" placeholder="9876543210" maxLength={10} icon={<Phone className="w-4 h-4" />} error={errors.phone?.message} {...register("phone")} />
-        </div>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label>Password</Label>
-          <div className="relative">
-            <Input
-              type={showPassword ? "text" : "password"}
-              placeholder="Min 8 characters"
-              icon={<Lock className="w-4 h-4" />}
-              error={errors.password?.message}
-              className="pr-11"
-              {...register("password")}
-            />
-            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
-          </div>
-        </div>
-        <div className="space-y-1">
-          <Label>Confirm Password</Label>
-          <Input type="password" placeholder="Re-enter password" icon={<Lock className="w-4 h-4" />} error={errors.confirmPassword?.message} {...register("confirmPassword")} />
         </div>
       </div>
 
-      <Button type="submit" loading={loading} className="w-full mt-1" size="lg">
+      {!emailVerified ? (
+        <div className="rounded-2xl border border-gold-200 bg-gold-50/50 p-3.5 space-y-2.5">
+          <p className="text-xs font-medium text-gold-700 flex items-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5" />Verify your email
+          </p>
+          <div className="space-y-2">
+            <Input
+              type="email"
+              placeholder="you@example.com"
+              icon={<Mail className="w-4 h-4" />}
+              error={errors.email?.message}
+              disabled={otpSent}
+              {...register("email")}
+            />
+            {!otpSent && (
+              <Button type="button" onClick={handleSendOtp} loading={otpBusy} className="w-full">
+                Send code
+              </Button>
+            )}
+          </div>
+          {otpSent && (
+            <>
+              <div className="space-y-2">
+                <OtpInput
+                  value={otpCode}
+                  onChange={setOtpCode}
+                  onComplete={(code) => handleVerifyOtp(code)}
+                  disabled={otpBusy}
+                  error={otpError}
+                  autoFocus
+                />
+                <Button type="button" onClick={() => handleVerifyOtp()} loading={otpBusy} className="w-full">
+                  Verify
+                </Button>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <button
+                  type="button"
+                  className="text-gold-700 font-medium disabled:text-muted-foreground"
+                  disabled={resendIn > 0 || otpBusy}
+                  onClick={handleSendOtp}
+                >
+                  {resendIn > 0 ? `Resend in ${resendIn}s` : "Resend code"}
+                </button>
+                <button type="button" className="text-muted-foreground hover:text-navy-900" onClick={() => setOtpSent(false)}>
+                  Edit email
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      ) : (
+        <div className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-700 text-xs font-medium px-3 py-2 rounded-xl">
+          <ShieldCheck className="w-3.5 h-3.5" />{email} verified
+        </div>
+      )}
+
+      <AnimatePresence>
+        {emailVerified && (
+          <motion.div
+            key="password-fields"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden grid grid-cols-1 sm:grid-cols-2 gap-3"
+          >
+            <div className="space-y-1">
+              <Label>Password</Label>
+              <div className="relative">
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Min 8 characters"
+                  icon={<Lock className="w-4 h-4" />}
+                  error={errors.password?.message}
+                  className="pr-11"
+                  autoComplete="new-password"
+                  {...register("password")}
+                />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Confirm Password</Label>
+              <Input type="password" placeholder="Re-enter password" icon={<Lock className="w-4 h-4" />} error={errors.confirmPassword?.message} autoComplete="new-password" {...register("confirmPassword")} />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <Button type="submit" loading={loading} disabled={!emailVerified} className="w-full mt-1" size="lg">
         Create Account
       </Button>
     </form>
