@@ -11,6 +11,7 @@ import {
   Smartphone, ShieldCheck,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { cn } from "@/lib/utils";
 import { signInWithEmail } from "@/lib/firebase/auth-client";
 import { registerSchema, RegisterFormData } from "@/lib/validations/auth";
 import { Button } from "@/components/ui/button";
@@ -281,67 +282,64 @@ function ArtistRegisterForm() {
         </div>
       </div>
 
-      {!emailVerified ? (
-        <div className="rounded-2xl border border-gold-200 bg-gold-50/50 p-3.5 space-y-2.5">
-          <p className="text-xs font-medium text-gold-700 flex items-center gap-1.5">
-            <ShieldCheck className="w-3.5 h-3.5" />Verify your email
-          </p>
-          <div className="space-y-2">
-            <Input
-              type="email"
-              placeholder="you@example.com"
-              icon={<Mail className="w-4 h-4" />}
-              error={errors.email?.message}
-              disabled={otpSent}
-              {...register("email")}
-            />
-            {!otpSent && (
-              <Button type="button" onClick={handleSendOtp} loading={otpBusy} className="w-full">
-                Send code
+      <div className={cn(
+        "rounded-2xl border p-3.5 space-y-2.5 transition-colors",
+        emailVerified ? "border-emerald-200 bg-emerald-50/40" : "border-gold-200 bg-gold-50/50"
+      )}>
+        <p className={cn(
+          "text-xs font-medium flex items-center gap-1.5",
+          emailVerified ? "text-emerald-700" : "text-gold-700"
+        )}>
+          <ShieldCheck className="w-3.5 h-3.5" />
+          {emailVerified ? "Email verified" : "Verify your email"}
+        </p>
+        <Input
+          type="email"
+          placeholder="you@example.com"
+          icon={<Mail className="w-4 h-4" />}
+          rightIcon={emailVerified ? (
+            <motion.span
+              initial={{ scale: 0, rotate: -45 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ type: "spring", stiffness: 500, damping: 15 }}
+            >
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+            </motion.span>
+          ) : undefined}
+          error={errors.email?.message}
+          success={emailVerified}
+          disabled={otpSent || emailVerified}
+          {...register("email")}
+        />
+        {!emailVerified && !otpSent && (
+          <Button type="button" onClick={handleSendOtp} loading={otpBusy} className="w-full">
+            Send code
+          </Button>
+        )}
+        {!emailVerified && otpSent && (
+          <>
+            <div className="space-y-2">
+              <OtpInput
+                value={otpCode}
+                onChange={setOtpCode}
+                onComplete={(code) => handleVerifyOtp(code)}
+                disabled={otpBusy}
+                error={otpError}
+                autoFocus
+              />
+              <Button type="button" onClick={() => handleVerifyOtp()} loading={otpBusy} className="w-full">
+                Verify
               </Button>
-            )}
-          </div>
-          {otpSent && (
-            <>
-              <div className="space-y-2">
-                <OtpInput
-                  value={otpCode}
-                  onChange={setOtpCode}
-                  onComplete={(code) => handleVerifyOtp(code)}
-                  disabled={otpBusy}
-                  error={otpError}
-                  autoFocus
-                />
-                <Button type="button" onClick={() => handleVerifyOtp()} loading={otpBusy} className="w-full">
-                  Verify
-                </Button>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <ResendTimer seconds={resendIn} totalSeconds={45} onResend={handleSendOtp} disabled={otpBusy} />
-                <button type="button" className="text-muted-foreground hover:text-navy-900" onClick={() => setOtpSent(false)}>
-                  Edit email
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      ) : (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.85, y: 4 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ type: "spring", stiffness: 400, damping: 22 }}
-          className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-700 text-xs font-medium px-3 py-2 rounded-xl"
-        >
-          <motion.span
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 0.15, type: "spring", stiffness: 500, damping: 15 }}
-          >
-            <ShieldCheck className="w-3.5 h-3.5" />
-          </motion.span>
-          {email} verified
-        </motion.div>
-      )}
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <ResendTimer seconds={resendIn} totalSeconds={45} onResend={handleSendOtp} disabled={otpBusy} />
+              <button type="button" className="text-muted-foreground hover:text-navy-900" onClick={() => setOtpSent(false)}>
+                Edit email
+              </button>
+            </div>
+          </>
+        )}
+      </div>
 
       <AnimatePresence>
         {emailVerified && (
@@ -537,67 +535,64 @@ function ClientRegisterForm() {
         </div>
       </div>
 
-      {!emailVerified ? (
-        <div className="rounded-2xl border border-gold-200 bg-gold-50/50 p-3.5 space-y-2.5">
-          <p className="text-xs font-medium text-gold-700 flex items-center gap-1.5">
-            <ShieldCheck className="w-3.5 h-3.5" />Verify your email
-          </p>
-          <div className="space-y-2">
-            <Input
-              type="email"
-              placeholder="you@example.com"
-              icon={<Mail className="w-4 h-4" />}
-              value={email}
-              disabled={otpSent}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-            {!otpSent && (
-              <Button type="button" onClick={handleSendOtp} loading={otpBusy} className="w-full">
-                Send code
+      <div className={cn(
+        "rounded-2xl border p-3.5 space-y-2.5 transition-colors",
+        emailVerified ? "border-emerald-200 bg-emerald-50/40" : "border-gold-200 bg-gold-50/50"
+      )}>
+        <p className={cn(
+          "text-xs font-medium flex items-center gap-1.5",
+          emailVerified ? "text-emerald-700" : "text-gold-700"
+        )}>
+          <ShieldCheck className="w-3.5 h-3.5" />
+          {emailVerified ? "Email verified" : "Verify your email"}
+        </p>
+        <Input
+          type="email"
+          placeholder="you@example.com"
+          icon={<Mail className="w-4 h-4" />}
+          rightIcon={emailVerified ? (
+            <motion.span
+              initial={{ scale: 0, rotate: -45 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ type: "spring", stiffness: 500, damping: 15 }}
+            >
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+            </motion.span>
+          ) : undefined}
+          success={emailVerified}
+          value={email}
+          disabled={otpSent || emailVerified}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        {!emailVerified && !otpSent && (
+          <Button type="button" onClick={handleSendOtp} loading={otpBusy} className="w-full">
+            Send code
+          </Button>
+        )}
+        {!emailVerified && otpSent && (
+          <>
+            <div className="space-y-2">
+              <OtpInput
+                value={otpCode}
+                onChange={setOtpCode}
+                onComplete={(code) => handleVerifyOtp(code)}
+                disabled={otpBusy}
+                error={otpError}
+                autoFocus
+              />
+              <Button type="button" onClick={() => handleVerifyOtp()} loading={otpBusy} className="w-full">
+                Verify
               </Button>
-            )}
-          </div>
-          {otpSent && (
-            <>
-              <div className="space-y-2">
-                <OtpInput
-                  value={otpCode}
-                  onChange={setOtpCode}
-                  onComplete={(code) => handleVerifyOtp(code)}
-                  disabled={otpBusy}
-                  error={otpError}
-                  autoFocus
-                />
-                <Button type="button" onClick={() => handleVerifyOtp()} loading={otpBusy} className="w-full">
-                  Verify
-                </Button>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <ResendTimer seconds={resendIn} totalSeconds={45} onResend={handleSendOtp} disabled={otpBusy} />
-                <button type="button" className="text-muted-foreground hover:text-navy-900" onClick={() => { setOtpSent(false); setOtpCode(""); }}>
-                  Edit email
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      ) : (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.85, y: 4 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ type: "spring", stiffness: 400, damping: 22 }}
-          className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-700 text-xs font-medium px-3 py-2 rounded-xl"
-        >
-          <motion.span
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 0.15, type: "spring", stiffness: 500, damping: 15 }}
-          >
-            <ShieldCheck className="w-3.5 h-3.5" />
-          </motion.span>
-          {email} verified
-        </motion.div>
-      )}
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <ResendTimer seconds={resendIn} totalSeconds={45} onResend={handleSendOtp} disabled={otpBusy} />
+              <button type="button" className="text-muted-foreground hover:text-navy-900" onClick={() => { setOtpSent(false); setOtpCode(""); }}>
+                Edit email
+              </button>
+            </div>
+          </>
+        )}
+      </div>
 
       <AnimatePresence>
         {emailVerified && (

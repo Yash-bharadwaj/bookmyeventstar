@@ -3,11 +3,13 @@ import { cn } from "@/lib/utils";
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   icon?: React.ReactNode;
+  rightIcon?: React.ReactNode;
   error?: string;
+  success?: boolean;
 }
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, icon, error, ...props }, ref) => {
+  ({ className, type, icon, rightIcon, error, success, ...props }, ref) => {
     return (
       <div className="relative w-full">
         {icon && (
@@ -24,12 +26,19 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-500 focus-visible:border-gold-500",
             "disabled:cursor-not-allowed disabled:opacity-50",
             icon && "pl-10",
+            rightIcon && "pr-10",
             error && "border-destructive focus-visible:ring-destructive",
+            success && !error && "border-emerald-400 focus-visible:ring-emerald-400",
             className
           )}
           ref={ref}
           {...props}
         />
+        {rightIcon && (
+          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+            {rightIcon}
+          </div>
+        )}
         {error && (
           <p className="mt-1 text-xs text-destructive">{error}</p>
         )}

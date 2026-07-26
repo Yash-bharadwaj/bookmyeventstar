@@ -540,8 +540,18 @@ export default function EnquiryPage() {
                           type="email"
                           placeholder="you@example.com"
                           icon={<Mail className="w-4 h-4" />}
+                          rightIcon={!hasSession && emailVerified ? (
+                            <motion.span
+                              initial={{ scale: 0, rotate: -45 }}
+                              animate={{ scale: 1, rotate: 0 }}
+                              transition={{ type: "spring", stiffness: 500, damping: 15 }}
+                            >
+                              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                            </motion.span>
+                          ) : undefined}
+                          success={!hasSession && emailVerified}
                           error={errors.email?.message}
-                          disabled={!hasSession && otpSent}
+                          disabled={!hasSession && (otpSent || emailVerified)}
                           {...register("email")}
                         />
                       </div>
@@ -568,7 +578,7 @@ export default function EnquiryPage() {
                           </div>
                         </div>
 
-                        {!emailVerified ? (
+                        {!emailVerified && (
                           <div className="rounded-2xl border border-gold-200 bg-gold-50/50 p-4 space-y-3">
                             <p className="text-xs font-medium text-gold-700 flex items-center gap-1.5">
                               <ShieldCheck className="w-3.5 h-3.5" />
@@ -608,22 +618,6 @@ export default function EnquiryPage() {
                               </div>
                             )}
                           </div>
-                        ) : (
-                          <motion.div
-                            initial={{ opacity: 0, scale: 0.85, y: 4 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            transition={{ type: "spring", stiffness: 400, damping: 22 }}
-                            className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-700 text-xs font-medium px-3 py-2 rounded-xl"
-                          >
-                            <motion.span
-                              initial={{ scale: 0 }}
-                              animate={{ scale: 1 }}
-                              transition={{ delay: 0.15, type: "spring", stiffness: 500, damping: 15 }}
-                            >
-                              <ShieldCheck className="w-3.5 h-3.5" />
-                            </motion.span>
-                            {watch("email")} verified
-                          </motion.div>
                         )}
 
                         {emailVerified && (
