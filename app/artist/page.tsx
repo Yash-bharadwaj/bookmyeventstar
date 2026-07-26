@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { serialize, type AnyDoc } from "@/lib/firebase/firestore-utils";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ArtistOverview } from "@/components/dashboard/ArtistOverview";
 
 export default async function ArtistPage() {
@@ -70,16 +69,14 @@ export default async function ArtistPage() {
   const completedBookings = bookings.filter((b: any) => b.status === "completed");
 
   return (
-    <DashboardLayout user={serialize(user)} title="My Dashboard">
-      <ArtistOverview
-        artistProfile={serialize(artistProfile) as any}
-        bookings={serialize(bookings) as any}
-        totalEarnings={totalEarnings}
-        upcomingCount={upcomingBookings.length}
-        completedCount={completedBookings.length}
-        artistPhotoCount={artistPhotoCount}
-        hasAvatar={!!user.avatar_url}
-      />
-    </DashboardLayout>
+    <ArtistOverview
+      artistProfile={serialize(artistProfile) as any}
+      bookings={serialize(bookings) as any}
+      totalEarnings={totalEarnings}
+      upcomingCount={upcomingBookings.length}
+      completedCount={completedBookings.length}
+      artistPhotoCount={artistPhotoCount}
+      hasAvatar={!!user.avatar_url}
+    />
   );
 }

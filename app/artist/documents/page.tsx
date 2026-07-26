@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { serialize } from "@/lib/firebase/firestore-utils";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ArtistDocumentsClient } from "./ArtistDocumentsClient";
 
 export default async function ArtistDocumentsPage() {
@@ -20,8 +19,6 @@ export default async function ArtistDocumentsPage() {
   const documents = documentsSnap.docs.map((d) => ({ id: d.id, artist_id: user.id, ...d.data() }));
 
   return (
-    <DashboardLayout user={serialize(user)} title="My Documents">
-      <ArtistDocumentsClient artistProfileId={user.id} documents={serialize(documents) as any} />
-    </DashboardLayout>
+    <ArtistDocumentsClient artistProfileId={user.id} documents={serialize(documents) as any} />
   );
 }

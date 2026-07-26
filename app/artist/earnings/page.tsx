@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { serialize } from "@/lib/firebase/firestore-utils";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ArtistEarningsClient } from "./ArtistEarningsClient";
 
 export default async function ArtistEarningsPage() {
@@ -38,8 +37,6 @@ export default async function ArtistEarningsPage() {
     });
 
   return (
-    <DashboardLayout user={serialize(user)} title="My Earnings">
-      <ArtistEarningsClient payments={serialize(payments) as any} bookings={serialize(bookings) as any} />
-    </DashboardLayout>
+    <ArtistEarningsClient payments={serialize(payments) as any} bookings={serialize(bookings) as any} />
   );
 }

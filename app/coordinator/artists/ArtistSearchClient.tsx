@@ -537,7 +537,7 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                   {/* Info */}
                   <div className="p-4">
                     <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-display font-semibold text-base truncate">{artist.user?.name}</h3>
+                      <h3 className="font-display font-semibold text-base truncate min-w-0">{artist.user?.name}</h3>
                       <div className="flex items-center gap-0.5 flex-shrink-0">
                         <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
                         <span className="text-sm font-semibold">{artist.rating.toFixed(1)}</span>

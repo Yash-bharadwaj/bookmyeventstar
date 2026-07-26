@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { adminDb } from "@/lib/firebase/admin";
 import { serialize } from "@/lib/firebase/firestore-utils";
 import { getCurrentUser } from "@/lib/firebase/server";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ClientMessagesClient } from "./ClientMessagesClient";
 
 export default async function ClientMessagesPage() {
@@ -37,12 +36,10 @@ export default async function ClientMessagesPage() {
   });
 
   return (
-    <DashboardLayout user={serialize(user)} title="Messages">
-      <ClientMessagesClient
-        enquiries={enquiries}
-        currentUserId={user.id}
-        currentUserName={user.name}
-      />
-    </DashboardLayout>
+    <ClientMessagesClient
+      enquiries={enquiries}
+      currentUserId={user.id}
+      currentUserName={user.name}
+    />
   );
 }

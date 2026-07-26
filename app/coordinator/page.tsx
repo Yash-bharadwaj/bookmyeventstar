@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/firebase/server";
 import { serialize } from "@/lib/firebase/firestore-utils";
 import { adminDb } from "@/lib/firebase/admin";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { CoordinatorOverview } from "@/components/dashboard/CoordinatorOverview";
 
 function toIso(v: any) {
@@ -102,14 +101,12 @@ export default async function CoordinatorPage() {
     .slice(0, 10);
 
   return (
-    <DashboardLayout user={serialize(user)} title="My Dashboard">
-      <CoordinatorOverview
-        enquiries={serialize(enrichedEnquiries) as any}
-        upcomingBookings={serialize(enrichedUpcomingBookings) as any}
-        pendingTasks={serialize(pendingTasks) as any}
-        followUpEnquiries={serialize(enrichedFollowUps) as any}
-        performance={performance}
-      />
-    </DashboardLayout>
+    <CoordinatorOverview
+      enquiries={serialize(enrichedEnquiries) as any}
+      upcomingBookings={serialize(enrichedUpcomingBookings) as any}
+      pendingTasks={serialize(pendingTasks) as any}
+      followUpEnquiries={serialize(enrichedFollowUps) as any}
+      performance={performance}
+    />
   );
 }

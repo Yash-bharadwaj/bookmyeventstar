@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/firebase/server";
 import { serialize } from "@/lib/firebase/firestore-utils";
 import { adminDb } from "@/lib/firebase/admin";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { CoordinatorMessagesClient } from "./CoordinatorMessagesClient";
 
 export default async function CoordinatorMessagesPage() {
@@ -36,12 +35,10 @@ export default async function CoordinatorMessagesPage() {
   });
 
   return (
-    <DashboardLayout user={serialize(user)} title="Messages">
-      <CoordinatorMessagesClient
-        enquiries={enquiries}
-        currentUserId={user.id}
-        currentUserName={user.name}
-      />
-    </DashboardLayout>
+    <CoordinatorMessagesClient
+      enquiries={enquiries}
+      currentUserId={user.id}
+      currentUserName={user.name}
+    />
   );
 }

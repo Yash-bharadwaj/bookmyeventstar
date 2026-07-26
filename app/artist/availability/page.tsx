@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { serialize } from "@/lib/firebase/firestore-utils";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ArtistAvailabilityClient } from "./ArtistAvailabilityClient";
 
 export default async function ArtistAvailabilityPage() {
@@ -16,11 +15,9 @@ export default async function ArtistAvailabilityPage() {
   const availability = availabilitySnap.docs.map((d) => ({ id: d.id, artist_id: user.id, date: d.id, ...d.data() }));
 
   return (
-    <DashboardLayout user={serialize(user)} title="Availability Calendar">
-      <ArtistAvailabilityClient
-        artistProfileId={user.id}
-        availability={serialize(availability) as any}
-      />
-    </DashboardLayout>
+    <ArtistAvailabilityClient
+      artistProfileId={user.id}
+      availability={serialize(availability) as any}
+    />
   );
 }

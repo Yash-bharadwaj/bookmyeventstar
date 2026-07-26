@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { serialize, type AnyDoc } from "@/lib/firebase/firestore-utils";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminEnquiriesClient } from "./AdminEnquiriesClient";
 
 export default async function AdminEnquiriesPage() {
@@ -39,11 +38,9 @@ export default async function AdminEnquiriesPage() {
   });
 
   return (
-    <DashboardLayout user={serialize(user)} title="All Enquiries">
-      <AdminEnquiriesClient
-        enquiries={serialize(enquiries) as any}
-        coordinators={coordinators}
-      />
-    </DashboardLayout>
+    <AdminEnquiriesClient
+      enquiries={serialize(enquiries) as any}
+      coordinators={coordinators}
+    />
   );
 }

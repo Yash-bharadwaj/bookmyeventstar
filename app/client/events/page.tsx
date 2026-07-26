@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { adminDb } from "@/lib/firebase/admin";
 import { serialize } from "@/lib/firebase/firestore-utils";
 import { getCurrentUser } from "@/lib/firebase/server";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ClientEventsClient } from "./ClientEventsClient";
 
 function toPlain<T extends Record<string, any>>(data: T): T {
@@ -69,8 +68,6 @@ export default async function ClientEventsPage() {
   });
 
   return (
-    <DashboardLayout user={serialize(user)} title="My Events">
-      <ClientEventsClient bookings={serialize(bookings) as any} clientId={user.id} />
-    </DashboardLayout>
+    <ClientEventsClient bookings={serialize(bookings) as any} clientId={user.id} />
   );
 }

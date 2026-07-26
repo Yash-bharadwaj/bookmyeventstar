@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { adminDb } from "@/lib/firebase/admin";
 import { serialize } from "@/lib/firebase/firestore-utils";
 import { getCurrentUser } from "@/lib/firebase/server";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ClientPaymentsClient } from "./ClientPaymentsClient";
 
 function toPlain<T extends Record<string, any>>(data: T): T {
@@ -73,8 +72,6 @@ export default async function ClientPaymentsPage() {
     .sort((a: any, b: any) => (a.created_at < b.created_at ? 1 : -1));
 
   return (
-    <DashboardLayout user={serialize(user)} title="Payments & Invoices">
-      <ClientPaymentsClient bookings={bookings} payments={payments as any} />
-    </DashboardLayout>
+    <ClientPaymentsClient bookings={bookings} payments={payments as any} />
   );
 }

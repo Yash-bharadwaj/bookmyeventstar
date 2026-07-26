@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { serialize } from "@/lib/firebase/firestore-utils";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminArtistsClient } from "./AdminArtistsClient";
 
 export default async function AdminArtistsPage() {
@@ -38,8 +37,6 @@ export default async function AdminArtistsPage() {
   const categoryNames = categoriesSnap.docs.map((d) => d.data().name as string);
 
   return (
-    <DashboardLayout user={serialize(user)} title="Artists">
-      <AdminArtistsClient artists={serialize(artists) as any} categories={categoryNames} />
-    </DashboardLayout>
+    <AdminArtistsClient artists={serialize(artists) as any} categories={categoryNames} />
   );
 }

@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/firebase/server";
 import { serialize } from "@/lib/firebase/firestore-utils";
 import { adminDb } from "@/lib/firebase/admin";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { CoordinatorCalendarClient } from "./CoordinatorCalendarClient";
 
 export default async function CoordinatorCalendarPage() {
@@ -30,8 +29,6 @@ export default async function CoordinatorCalendarPage() {
   }));
 
   return (
-    <DashboardLayout user={serialize(user)} title="Event Calendar">
-      <CoordinatorCalendarClient bookings={bookings} />
-    </DashboardLayout>
+    <CoordinatorCalendarClient bookings={bookings} />
   );
 }

@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { adminDb } from "@/lib/firebase/admin";
 import { serialize } from "@/lib/firebase/firestore-utils";
 import { getCurrentUser } from "@/lib/firebase/server";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ClientProposalsClient } from "./ClientProposalsClient";
 
 function toPlain<T extends Record<string, any>>(data: T): T {
@@ -59,8 +58,6 @@ export default async function ClientProposalsPage() {
     .sort((a: any, b: any) => (a.created_at < b.created_at ? 1 : -1));
 
   return (
-    <DashboardLayout user={serialize(user)} title="My Proposals">
-      <ClientProposalsClient proposals={proposals as any} clientId={user.id} />
-    </DashboardLayout>
+    <ClientProposalsClient proposals={proposals as any} clientId={user.id} />
   );
 }

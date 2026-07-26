@@ -2,7 +2,6 @@ import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { serialize, type AnyDoc } from "@/lib/firebase/firestore-utils";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminEnquiryDetail } from "./AdminEnquiryDetail";
 
 export default async function AdminEnquiryDetailPage({ params }: { params: { id: string } }) {
@@ -38,12 +37,10 @@ export default async function AdminEnquiryDetailPage({ params }: { params: { id:
   });
 
   return (
-    <DashboardLayout user={serialize(user)} title="Enquiry Detail">
-      <AdminEnquiryDetail
-        enquiry={serialize(enquiry)}
-        proposals={serialize(proposals)}
-        coordinators={coordinators}
-      />
-    </DashboardLayout>
+    <AdminEnquiryDetail
+      enquiry={serialize(enquiry)}
+      proposals={serialize(proposals)}
+      coordinators={coordinators}
+    />
   );
 }

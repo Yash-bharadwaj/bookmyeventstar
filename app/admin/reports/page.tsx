@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { serialize } from "@/lib/firebase/firestore-utils";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminReportsClient } from "./AdminReportsClient";
 
 export default async function AdminReportsPage() {
@@ -52,13 +51,11 @@ export default async function AdminReportsPage() {
   })).sort((a, b) => b.total - a.total);
 
   return (
-    <DashboardLayout user={serialize(user)} title="Reports & Analytics">
-      <AdminReportsClient
-        enquiries={serialize(enquiries) as any}
-        bookings={serialize(bookings) as any}
-        payments={serialize(payments) as any}
-        coordinatorStats={coordinatorStats}
-      />
-    </DashboardLayout>
+    <AdminReportsClient
+      enquiries={serialize(enquiries) as any}
+      bookings={serialize(bookings) as any}
+      payments={serialize(payments) as any}
+      coordinatorStats={coordinatorStats}
+    />
   );
 }

@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { serialize } from "@/lib/firebase/firestore-utils";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminSettingsClient } from "./AdminSettingsClient";
 
 export default async function AdminSettingsPage() {
@@ -31,12 +30,10 @@ export default async function AdminSettingsPage() {
   };
 
   return (
-    <DashboardLayout user={serialize(user)} title="System Settings">
-      <AdminSettingsClient
-        categories={serialize(categories) as any}
-        cities={serialize(cities) as any}
-        platformSettings={platformSettings}
-      />
-    </DashboardLayout>
+    <AdminSettingsClient
+      categories={serialize(categories) as any}
+      cities={serialize(cities) as any}
+      platformSettings={platformSettings}
+    />
   );
 }

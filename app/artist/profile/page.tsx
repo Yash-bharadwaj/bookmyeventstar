@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { serialize } from "@/lib/firebase/firestore-utils";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ArtistProfileClient } from "./ArtistProfileClient";
 
 export default async function ArtistProfilePage() {
@@ -21,13 +20,11 @@ export default async function ArtistProfilePage() {
   const categoryNames = categoriesSnap.docs.map((d) => d.data().name as string);
 
   return (
-    <DashboardLayout user={serialize(user)} title="My Profile">
-      <ArtistProfileClient
-        user={serialize(user)}
-        artistProfile={serialize(artistProfile) as any}
-        media={serialize(media) as any}
-        categories={categoryNames}
-      />
-    </DashboardLayout>
+    <ArtistProfileClient
+      user={serialize(user)}
+      artistProfile={serialize(artistProfile) as any}
+      media={serialize(media) as any}
+      categories={categoryNames}
+    />
   );
 }

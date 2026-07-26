@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/firebase/server";
 import { serialize } from "@/lib/firebase/firestore-utils";
 import { adminDb } from "@/lib/firebase/admin";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { CoordinatorProposalsClient } from "./CoordinatorProposalsClient";
 
 function toIso(v: any) {
@@ -109,14 +108,12 @@ export default async function CoordinatorProposalsPage() {
   const cityList: string[] = citiesSettingSnap.exists ? citiesSettingSnap.data()?.value ?? [] : [];
 
   return (
-    <DashboardLayout user={serialize(user)} title="My Proposals">
-      <CoordinatorProposalsClient
-        proposals={proposals as any}
-        coordinatorId={user.id}
-        enquiries={enquiries as any}
-        artists={artists as any}
-        cityList={cityList}
-      />
-    </DashboardLayout>
+    <CoordinatorProposalsClient
+      proposals={proposals as any}
+      coordinatorId={user.id}
+      enquiries={enquiries as any}
+      artists={artists as any}
+      cityList={cityList}
+    />
   );
 }

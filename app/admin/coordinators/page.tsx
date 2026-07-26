@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { serialize } from "@/lib/firebase/firestore-utils";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminCoordinatorsClient } from "./AdminCoordinatorsClient";
 
 export default async function AdminCoordinatorsPage() {
@@ -19,11 +18,9 @@ export default async function AdminCoordinatorsPage() {
   const enquiries = enquiriesSnap.docs.map((d) => d.data());
 
   return (
-    <DashboardLayout user={serialize(user)} title="Coordinators">
-      <AdminCoordinatorsClient
-        coordinators={serialize(coordinators) as any}
-        enquiries={serialize(enquiries) as any}
-      />
-    </DashboardLayout>
+    <AdminCoordinatorsClient
+      coordinators={serialize(coordinators) as any}
+      enquiries={serialize(enquiries) as any}
+    />
   );
 }

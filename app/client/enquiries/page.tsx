@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { adminDb } from "@/lib/firebase/admin";
 import { serialize } from "@/lib/firebase/firestore-utils";
 import { getCurrentUser } from "@/lib/firebase/server";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ClientEnquiriesClient } from "./ClientEnquiriesClient";
 
 function toPlain<T extends Record<string, any>>(data: T): T {
@@ -38,8 +37,6 @@ export default async function ClientEnquiriesPage() {
   }));
 
   return (
-    <DashboardLayout user={serialize(user)} title="My Enquiries">
-      <ClientEnquiriesClient enquiries={serialize(enquiries) as any} />
-    </DashboardLayout>
+    <ClientEnquiriesClient enquiries={serialize(enquiries) as any} />
   );
 }

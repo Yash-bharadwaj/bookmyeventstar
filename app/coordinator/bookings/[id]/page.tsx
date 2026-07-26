@@ -2,7 +2,6 @@ import { redirect, notFound } from "next/navigation";
 import { getCurrentUser } from "@/lib/firebase/server";
 import { serialize } from "@/lib/firebase/firestore-utils";
 import { adminDb } from "@/lib/firebase/admin";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { CoordinatorBookingDetail } from "./CoordinatorBookingDetail";
 
 function toIso(v: any) {
@@ -67,8 +66,6 @@ export default async function CoordinatorBookingDetailPage({ params }: { params:
   };
 
   return (
-    <DashboardLayout user={serialize(user)} title="Booking Details">
-      <CoordinatorBookingDetail booking={serialize(booking)} artistSharePct={artistSharePct} />
-    </DashboardLayout>
+    <CoordinatorBookingDetail booking={serialize(booking)} artistSharePct={artistSharePct} />
   );
 }

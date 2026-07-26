@@ -323,13 +323,13 @@ export function AdminArtistsClient({ artists, categories }: { artists: ArtistWit
               />
               {/* Header */}
               <div className="flex items-start justify-between gap-3 mb-3 pl-6">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
                   <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-sm flex-shrink-0 ${
                     artist.is_verified ? "gold-gradient text-white" : "bg-muted text-muted-foreground"
                   }`}>
                     {getInitials(artist.user.name)}
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="font-semibold text-sm truncate">{artist.user.name}</p>
                     <p className="text-xs text-muted-foreground truncate">{artist.user.email}</p>
                   </div>

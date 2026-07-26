@@ -3,7 +3,6 @@ import { Timestamp } from "firebase-admin/firestore";
 import { getCurrentUser } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { serialize, type AnyDoc } from "@/lib/firebase/firestore-utils";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminOverview } from "@/components/dashboard/AdminOverview";
 import type { User } from "@/types";
 
@@ -90,25 +89,23 @@ export default async function AdminPage() {
     : null;
 
   return (
-    <DashboardLayout user={serialize(user)} title="Admin Dashboard">
-      <AdminOverview
-        stats={{
-          total_enquiries: totalEnquiries,
-          active_bookings: activeBookings,
-          artists_count: artistsCount,
-          coordinators_count: coordinators.length,
-          enq_trend: enqTrend,
-          bk_trend: bkTrend,
-        }}
-        pipelineCounts={{
-          new: newCount,
-          assigned: assignedCount,
-          proposal_sent: proposalCount,
-          confirmed: confirmedCount,
-        }}
-        recentEnquiries={serialize(recentEnquiries) as any}
-        coordinators={serialize(coordinators) as User[]}
-      />
-    </DashboardLayout>
+    <AdminOverview
+      stats={{
+        total_enquiries: totalEnquiries,
+        active_bookings: activeBookings,
+        artists_count: artistsCount,
+        coordinators_count: coordinators.length,
+        enq_trend: enqTrend,
+        bk_trend: bkTrend,
+      }}
+      pipelineCounts={{
+        new: newCount,
+        assigned: assignedCount,
+        proposal_sent: proposalCount,
+        confirmed: confirmedCount,
+      }}
+      recentEnquiries={serialize(recentEnquiries) as any}
+      coordinators={serialize(coordinators) as User[]}
+    />
   );
 }

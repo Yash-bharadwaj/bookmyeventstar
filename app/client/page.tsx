@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { adminDb } from "@/lib/firebase/admin";
 import { getCurrentUser } from "@/lib/firebase/server";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ClientOverview } from "@/components/dashboard/ClientOverview";
 import { serialize } from "@/lib/firebase/firestore-utils";
 
@@ -110,13 +109,11 @@ export default async function ClientPage() {
   });
 
   return (
-    <DashboardLayout user={serialize(user)} title="My Dashboard">
-      <ClientOverview
-        enquiries={serialize(enrichedEnquiries) as any}
-        proposals={serialize(enrichedProposals) as any}
-        upcomingBookings={serialize(enrichedBookings) as any}
-        userName={user.name}
-      />
-    </DashboardLayout>
+    <ClientOverview
+      enquiries={serialize(enrichedEnquiries) as any}
+      proposals={serialize(enrichedProposals) as any}
+      upcomingBookings={serialize(enrichedBookings) as any}
+      userName={user.name}
+    />
   );
 }

@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/firebase/server";
 import { serialize } from "@/lib/firebase/firestore-utils";
 import { adminDb } from "@/lib/firebase/admin";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ArtistSearchClient } from "./ArtistSearchClient";
 
 export default async function CoordinatorArtistsPage() {
@@ -59,8 +58,6 @@ export default async function CoordinatorArtistsPage() {
   const categoryNames = categoriesSnap.docs.map((d) => d.data().name as string).sort();
 
   return (
-    <DashboardLayout user={serialize(user)} title="Artist Search">
-      <ArtistSearchClient artists={serialize(mappedArtists) as any} enquiries={serialize(mappedEnquiries) as any} allCategories={categoryNames} />
-    </DashboardLayout>
+    <ArtistSearchClient artists={serialize(mappedArtists) as any} enquiries={serialize(mappedEnquiries) as any} allCategories={categoryNames} />
   );
 }

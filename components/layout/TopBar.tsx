@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { LogOut, Settings, User } from "lucide-react";
 import { signOutEverywhere } from "@/lib/firebase/auth-client";
 import {
@@ -15,6 +15,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { NotificationBell } from "./NotificationBell";
 import { getInitials } from "@/lib/utils";
+import { getPageTitle } from "@/lib/page-titles";
 import { User as UserType } from "@/types";
 
 interface TopBarProps {
@@ -24,6 +25,8 @@ interface TopBarProps {
 
 export function TopBar({ user, title }: TopBarProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const resolvedTitle = title ?? getPageTitle(pathname);
 
   const handleLogout = async () => {
     await signOutEverywhere();
@@ -38,9 +41,9 @@ export function TopBar({ user, title }: TopBarProps) {
           <BrandLogo href="/" size="sm" />
         </div>
 
-        {title && (
+        {resolvedTitle && (
           <h1 className="hidden md:block font-display text-xl font-semibold text-foreground">
-            {title}
+            {resolvedTitle}
           </h1>
         )}
       </div>

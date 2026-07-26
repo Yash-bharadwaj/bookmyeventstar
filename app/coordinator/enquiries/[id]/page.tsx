@@ -2,7 +2,6 @@ import { redirect, notFound } from "next/navigation";
 import { getCurrentUser } from "@/lib/firebase/server";
 import { serialize } from "@/lib/firebase/firestore-utils";
 import { adminDb } from "@/lib/firebase/admin";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { CoordinatorEnquiryDetail } from "./CoordinatorEnquiryDetail";
 
 function toIso(v: any) {
@@ -39,8 +38,6 @@ export default async function CoordinatorEnquiryDetailPage({ params }: { params:
   };
 
   return (
-    <DashboardLayout user={serialize(user)} title="Enquiry Details">
-      <CoordinatorEnquiryDetail enquiry={serialize(enquiry) as any} proposals={serialize(proposals) as any} coordinatorId={user.id} />
-    </DashboardLayout>
+    <CoordinatorEnquiryDetail enquiry={serialize(enquiry) as any} proposals={serialize(proposals) as any} coordinatorId={user.id} />
   );
 }

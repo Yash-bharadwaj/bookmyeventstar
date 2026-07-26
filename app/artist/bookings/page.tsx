@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { serialize, type AnyDoc } from "@/lib/firebase/firestore-utils";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ArtistBookingsClient } from "./ArtistBookingsClient";
 
 export default async function ArtistBookingsPage() {
@@ -45,8 +44,6 @@ export default async function ArtistBookingsPage() {
   });
 
   return (
-    <DashboardLayout user={serialize(user)} title="My Bookings">
-      <ArtistBookingsClient bookings={serialize(bookings) as any} />
-    </DashboardLayout>
+    <ArtistBookingsClient bookings={serialize(bookings) as any} />
   );
 }
