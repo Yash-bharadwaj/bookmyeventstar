@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   collection, query, orderBy, limit, onSnapshot,
-  writeBatch, doc,
+  writeBatch, doc, Timestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { Notification } from "@/types";
@@ -22,7 +22,20 @@ export function useNotifications(userId?: string) {
     );
 
     const unsubscribe = onSnapshot(q, (snap) => {
-      const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Notification);
+      const items = snap.docs.map((d) => {
+        const data = d.data();
+        // created_at is a Firestore Timestamp object at runtime (the type
+        // says string, but nothing here actually converts it) — passing
+        // that straight to `new Date()` produces an invalid date, which
+        // formatDateTime silently falls back to "Just now" for, regardless
+        // of how old the notification actually is.
+        const createdAt: Timestamp | undefined = data.created_at;
+        return {
+          id: d.id,
+          ...data,
+          created_at: createdAt?.toDate ? createdAt.toDate().toISOString() : new Date().toISOString(),
+        } as Notification;
+      });
       setNotifications(items);
       setUnreadCount(items.filter((n) => !n.is_read).length);
     });
