@@ -175,16 +175,49 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-navy-900 via-navy-800 to-navy-950 p-6">
+    <div className="h-screen flex overflow-hidden">
       <div id="recaptcha-container" />
+
+      {/* Left panel — branding, desktop only */}
+      <div className="hidden lg:flex lg:w-1/2 h-full navy-gradient relative overflow-hidden flex-col items-center justify-center p-10">
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full bg-gold-500/10 blur-3xl" />
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="relative text-center max-w-sm"
+        >
+          <div className="flex justify-center mb-6">
+            <BrandLogo href="/" size="lg" priority />
+          </div>
+          <p className="text-white/70">
+            India&apos;s premier artist management and event booking platform
+          </p>
+          <div className="mt-6 grid grid-cols-2 gap-3 text-left">
+            {[
+              ["Verified", "Every Artist"],
+              ["2 Hours", "Coordinator Response"],
+              ["Pan-India", "Coverage"],
+              ["₹0", "Upfront Fee"],
+            ].map(([val, label]) => (
+              <div key={label} className="glass rounded-xl p-3.5">
+                <p className="font-display text-xl font-bold text-white">{val}</p>
+                <p className="text-white/60 text-xs mt-0.5">{label}</p>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Right panel — form */}
+      <div className="flex-1 h-full overflow-y-auto flex items-center justify-center p-6 bg-white">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md"
+        className="w-full max-w-md py-6"
       >
-        <div className="bg-white rounded-3xl shadow-2xl p-8">
-          <div className="mb-6 flex justify-start">
-            <BrandLogo href="/" size="lg" />
+          <div className="lg:hidden mb-6 flex justify-center">
+            <BrandLogo href="/" size="lg" priority />
           </div>
 
           {step === "identifier" && (
@@ -353,8 +386,8 @@ export default function ForgotPasswordPage() {
             <ArrowLeft className="w-3.5 h-3.5" />
             Back to login
           </Link>
-        </div>
       </motion.div>
+      </div>
     </div>
   );
 }

@@ -13,9 +13,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { db, storage } from "@/lib/firebase/client";
+import { db } from "@/lib/firebase/client";
 import { doc, updateDoc, collection, addDoc, deleteDoc, writeBatch, serverTimestamp } from "firebase/firestore";
-import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { uploadToCloudinary, deleteFromCloudinary } from "@/lib/cloudinary/client";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import { ArtistProfile, ArtistMedia, User } from "@/types";
@@ -123,13 +123,10 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
   const uploadAvatar = async (file: File) => {
     if (!file) return;
     setUploadingAvatar(true);
-    const ext = file.name.split(".").pop() ?? "jpg";
-    const path = `artist-media/profile/${user.id}.${ext}`;
-    const fileRef = storageRef(storage, path);
     let downloadUrl: string;
     try {
-      await uploadBytes(fileRef, file);
-      downloadUrl = await getDownloadURL(fileRef);
+      const result = await uploadToCloudinary(file, "avatar");
+      downloadUrl = result.url;
     } catch {
       toast.error("Failed to upload photo");
       setUploadingAvatar(false);
@@ -208,13 +205,12 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
     let aggregated = [...mediaList];
     for (const file of Array.from(files)) {
       const isVideo = file.type.startsWith("video/");
-      const ext = file.name.split(".").pop();
-      const path = `artist-media/${artistProfile.id}/${Date.now()}.${ext}`;
-      const fileRef = storageRef(storage, path);
       let downloadUrl: string;
+      let publicId: string;
       try {
-        await uploadBytes(fileRef, file);
-        downloadUrl = await getDownloadURL(fileRef);
+        const result = await uploadToCloudinary(file, "media");
+        downloadUrl = result.url;
+        publicId = result.publicId;
       } catch {
         toast.error(`Failed to upload ${file.name}`);
         continue;
@@ -223,7 +219,7 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
         const ref = await addDoc(collection(db, "artistProfiles", artistProfile.id, "media"), {
           type: isVideo ? "video" : "photo",
           url: downloadUrl,
-          storage_path: path,
+          storage_path: publicId,
           title: file.name,
           is_primary: mediaList.length === 0,
           created_at: serverTimestamp(),
@@ -233,7 +229,7 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
           artist_id: artistProfile.id,
           type: isVideo ? "video" : "photo",
           url: downloadUrl,
-          storage_path: path,
+          storage_path: publicId,
           title: file.name,
           is_primary: mediaList.length === 0,
         };
@@ -254,7 +250,7 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
     if (!artistProfile?.id) return;
     setDeletingId(item.id);
     if (item.storage_path) {
-      await deleteObject(storageRef(storage, item.storage_path)).catch(() => {});
+      await deleteFromCloudinary(item.storage_path, item.type === "video" ? "video" : "image").catch(() => {});
     }
     await deleteDoc(doc(db, "artistProfiles", artistProfile.id, "media", item.id));
     const next = mediaList.filter((m) => m.id !== item.id);
