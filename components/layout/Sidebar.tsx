@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard,
   Users,
+  Contact,
   Music,
   FileText,
   Calendar,
@@ -30,6 +31,7 @@ import { UserRole } from "@/types";
 const navConfig: Record<UserRole, { label: string; href: string; icon: React.ElementType }[]> = {
   admin: [
     { label: "Overview", href: "/admin", icon: LayoutDashboard },
+    { label: "Users", href: "/admin/users", icon: Contact },
     { label: "Enquiries", href: "/admin/enquiries", icon: FileText },
     { label: "Coordinators", href: "/admin/coordinators", icon: Users },
     { label: "Artists", href: "/admin/artists", icon: Music },

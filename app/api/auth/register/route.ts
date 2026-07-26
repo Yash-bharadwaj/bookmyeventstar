@@ -31,24 +31,28 @@ export async function POST(req: NextRequest) {
       if (!igStr) return NextResponse.json({ error: "Instagram handle is required." }, { status: 400 });
     }
 
+    // Resolve the caller's own role once — used both for the privileged-role
+    // gate below and to let an admin skip the client email-OTP requirement
+    // when creating an account on someone's behalf (e.g. from Admin > Users).
+    const cookieStore = await cookies();
+    const sessionToken = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+    const caller = sessionToken ? await adminAuth.verifyIdToken(sessionToken).catch(() => null) : null;
+    const callerDoc = caller ? await adminDb.collection("users").doc(caller.uid).get() : null;
+    const callerRole = callerDoc?.exists ? (callerDoc.data()?.role as string | undefined) : undefined;
+
     // Creating a coordinator or admin account is a privileged action — the
     // caller must already be signed in as an admin. Client/artist signup
     // (the public /register page) is unauthenticated by design and skips
     // this check entirely.
-    if (PRIVILEGED_ROLES.includes(role)) {
-      const cookieStore = await cookies();
-      const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
-      const caller = token ? await adminAuth.verifyIdToken(token).catch(() => null) : null;
-      const callerDoc = caller ? await adminDb.collection("users").doc(caller.uid).get() : null;
-      const callerRole = callerDoc?.exists ? (callerDoc.data()?.role as string | undefined) : undefined;
-      if (callerRole !== "admin") {
-        return NextResponse.json({ error: "Only admins can create this account type." }, { status: 403 });
-      }
+    if (PRIVILEGED_ROLES.includes(role) && callerRole !== "admin") {
+      return NextResponse.json({ error: "Only admins can create this account type." }, { status: 403 });
     }
 
     // Clients must prove ownership of their email via the OTP flow first —
     // the token here is only minted by a successful /api/auth/email-otp/verify.
-    if (role === "client" && !verifyEmailVerification(email, emailVerificationToken, emailVerificationExpires)) {
+    // An admin creating the account directly (Admin > Users) is trusted and
+    // skips this — there's no self-service OTP step in that flow.
+    if (role === "client" && callerRole !== "admin" && !verifyEmailVerification(email, emailVerificationToken, emailVerificationExpires)) {
       return NextResponse.json({ error: "Please verify your email before creating an account." }, { status: 403 });
     }
 

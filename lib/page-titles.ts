@@ -6,6 +6,7 @@
 // title from the route instead.
 const EXACT_TITLES: Record<string, string> = {
   "/admin": "Admin Dashboard",
+  "/admin/users": "Users",
   "/admin/enquiries": "All Enquiries",
   "/admin/coordinators": "Coordinators",
   "/admin/artists": "Artists",
