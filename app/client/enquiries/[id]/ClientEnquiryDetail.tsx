@@ -161,16 +161,16 @@ export function ClientEnquiryDetail({ enquiry, proposals }: { enquiry: any; prop
             <User className="w-4 h-4 text-navy-600" />Your Coordinator
           </h2>
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-full bg-navy-100 flex items-center justify-center text-navy-700 font-bold">
+            <div className="w-12 h-12 rounded-full bg-navy-100 flex items-center justify-center text-navy-700 font-bold flex-shrink-0">
               {enquiry.coordinator.name?.[0]?.toUpperCase()}
             </div>
-            <div className="space-y-1 text-sm">
-              <p className="font-semibold">{enquiry.coordinator.name}</p>
+            <div className="space-y-1 text-sm min-w-0 flex-1">
+              <p className="font-semibold truncate">{enquiry.coordinator.name}</p>
               <a href={`tel:${enquiry.coordinator.phone}`} className="flex items-center gap-2 text-muted-foreground">
-                <Phone className="w-3.5 h-3.5" />{enquiry.coordinator.phone}
+                <Phone className="w-3.5 h-3.5 flex-shrink-0" />{enquiry.coordinator.phone}
               </a>
               <a href={`mailto:${enquiry.coordinator.email}`} className="flex items-center gap-2 text-muted-foreground">
-                <Mail className="w-3.5 h-3.5" />{enquiry.coordinator.email}
+                <Mail className="w-3.5 h-3.5 flex-shrink-0" /><span className="truncate">{enquiry.coordinator.email}</span>
               </a>
             </div>
           </div>

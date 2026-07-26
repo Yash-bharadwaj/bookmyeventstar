@@ -47,12 +47,12 @@ export function SettingsClient({ user, notifications, profileLink }: Props) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-between py-2">
-              <div>
-                <p className="text-sm font-medium">{user.name}</p>
-                <p className="text-xs text-muted-foreground">{user.email}</p>
+            <div className="flex items-center justify-between gap-3 py-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium truncate">{user.name}</p>
+                <p className="text-xs text-muted-foreground truncate">{user.email}</p>
               </div>
-              <Link href={profileLink}>
+              <Link href={profileLink} className="flex-shrink-0">
                 <Button variant="outline" size="sm" className="gap-1.5">
                   Edit Profile
                   <ExternalLink className="w-3 h-3" />

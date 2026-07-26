@@ -166,7 +166,7 @@ export function ClientOverview({ enquiries, proposals, upcomingBookings, userNam
             "border-emerald-200 bg-emerald-50/30"
           }`}
         >
-          <div className="p-4 sm:p-5 flex items-center gap-4 sm:gap-5 flex-wrap">
+          <div className="p-4 sm:p-5 flex flex-col items-start sm:flex-row sm:items-center gap-4 sm:gap-5">
             {/* Countdown block */}
             <div className={`flex-shrink-0 text-center px-4 sm:px-6 py-3 rounded-xl ${
               daysLeft <= 3 ? "bg-red-100" :
@@ -190,7 +190,7 @@ export function ClientOverview({ enquiries, proposals, upcomingBookings, userNam
               )}
             </div>
 
-            <div className="flex-1 min-w-0">
+            <div className="w-full sm:flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
                 <PartyPopper className="w-4 h-4 text-gold-600" />
                 <p className="font-semibold text-sm">Upcoming Event</p>
@@ -210,8 +210,8 @@ export function ClientOverview({ enquiries, proposals, upcomingBookings, userNam
               )}
             </div>
 
-            <Link href="/client/events" className="flex-shrink-0">
-              <Button variant="outline" size="sm">
+            <Link href="/client/events" className="w-full sm:w-auto flex-shrink-0">
+              <Button variant="outline" size="sm" className="w-full sm:w-auto">
                 View Details <ChevronRight className="w-3.5 h-3.5 ml-1" />
               </Button>
             </Link>

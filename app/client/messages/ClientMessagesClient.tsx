@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { Send, MessageSquare, ChevronLeft, Headphones } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,9 +43,16 @@ export function ClientMessagesClient({ enquiries, currentUserId, currentUserName
   const [messagesByEnquiry, setMessagesByEnquiry] = useState<Record<string, Message[]>>({});
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
-  const [showSidebar, setShowSidebar] = useState(true);
+  // Mobile-only pane routing — defaults to false (list view) both server-
+  // and client-side, so there's no hydration mismatch and no dependency on
+  // window.innerWidth. Purely a CSS `hidden md:flex` switch below; on desktop
+  // both panes always show regardless of this value.
+  const [mobileConversationOpen, setMobileConversationOpen] = useState(false);
   const [unreadIds, setUnreadIds] = useState<Set<string>>(new Set());
-  const bottomRef = useRef<HTMLDivElement>(null);
+  // Scrolled directly (not via scrollIntoView, which bubbles up through
+  // every scrollable ancestor — including the dashboard shell's own <main>
+  // — and was nudging the whole page down, clipping this panel's header.
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const selectedRef = useRef<string | null>(selectedEnquiryId);
   const initializedRef = useRef<Set<string>>(new Set()); // skip the alert on each listener's first (backlog) snapshot
@@ -121,12 +128,13 @@ export function ClientMessagesClient({ enquiries, currentUserId, currentUserName
   }, [selectedEnquiryId]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = messagesContainerRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
   const selectConversation = (id: string) => {
     setSelectedEnquiryId(id);
-    if (window.innerWidth < 768) setShowSidebar(false);
+    setMobileConversationOpen(true);
   };
 
   const sendMessage = async () => {
@@ -159,16 +167,12 @@ export function ClientMessagesClient({ enquiries, currentUserId, currentUserName
     <div className="h-[calc(100vh-5rem)] flex overflow-hidden rounded-2xl border m-2 md:m-4 shadow-sm">
 
       {/* ── Sidebar ── */}
-      <AnimatePresence initial={false}>
-        {(showSidebar || enquiries.length === 0) && (
-          <motion.div
-            key="sidebar"
-            initial={{ width: 0, opacity: 0 }}
-            animate={{ width: "100%", maxWidth: 280, opacity: 1 }}
-            exit={{ width: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="flex-shrink-0 border-r bg-card flex flex-col overflow-hidden md:max-w-[260px]"
-          >
+      <div
+        className={cn(
+          "flex-shrink-0 border-r bg-card flex-col overflow-hidden w-full md:max-w-[260px]",
+          mobileConversationOpen ? "hidden md:flex" : "flex"
+        )}
+      >
             <div className="p-4 border-b flex-shrink-0">
               <h2 className="font-semibold text-sm text-foreground">My Conversations</h2>
               <p className="text-xs text-muted-foreground mt-0.5">Chat with your coordinator</p>
@@ -223,24 +227,25 @@ export function ClientMessagesClient({ enquiries, currentUserId, currentUserName
                 })
               )}
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      </div>
 
       {/* ── Chat pane ── */}
-      <div className="flex-1 flex flex-col min-w-0 bg-background">
+      <div
+        className={cn(
+          "flex-1 flex-col min-w-0 bg-background",
+          mobileConversationOpen ? "flex" : "hidden md:flex"
+        )}
+      >
         {selectedEnquiry ? (
           <>
             {/* Header */}
             <div className="px-4 py-3 border-b flex items-center gap-3 flex-shrink-0 bg-card">
-              {!showSidebar && (
-                <button
-                  onClick={() => setShowSidebar(true)}
-                  className="md:hidden p-1 rounded-lg hover:bg-accent transition-colors"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-              )}
+              <button
+                onClick={() => setMobileConversationOpen(false)}
+                className="md:hidden p-1 rounded-lg hover:bg-accent transition-colors"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
               <Avatar>
                 <AvatarFallback className="bg-gold-100 text-gold-800 font-semibold">
                   {getInitials(selectedEnquiry.coordinator?.name ?? "C")}
@@ -255,7 +260,7 @@ export function ClientMessagesClient({ enquiries, currentUserId, currentUserName
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3">
               {loadingMsgs ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center text-muted-foreground">
@@ -326,7 +331,6 @@ export function ClientMessagesClient({ enquiries, currentUserId, currentUserName
                       </div>
                     );
                   })}
-                  <div ref={bottomRef} />
                 </>
               )}
             </div>
