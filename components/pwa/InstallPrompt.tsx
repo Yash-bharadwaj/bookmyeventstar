@@ -29,20 +29,43 @@ export function InstallPrompt() {
 
     if (isInStandaloneMode) return;
 
+    // A pure timer used to show this regardless of scroll position, which
+    // meant it could pop up directly on top of the homepage hero's search
+    // bar / CTAs on phone-height viewports — the single most important
+    // above-the-fold content. Now it also waits for the visitor to have
+    // scrolled past the hero before it's allowed to appear.
+    let timerDone = false;
+    let scrolledPast = window.scrollY > 400;
+
+    const maybeShow = () => {
+      if (timerDone && scrolledPast) setShowBanner(true);
+    };
+    const onScroll = () => {
+      if (window.scrollY > 400) {
+        scrolledPast = true;
+        maybeShow();
+        window.removeEventListener("scroll", onScroll);
+      }
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+
     if (isIOSDevice) {
       setIsIOS(true);
-      setTimeout(() => setShowBanner(true), 3000);
-      return;
+      const t = setTimeout(() => { timerDone = true; maybeShow(); }, 3000);
+      return () => { clearTimeout(t); window.removeEventListener("scroll", onScroll); };
     }
 
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
-      setTimeout(() => setShowBanner(true), 3000);
+      setTimeout(() => { timerDone = true; maybeShow(); }, 3000);
     };
 
     window.addEventListener("beforeinstallprompt", handler);
-    return () => window.removeEventListener("beforeinstallprompt", handler);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handler);
+      window.removeEventListener("scroll", onScroll);
+    };
   }, []);
 
   const handleInstall = async () => {

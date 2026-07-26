@@ -2,16 +2,14 @@ import { NextResponse, type NextRequest } from "next/server";
 import { verifySessionToken, SESSION_COOKIE_NAME } from "./session";
 
 // Fully public content pages that never redirect based on auth state —
-// skip token verification entirely for these.
+// skip token verification entirely for these. `/artists` is deliberately
+// NOT here: every action in this app requires signing in first, including
+// browsing the artist roster, so it goes through the normal login redirect
+// like every other page below.
 const PUBLIC_NO_AUTH_CHECK = ["/", "/enquiry", "/forgot-password"];
 
 function isPublicNoAuthCheck(pathname: string): boolean {
-  return (
-    pathname.startsWith("/api/") ||
-    PUBLIC_NO_AUTH_CHECK.includes(pathname) ||
-    pathname === "/artists" ||
-    pathname.startsWith("/artists/")
-  );
+  return pathname.startsWith("/api/") || PUBLIC_NO_AUTH_CHECK.includes(pathname);
 }
 
 // Central role gate. Previously each dashboard page individually checked
