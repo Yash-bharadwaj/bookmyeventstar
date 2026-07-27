@@ -324,22 +324,32 @@ export default function LandingPage() {
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 pt-12 pb-24 text-center">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/20 bg-white/10 text-white/90 text-sm mb-6 backdrop-blur-sm">
-              <Award className="w-4 h-4 text-gold-400" />
-              Verified Artists • Expert Coordination • Pan-India
+            <div className="flex flex-wrap items-center justify-center gap-2 mb-6">
+              {["Verified Artists", "Expert Coordination", "Pan-India"].map((t) => (
+                <span
+                  key={t}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/20 bg-white/10 text-white/90 text-xs sm:text-sm backdrop-blur-sm whitespace-nowrap"
+                >
+                  <Award className="w-3.5 h-3.5 text-gold-400 flex-shrink-0" />
+                  {t}
+                </span>
+              ))}
             </div>
 
-            <h1 className="font-display text-4xl md:text-6xl lg:text-7xl font-bold text-white leading-tight">
-              Book the{" "}
-              <span className="bg-gradient-to-r from-gold-300 via-gold-400 to-gold-300 bg-clip-text text-transparent">
-                Perfect Artist
+            <h1 className="font-display text-[2.25rem] leading-[1.15] sm:text-4xl md:text-6xl lg:text-7xl font-bold text-white sm:leading-tight">
+              <span className="block text-balance">
+                Book the{" "}
+                <span className="whitespace-nowrap bg-gradient-to-r from-gold-300 via-gold-400 to-gold-300 bg-clip-text text-transparent">
+                  Perfect Artist
+                </span>
               </span>
-              <br />
-              <span className="text-3xl md:text-5xl lg:text-6xl text-white/90">for Your Event in India</span>
+              <span className="block mt-1 sm:mt-2 text-2xl sm:text-3xl md:text-5xl lg:text-6xl text-white/90 text-balance">
+                for Your Event in India
+              </span>
             </h1>
 
-            <p className="mt-5 text-lg md:text-xl text-white/70 max-w-2xl mx-auto leading-relaxed">
-              Singers · DJs · Comedians · Dancers · Anchors — all in one place with expert coordination.
+            <p className="mt-5 text-base sm:text-lg md:text-xl text-white/70 max-w-2xl mx-auto leading-relaxed text-pretty">
+              Singers, DJs, comedians, dancers, anchors — all in one place with expert coordination.
             </p>
 
             {/* Search bar */}
@@ -464,7 +474,7 @@ export default function LandingPage() {
             <span className="inline-block px-4 py-1.5 rounded-full bg-navy-100 text-navy-700 text-xs font-bold uppercase tracking-widest mb-3">
               For Every Occasion
             </span>
-            <h2 className="font-display text-3xl md:text-4xl font-bold text-navy-900">
+            <h2 className="font-display text-3xl md:text-4xl font-bold text-navy-900 text-balance">
               Browse by Category
             </h2>
             <p className="mt-3 text-muted-foreground">Click any category to instantly see available artists</p>
@@ -516,7 +526,7 @@ export default function LandingPage() {
             <span className="inline-block px-4 py-1.5 rounded-full bg-navy-100 text-navy-700 text-xs font-bold uppercase tracking-widest mb-3">
               Simple Process
             </span>
-            <h2 className="font-display text-3xl md:text-4xl font-bold text-navy-900">
+            <h2 className="font-display text-3xl md:text-4xl font-bold text-navy-900 text-balance">
               How BookMyEventStar Works
             </h2>
             <p className="mt-3 text-muted-foreground max-w-xl mx-auto">From enquiry to event day — we handle everything with expert precision</p>
@@ -569,7 +579,7 @@ export default function LandingPage() {
             <span className="inline-block px-4 py-1.5 rounded-full bg-gold-50 text-gold-700 text-xs font-bold uppercase tracking-widest mb-3">
               Our Promise
             </span>
-            <h2 className="font-display text-3xl md:text-4xl font-bold text-navy-900">
+            <h2 className="font-display text-3xl md:text-4xl font-bold text-navy-900 text-balance">
               Why Book With BookMyEventStar
             </h2>
           </div>
@@ -604,7 +614,7 @@ export default function LandingPage() {
             <span className="inline-block px-4 py-1.5 rounded-full bg-navy-100 text-navy-700 text-xs font-bold uppercase tracking-widest mb-3">
               Trust &amp; Safety
             </span>
-            <h2 className="font-display text-3xl md:text-4xl font-bold text-navy-900">
+            <h2 className="font-display text-3xl md:text-4xl font-bold text-navy-900 text-balance">
               How We Verify Every Artist
             </h2>
             <p className="mt-3 text-muted-foreground max-w-xl mx-auto">Nobody appears in search until they've been through this</p>
@@ -638,7 +648,7 @@ export default function LandingPage() {
             <span className="inline-block px-4 py-1.5 rounded-full bg-gold-50 text-gold-700 text-xs font-bold uppercase tracking-widest mb-3">
               Questions
             </span>
-            <h2 className="font-display text-3xl md:text-4xl font-bold text-navy-900">
+            <h2 className="font-display text-3xl md:text-4xl font-bold text-navy-900 text-balance">
               Frequently Asked Questions
             </h2>
           </div>
@@ -664,7 +674,7 @@ export default function LandingPage() {
               <span className="inline-block px-4 py-1.5 rounded-full bg-white/10 text-white/90 text-xs font-bold uppercase tracking-widest mb-4">
                 For Performers
               </span>
-              <h2 className="font-display text-3xl md:text-4xl font-bold text-white leading-tight">
+              <h2 className="font-display text-3xl md:text-4xl font-bold text-white leading-tight text-balance">
                 Are You a Performer?
               </h2>
               <p className="mt-4 text-white/70">
@@ -704,7 +714,7 @@ export default function LandingPage() {
             <div className="flex justify-center mb-6">
               <BrandLogo href="/" size="xl" className="shadow-xl shadow-black/20" />
             </div>
-            <h2 className="font-display text-3xl md:text-5xl font-bold text-white">
+            <h2 className="font-display text-3xl md:text-5xl font-bold text-white text-balance">
               Ready to Make Your Event{" "}
               <span className="bg-gradient-to-r from-gold-300 to-gold-400 bg-clip-text text-transparent">
                 Unforgettable?
@@ -714,21 +724,21 @@ export default function LandingPage() {
               Submit a free enquiry and a dedicated coordinator will call you within 2 hours.
             </p>
 
-            <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
-              <Link href="/artists">
-                <Button variant="white" size="lg" className="px-10 font-bold shadow-xl text-base">
+            <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center items-stretch sm:items-center">
+              <Link href="/artists" className="w-full sm:w-auto">
+                <Button variant="white" size="lg" className="w-full sm:w-auto px-10 font-bold shadow-xl text-base">
                   <Users className="w-5 h-5 mr-2" />
                   Browse Artists
                 </Button>
               </Link>
-              <Link href="/enquiry">
-                <Button size="lg" className="px-10 gold-gradient text-white font-bold border-0 hover:opacity-90 shadow-xl shadow-gold-500/30 text-base">
+              <Link href="/enquiry" className="w-full sm:w-auto">
+                <Button size="lg" className="w-full sm:w-auto px-10 gold-gradient text-white font-bold border-0 hover:opacity-90 shadow-xl shadow-gold-500/30 text-base">
                   <Sparkles className="w-5 h-5 mr-2" />
                   Get Free Quote
                 </Button>
               </Link>
-              <a href="tel:+919999999999">
-                <Button size="lg" className="px-8 bg-white/10 border border-white/20 text-white hover:bg-white/20 backdrop-blur-sm text-base">
+              <a href="tel:+919999999999" className="w-full sm:w-auto">
+                <Button size="lg" className="w-full sm:w-auto px-8 bg-white/10 border border-white/20 text-white hover:bg-white/20 backdrop-blur-sm text-base">
                   <Phone className="w-5 h-5 mr-2" />
                   Call Us
                 </Button>
@@ -756,9 +766,9 @@ export default function LandingPage() {
               © 2026 · India&apos;s Premier Artist Booking Platform
             </p>
           </div>
-            <div className="flex items-center gap-6 text-sm">
+            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm">
               {[["Browse Artists", "/artists"], ["Raise Enquiry", "/enquiry"], ["Login", "/login"], ["Register", "/register"]].map(([label, href]) => (
-                <Link key={label} href={href} className="hover:text-white transition-colors">{label}</Link>
+                <Link key={label} href={href} className="whitespace-nowrap hover:text-white transition-colors">{label}</Link>
               ))}
             </div>
             <div className="flex items-center gap-4">
