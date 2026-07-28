@@ -20,7 +20,7 @@ import { Proposal } from "@/types";
 import { formatDate, formatCurrency, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { db } from "@/lib/firebase/client";
 import { notifyUser, emailUser } from "@/lib/notifications/client";
-import { checkArtistsAvailability, AvailabilityStatus } from "@/lib/availability";
+import { checkArtistsAvailability, checkArtistAvailability, AvailabilityStatus } from "@/lib/availability";
 import {
   collection, doc, addDoc, updateDoc, getDoc, getDocs,
   query, where, serverTimestamp, writeBatch,
@@ -349,6 +349,25 @@ export function CoordinatorProposalsClient({
       toast.error("Please select the confirmed artist");
       return;
     }
+
+    // Re-check live rather than trusting `availabilityMap` — that was
+    // fetched when the enquiry/artist was first selected and could be
+    // stale by the time this button is actually clicked. This is the
+    // moment of truth: never write a conflicting booking.
+    const eventDateForCheck = proposal.enquiry?.event_date;
+    if (eventDateForCheck) {
+      const liveStatus = await checkArtistAvailability(selectedBookingArtistId, eventDateForCheck, editingBookingId ?? undefined);
+      if (liveStatus !== "available") {
+        const artistName = artists.find((a) => a.id === selectedBookingArtistId)?.user?.name ?? "This artist";
+        toast.error(
+          liveStatus === "blocked"
+            ? `${artistName} has blocked this date on their own calendar. Choose another artist or confirm with them first.`
+            : `${artistName} already has a booking on this date. Choose another artist or cancel the existing booking first.`
+        );
+        return;
+      }
+    }
+
     setCreatingBooking(true);
     try {
       const totalAmt = Number(totalAmount);

@@ -57,8 +57,27 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const bookingArtistId = preferredArtistId || (artists.length === 1 ? artists[0].artist_id : null);
     const bookingArtist = artists.find((a) => a.artist_id === bookingArtistId);
     let bookingCreated = false;
+    let hasConflict = false;
 
     if (bookingArtistId) {
+      // This runs with no coordinator in the loop yet, so unlike the
+      // coordinator's own manual createBooking flow, there's no one to
+      // notice an "already booked" warning badge — check for a genuine
+      // conflict here and skip the auto-draft entirely rather than risk
+      // silently double-booking the artist.
+      const [availSnap, conflictSnap] = await Promise.all([
+        adminDb.collection("artistProfiles").doc(bookingArtistId).collection("availability").doc(enquiry.event_date).get(),
+        adminDb.collection("bookings")
+          .where("artist_id", "==", bookingArtistId)
+          .where("event_date", "==", enquiry.event_date)
+          .get(),
+      ]);
+      hasConflict =
+        (availSnap.exists && availSnap.data()?.status === "blocked") ||
+        conflictSnap.docs.some((d) => d.data().status !== "cancelled");
+    }
+
+    if (bookingArtistId && !hasConflict) {
       const totalAmt = bookingArtist?.quoted_price ?? proposal.quoted_price;
       const advanceAmt = Math.round(totalAmt * 0.3);
       const bookingRef = adminDb.collection("bookings").doc();
@@ -101,12 +120,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             message: `${enquiry.event_type ?? "Event"} booking draft created${preferredName ? ` for ${preferredName}` : ""}. Please confirm the venue and payment split.`,
             link: `/coordinator/proposals`,
           }
+        : hasConflict
+        ? {
+            title: "⚠️ Proposal Accepted — Artist Unavailable",
+            message: `${enquiry.event_type ?? "Event"} was accepted${preferredName ? ` for ${preferredName}` : ""}, but they're already booked or blocked on ${enquiry.event_date}. Please resolve this with the artist or client before creating the booking.`,
+            link: `/coordinator/proposals`,
+          }
         : {
             title: "🎉 Proposal Accepted — Create Booking",
             message: `${enquiry.event_type ?? "Event"} booking confirmed${preferredName ? `. Client prefers ${preferredName}` : ""}. Multiple artist options were proposed — please pick one and create the booking.`,
             link: `/coordinator/proposals`,
           };
-      await notifyUserServer(proposal.coordinator_id, { ...payload, type: "success" });
+      await notifyUserServer(proposal.coordinator_id, { ...payload, type: hasConflict ? "warning" : "success" });
       await emailUserServer(proposal.coordinator_id, payload);
     }
 

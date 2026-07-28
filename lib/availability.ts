@@ -11,7 +11,12 @@ export type AvailabilityStatus = "available" | "blocked" | "booked";
  */
 export async function checkArtistAvailability(
   artistId: string,
-  dateStr: string
+  dateStr: string,
+  /** Exclude this booking doc from the conflict check — needed when
+   * re-verifying availability for a booking that's already being
+   * edited/confirmed (e.g. an auto-drafted booking), which would otherwise
+   * show up as a false-positive conflict against itself. */
+  excludeBookingId?: string
 ): Promise<AvailabilityStatus> {
   const availSnap = await getDoc(doc(db, "artistProfiles", artistId, "availability", dateStr));
   if (availSnap.exists() && availSnap.data().status === "blocked") return "blocked";
@@ -23,7 +28,7 @@ export async function checkArtistAvailability(
       where("event_date", "==", dateStr)
     )
   );
-  if (bookingsSnap.docs.some((d) => d.data().status !== "cancelled")) return "booked";
+  if (bookingsSnap.docs.some((d) => d.id !== excludeBookingId && d.data().status !== "cancelled")) return "booked";
 
   return "available";
 }
