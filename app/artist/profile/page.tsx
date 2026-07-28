@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
-import { serialize } from "@/lib/firebase/firestore-utils";
+import { serialize, type AnyDoc } from "@/lib/firebase/firestore-utils";
+import { ensureArtistSlug } from "@/lib/artist-slug";
 import { ArtistProfileClient } from "./ArtistProfileClient";
 
 export default async function ArtistProfilePage() {
@@ -15,7 +16,11 @@ export default async function ArtistProfilePage() {
     adminDb.collection("categories").orderBy("name").get(),
   ]);
 
-  const artistProfile = artistProfileSnap.exists ? { id: user.id, ...artistProfileSnap.data() } : null;
+  let artistProfile = artistProfileSnap.exists ? ({ id: user.id, ...artistProfileSnap.data() } as AnyDoc) : null;
+  if (artistProfile) {
+    const slug = await ensureArtistSlug(user.id, user.name, artistProfile.slug);
+    artistProfile = { ...artistProfile, slug };
+  }
   const media = mediaSnap.docs.map((d) => ({ id: d.id, artist_id: user.id, ...d.data() }));
   const categoryNames = categoriesSnap.docs.map((d) => d.data().name as string);
 

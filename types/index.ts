@@ -71,6 +71,8 @@ export interface ArtistProfile {
   is_profile_complete?: boolean;
   social_links: Record<string, string>;
   rider_notes?: string;
+  /** Human-readable id for the artist's public shareable profile link (/artists/{slug}). */
+  slug?: string;
   user?: User;
 }
 

@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { serialize, type AnyDoc } from "@/lib/firebase/firestore-utils";
 import { ArtistOverview } from "@/components/dashboard/ArtistOverview";
+import { ensureArtistSlug } from "@/lib/artist-slug";
 
 export default async function ArtistPage() {
   const user = await getCurrentUser();
@@ -10,7 +11,11 @@ export default async function ArtistPage() {
   if (user.role !== "artist") redirect("/login");
 
   const artistProfileSnap = await adminDb.collection("artistProfiles").doc(user.id).get();
-  const artistProfile = artistProfileSnap.exists ? { id: user.id, ...artistProfileSnap.data() } : null;
+  let artistProfile = artistProfileSnap.exists ? ({ id: user.id, ...artistProfileSnap.data() } as AnyDoc) : null;
+  if (artistProfile) {
+    const slug = await ensureArtistSlug(user.id, user.name, artistProfile.slug);
+    artistProfile = { ...artistProfile, slug };
+  }
 
   const [photoCountSnap, bookingsSnap] = await Promise.all([
     adminDb.collection("artistProfiles").doc(user.id).collection("media").where("type", "==", "photo").count().get(),

@@ -23,6 +23,7 @@ import { formatDate, formatCurrency, getStatusColor, getStatusLabel } from "@/li
 import { useRouter } from "next/navigation";
 import { aggregateCompletionFromStoredProfile } from "@/lib/artist-profile-completion";
 import { ProfileCompletionGauge } from "@/components/artist/ProfileCompletionGauge";
+import { ShareProfileCard } from "@/components/artist/ShareProfileCard";
 import toast from "react-hot-toast";
 
 interface ArtistOverviewProps {
@@ -52,6 +53,11 @@ export function ArtistOverview({
 
   const completion =
     artistProfile !== null ? aggregateCompletionFromStoredProfile(artistProfile, artistPhotoCount, hasAvatar) : null;
+  // Once the artist is actually live on the directory, the completeness
+  // gauge has nothing left to report — keep it out of the dashboard instead
+  // of permanently showing a "100% done" card with no further action.
+  const showOnExplore =
+    !!completion?.isComplete && !!artistProfile?.is_verified && artistProfile?.is_listed !== false;
 
   const pendingRequests = bookings.filter((b) => b.status === "pending");
   const recent = bookings.slice(0, 5);
@@ -78,18 +84,18 @@ export function ArtistOverview({
 
   return (
     <div className="p-4 md:p-6 space-y-6">
-      {completion && artistProfile && (
+      {artistProfile?.slug && (
+        <ShareProfileCard slug={artistProfile.slug} isLive={showOnExplore} />
+      )}
+
+      {completion && artistProfile && !showOnExplore && (
         <ProfileCompletionGauge
           percent={completion.percent}
           isComplete={completion.isComplete}
           items={completion.items}
           verified={!!artistProfile.is_verified}
           listed={artistProfile.is_listed !== false}
-          showOnExplore={
-            completion.isComplete &&
-            !!artistProfile.is_verified &&
-            artistProfile.is_listed !== false
-          }
+          showOnExplore={showOnExplore}
         />
       )}
 
