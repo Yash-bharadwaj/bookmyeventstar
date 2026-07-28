@@ -76,16 +76,21 @@ export function AdminReportsClient({ enquiries, bookings, payments, coordinatorS
 
     const sections: string[] = [];
 
-    // Summary
-    const totalRevenue = payments.filter((p) => p.status === "paid" && isClientPayment(p)).reduce((s, p) => s + p.amount, 0);
-    const completedBookings = bookings.filter((b) => b.status === "completed").length;
+    // Summary — mirrors the on-screen stat cards exactly, so both respect
+    // the active date-range filter instead of silently exporting all-time
+    // data, and never disagree with each other.
+    const csvRevenue = filteredPayments.filter((p) => p.status === "paid" && isClientPayment(p)).reduce((s, p) => s + p.amount, 0);
+    const csvArtistPayouts = filteredPayments.filter((p) => p.type === "artist_settlement" && p.status === "paid").reduce((s, p) => s + p.amount, 0);
+    const csvCompletedBookings = filteredBookings.filter((b) => b.status === "completed").length;
+    const csvCompletedEnquiries = filteredEnquiries.filter((e) => e.status === "completed").length;
     sections.push("SUMMARY");
-    sections.push(["Total Enquiries", "Total Revenue (₹)", "Completed Events", "Conversion Rate (%)"].join(","));
+    sections.push(["Total Enquiries", "Total Revenue (₹)", "Artist Payouts (₹)", "Completed Events", "Conversion Rate (%)"].join(","));
     sections.push([
-      enquiries.length,
-      totalRevenue,
-      completedBookings,
-      enquiries.length ? Math.round((completedBookings / enquiries.length) * 100) : 0,
+      filteredEnquiries.length,
+      csvRevenue,
+      csvArtistPayouts,
+      csvCompletedBookings,
+      filteredEnquiries.length ? Math.round((csvCompletedEnquiries / filteredEnquiries.length) * 100) : 0,
     ].join(","));
     sections.push("");
 
@@ -93,11 +98,11 @@ export function AdminReportsClient({ enquiries, bookings, payments, coordinatorS
     const monthlyRows = Array.from({ length: 6 }, (_, i) => {
       const month = subMonths(new Date(), 5 - i);
       const label = format(month, "MMM yyyy");
-      const count = enquiries.filter((e) => {
+      const count = filteredEnquiries.filter((e) => {
         const d = new Date(e.created_at);
         return d.getMonth() === month.getMonth() && d.getFullYear() === month.getFullYear();
       }).length;
-      const revenue = payments
+      const revenue = filteredPayments
         .filter((p) => {
           if (!p.paid_at) return false;
           const d = new Date(p.paid_at);
@@ -115,7 +120,7 @@ export function AdminReportsClient({ enquiries, bookings, payments, coordinatorS
     sections.push("TOP CITIES");
     sections.push("City,Enquiries");
     Array.from(
-      enquiries.reduce((acc, e) => { acc.set(e.city, (acc.get(e.city) ?? 0) + 1); return acc; }, new Map<string, number>())
+      filteredEnquiries.reduce((acc, e) => { acc.set(e.city, (acc.get(e.city) ?? 0) + 1); return acc; }, new Map<string, number>())
     ).sort((a, b) => b[1] - a[1]).slice(0, 10)
       .forEach(([city, count]) => sections.push(`${city},${count}`));
     sections.push("");
@@ -139,16 +144,16 @@ export function AdminReportsClient({ enquiries, bookings, payments, coordinatorS
     URL.revokeObjectURL(url);
   };
 
-  // Monthly enquiries (last 6 months)
+  // Monthly enquiries (last 6 months, scoped to the active date-range filter)
   const monthlyData = Array.from({ length: 6 }, (_, i) => {
     const month = subMonths(new Date(), 5 - i);
     const monthStart = startOfMonth(month);
     const monthLabel = format(month, "MMM");
-    const count = enquiries.filter((e) => {
+    const count = filteredEnquiries.filter((e) => {
       const d = new Date(e.created_at);
       return d.getMonth() === month.getMonth() && d.getFullYear() === month.getFullYear();
     }).length;
-    const revenue = payments
+    const revenue = filteredPayments
       .filter((p) => {
         if (!p.paid_at) return false;
         const d = new Date(p.paid_at);
@@ -161,12 +166,12 @@ export function AdminReportsClient({ enquiries, bookings, payments, coordinatorS
   // Source distribution
   const sourceData = ["website", "whatsapp", "email", "instagram", "referral", "walk_in"].map((src) => ({
     name: src.replace("_", " "),
-    value: enquiries.filter((e) => e.source === src).length,
+    value: filteredEnquiries.filter((e) => e.source === src).length,
   })).filter((d) => d.value > 0);
 
   // City distribution
   const cityData = Array.from(
-    enquiries.reduce((acc, e) => {
+    filteredEnquiries.reduce((acc, e) => {
       acc.set(e.city, (acc.get(e.city) ?? 0) + 1);
       return acc;
     }, new Map<string, number>())
@@ -175,9 +180,14 @@ export function AdminReportsClient({ enquiries, bookings, payments, coordinatorS
     .sort((a, b) => b.count - a.count)
     .slice(0, 8);
 
-  const totalRevenue = payments.filter((p) => p.status === "paid" && isClientPayment(p)).reduce((s, p) => s + p.amount, 0);
-  const artistPayouts = payments.filter((p) => p.type === "artist_settlement" && p.status === "paid").reduce((s, p) => s + p.amount, 0);
-  const completedBookings = bookings.filter((b) => b.status === "completed").length;
+  const totalRevenue = filteredPayments.filter((p) => p.status === "paid" && isClientPayment(p)).reduce((s, p) => s + p.amount, 0);
+  const artistPayouts = filteredPayments.filter((p) => p.type === "artist_settlement" && p.status === "paid").reduce((s, p) => s + p.amount, 0);
+  const completedBookings = filteredBookings.filter((b) => b.status === "completed").length;
+  // Conversion rate is deliberately computed within the SAME collection
+  // (enquiries) rather than against `completedBookings` (a different
+  // collection with no guaranteed 1:1 correspondence to enquiries) — this
+  // also matches how each coordinator's own conversion rate is computed below.
+  const completedEnquiries = filteredEnquiries.filter((e) => e.status === "completed").length;
 
   return (
     <div className="p-4 md:p-6 space-y-6 print:p-0">
@@ -218,11 +228,11 @@ export function AdminReportsClient({ enquiries, bookings, payments, coordinatorS
 
       {/* Summary stats */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <StatCard title="Total Enquiries" value={enquiries.length} icon={FileText} color="gold" index={0} />
+        <StatCard title="Total Enquiries" value={filteredEnquiries.length} icon={FileText} color="gold" index={0} />
         <StatCard title="Total Revenue" value={formatCurrency(totalRevenue)} icon={DollarSign} color="green" index={1} />
         <StatCard title="Artist Payouts" value={formatCurrency(artistPayouts)} icon={DollarSign} color="gold" index={2} />
         <StatCard title="Completed Events" value={completedBookings} icon={Calendar} color="navy" index={3} />
-        <StatCard title="Conversion Rate" value={`${enquiries.length ? Math.round((completedBookings / enquiries.length) * 100) : 0}%`} icon={TrendingUp} color="navy" index={4} />
+        <StatCard title="Conversion Rate" value={`${filteredEnquiries.length ? Math.round((completedEnquiries / filteredEnquiries.length) * 100) : 0}%`} icon={TrendingUp} color="navy" index={4} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

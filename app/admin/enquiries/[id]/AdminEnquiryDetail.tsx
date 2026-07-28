@@ -122,26 +122,40 @@ export function AdminEnquiryDetail({ enquiry, proposals, coordinators }: Props) 
         <h2 className="font-semibold text-sm mb-4 flex items-center gap-2">
           <Clock className="w-4 h-4 text-blue-500" />Pipeline Progress
         </h2>
-        <div className="flex items-center gap-1 overflow-x-auto pb-2">
-          {STATUS_FLOW.map((s, i) => (
-            <div key={s.key} className="flex items-center gap-1 flex-shrink-0">
-              <div className="flex flex-col items-center">
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                  i < currentStepIndex ? "bg-navy-500 text-white" :
-                  i === currentStepIndex ? "bg-navy-600 text-white ring-4 ring-navy-100" :
-                  "bg-muted text-muted-foreground"
-                }`}>
-                  {i < currentStepIndex ? <CheckCircle className="w-3.5 h-3.5" /> : i + 1}
+        {enquiry.status === "cancelled" ? (
+          // STATUS_FLOW has no "cancelled" step, so currentStepIndex is -1 —
+          // rendering the normal timeline would show every step as "not yet
+          // reached," which reads as "nothing has happened" even if this
+          // enquiry was cancelled after significant progress. Show a plain
+          // notice instead of a misleading all-gray progress bar.
+          <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            This enquiry was cancelled.
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-1 overflow-x-auto pb-2">
+              {STATUS_FLOW.map((s, i) => (
+                <div key={s.key} className="flex items-center gap-1 flex-shrink-0">
+                  <div className="flex flex-col items-center">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                      i < currentStepIndex ? "bg-navy-500 text-white" :
+                      i === currentStepIndex ? "bg-navy-600 text-white ring-4 ring-navy-100" :
+                      "bg-muted text-muted-foreground"
+                    }`}>
+                      {i < currentStepIndex ? <CheckCircle className="w-3.5 h-3.5" /> : i + 1}
+                    </div>
+                    <span className="text-[9px] text-muted-foreground mt-1 text-center w-16 leading-tight">{s.label}</span>
+                  </div>
+                  {i < STATUS_FLOW.length - 1 && (
+                    <div className={`h-0.5 w-6 flex-shrink-0 mb-4 ${i < currentStepIndex ? "bg-navy-500" : "bg-muted"}`} />
+                  )}
                 </div>
-                <span className="text-[9px] text-muted-foreground mt-1 text-center w-16 leading-tight">{s.label}</span>
-              </div>
-              {i < STATUS_FLOW.length - 1 && (
-                <div className={`h-0.5 w-6 flex-shrink-0 mb-4 ${i < currentStepIndex ? "bg-navy-500" : "bg-muted"}`} />
-              )}
+              ))}
             </div>
-          ))}
-        </div>
-        <p className="text-xs text-muted-foreground mt-1 md:hidden">← Scroll to see full pipeline →</p>
+            <p className="text-xs text-muted-foreground mt-1 md:hidden">← Scroll to see full pipeline →</p>
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">

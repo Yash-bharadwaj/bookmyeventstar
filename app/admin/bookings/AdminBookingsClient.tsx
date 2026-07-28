@@ -33,7 +33,7 @@ export function AdminBookingsClient({ bookings }: { bookings: Booking[] }) {
     <div className="p-4 md:p-6 space-y-4 max-w-5xl mx-auto">
       <div>
         <h1 className="font-display text-xl font-bold text-navy-900">Bookings</h1>
-        <p className="text-sm text-muted-foreground mt-1">Every confirmed booking, with what's been paid and what's still pending.</p>
+        <p className="text-sm text-muted-foreground mt-1">Every booking, with what's been paid and what's still pending.</p>
       </div>
 
       <div className="relative max-w-sm">
