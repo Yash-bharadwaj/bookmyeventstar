@@ -4,7 +4,7 @@ import { useState } from "react";
 import {
   ArrowLeft, Calendar, MapPin, User, Phone, Mail,
   IndianRupee, Mic2, CheckCircle, Plane, Wrench, Receipt, UtensilsCrossed,
-  Wallet, AlertTriangle,
+  Wallet, AlertTriangle, CreditCard,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,9 +16,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatDate, formatCurrency, getStatusColor, getStatusLabel, getInitials } from "@/lib/utils";
+import { summarizePayments } from "@/lib/payments";
 import { db } from "@/lib/firebase/client";
 import { doc, updateDoc, addDoc, collection, serverTimestamp } from "firebase/firestore";
-import { notifyUser } from "@/lib/notifications/client";
+import { notifyUser, emailUser } from "@/lib/notifications/client";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -60,6 +61,64 @@ export function CoordinatorBookingDetail({ booking, artistSharePct }: { booking:
   const [existingSettlement, setExistingSettlement] = useState<{ amount: number; status: string } | null>(
     booking.settlement ?? null
   );
+  // Client payments (advance/final) — tracked separately from the artist
+  // settlement above; source of truth is the payments subcollection, not
+  // the static advance_amount/balance_amount snapshot taken at booking creation.
+  const [payments, setPayments] = useState<any[]>(booking.payments ?? []);
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [paymentType, setPaymentType] = useState<"advance" | "final">("advance");
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentNotes, setPaymentNotes] = useState("");
+  const [savingPayment, setSavingPayment] = useState(false);
+
+  const paymentSummary = summarizePayments(booking.total_amount, payments);
+
+  const openPaymentDialog = (type: "advance" | "final") => {
+    setPaymentType(type);
+    setPaymentAmount(String(type === "advance" ? booking.advance_amount : paymentSummary.pendingBalance));
+    setPaymentNotes("");
+    setShowPaymentDialog(true);
+  };
+
+  const recordPayment = async () => {
+    const amount = Number(paymentAmount);
+    if (!amount || amount <= 0) { toast.error("Enter a valid amount"); return; }
+    setSavingPayment(true);
+    try {
+      const docRef = await addDoc(collection(db, "bookings", booking.id, "payments"), {
+        type: paymentType,
+        amount,
+        status: "paid",
+        notes: paymentNotes.trim() || null,
+        paid_at: serverTimestamp(),
+        created_at: serverTimestamp(),
+      });
+      const newPayment = { id: docRef.id, type: paymentType, amount, status: "paid", notes: paymentNotes.trim() || null };
+      const updated = [...payments, newPayment];
+      setPayments(updated);
+
+      const pendingAfter = summarizePayments(booking.total_amount, updated).pendingBalance;
+      const clientId = booking.enquiry?.client?.id;
+      if (clientId) {
+        const label = paymentType === "advance" ? "advance" : "balance";
+        const payload = {
+          title: "Payment recorded",
+          message: `We've recorded your ${formatCurrency(amount)} ${label} payment for ${booking.enquiry?.event_type ?? "your event"}. Balance remaining: ${formatCurrency(pendingAfter)}.`,
+          type: "success" as const,
+          link: "/client/payments",
+        };
+        await notifyUser(clientId, payload);
+        emailUser(clientId, payload).catch(() => {});
+      }
+
+      toast.success("Payment recorded!");
+      setShowPaymentDialog(false);
+      router.refresh();
+    } catch {
+      toast.error("Failed to record payment");
+    }
+    setSavingPayment(false);
+  };
 
   const updateTask = async (taskId: string, done: boolean) => {
     setUpdatingTask(taskId);
@@ -212,8 +271,8 @@ export function CoordinatorBookingDetail({ booking, artistSharePct }: { booking:
             <p className="font-medium mt-0.5">{booking.city}</p>
           </div>
           <div>
-            <p className="text-muted-foreground text-xs">Balance</p>
-            <p className="font-medium mt-0.5">{formatCurrency(booking.balance_amount)}</p>
+            <p className="text-muted-foreground text-xs">Pending Balance</p>
+            <p className="font-medium mt-0.5">{formatCurrency(paymentSummary.pendingBalance)}</p>
           </div>
         </div>
         <div className="mt-4 grid grid-cols-3 gap-3">
@@ -222,12 +281,12 @@ export function CoordinatorBookingDetail({ booking, artistSharePct }: { booking:
             <p className="font-bold text-blue-700">{formatCurrency(booking.total_amount)}</p>
           </div>
           <div className="p-3 rounded-xl bg-green-50 text-center">
-            <p className="text-xs text-green-600">Advance</p>
-            <p className="font-bold text-green-700">{formatCurrency(booking.advance_amount)}</p>
+            <p className="text-xs text-green-600">Paid So Far</p>
+            <p className="font-bold text-green-700">{formatCurrency(paymentSummary.paidTotal)}</p>
           </div>
           <div className="p-3 rounded-xl bg-amber-50 text-center">
-            <p className="text-xs text-amber-600">Balance</p>
-            <p className="font-bold text-amber-700">{formatCurrency(booking.balance_amount)}</p>
+            <p className="text-xs text-amber-600">Pending Balance</p>
+            <p className="font-bold text-amber-700">{formatCurrency(paymentSummary.pendingBalance)}</p>
           </div>
         </div>
       </div>
@@ -310,6 +369,38 @@ export function CoordinatorBookingDetail({ booking, artistSharePct }: { booking:
         )}
       </div>
 
+      {/* Client Payments */}
+      <div className="rounded-2xl border p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold text-sm flex items-center gap-2">
+            <CreditCard className="w-4 h-4 text-blue-500" />Client Payments
+          </h2>
+          <Button size="sm" onClick={() => openPaymentDialog(paymentSummary.advancePaid ? "final" : "advance")}>
+            <CreditCard className="w-3.5 h-3.5 mr-1.5" />Record Payment
+          </Button>
+        </div>
+
+        {payments.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No client payments recorded yet.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {payments.map((p: any) => (
+              <div key={p.id} className="flex items-center justify-between text-sm p-2.5 rounded-lg bg-muted/30">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${p.status === "paid" ? "bg-emerald-500" : "bg-amber-500"}`} />
+                  <span className="capitalize">{p.type} payment</span>
+                  {p.notes && <span className="text-xs text-muted-foreground">· {p.notes}</span>}
+                </div>
+                <div className="text-right">
+                  <p className="font-medium">{formatCurrency(p.amount)}</p>
+                  {p.paid_at && <p className="text-xs text-muted-foreground">{formatDate(p.paid_at)}</p>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Artist Settlement — always shown so coordinator can record at any stage */}
       {(
         <div className="rounded-2xl border p-5 space-y-4">
@@ -374,6 +465,55 @@ export function CoordinatorBookingDetail({ booking, artistSharePct }: { booking:
           )}
         </div>
       )}
+
+      {/* Record Payment Dialog */}
+      <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Record Payment</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Payment Type</Label>
+              <Select value={paymentType} onValueChange={(v) => setPaymentType(v as "advance" | "final")}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="advance">Advance</SelectItem>
+                  <SelectItem value="final">Final Balance</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Amount (₹)</Label>
+              <div className="relative">
+                <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                <Input
+                  type="number"
+                  className="pl-8 font-semibold text-lg"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Notes (optional)</Label>
+              <Input
+                placeholder="e.g. Cash received, UPI ref #12345"
+                value={paymentNotes}
+                onChange={(e) => setPaymentNotes(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">
+              <Button variant="outline" className="w-full sm:w-auto" onClick={() => setShowPaymentDialog(false)}>Cancel</Button>
+              <Button className="w-full sm:w-auto" onClick={recordPayment} loading={savingPayment}>
+                <CreditCard className="w-4 h-4 mr-2" />Confirm Payment
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Cancellation Dialog */}
       <Dialog open={showCancelDialog} onOpenChange={(o) => { if (!o) { setShowCancelDialog(false); setBookingStatus(booking.status); } }}>

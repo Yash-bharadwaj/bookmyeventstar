@@ -43,6 +43,10 @@ interface ReportsProps {
 
 const COLORS = CHART_SERIES;
 
+// "Revenue" is money collected from clients (advance/final) — artist
+// settlements are money going OUT and must never be folded into it.
+const isClientPayment = (p: { type: string }) => p.type === "advance" || p.type === "final";
+
 export function AdminReportsClient({ enquiries, bookings, payments, coordinatorStats }: ReportsProps) {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -73,7 +77,7 @@ export function AdminReportsClient({ enquiries, bookings, payments, coordinatorS
     const sections: string[] = [];
 
     // Summary
-    const totalRevenue = payments.filter((p) => p.status === "paid").reduce((s, p) => s + p.amount, 0);
+    const totalRevenue = payments.filter((p) => p.status === "paid" && isClientPayment(p)).reduce((s, p) => s + p.amount, 0);
     const completedBookings = bookings.filter((b) => b.status === "completed").length;
     sections.push("SUMMARY");
     sections.push(["Total Enquiries", "Total Revenue (₹)", "Completed Events", "Conversion Rate (%)"].join(","));
@@ -97,7 +101,7 @@ export function AdminReportsClient({ enquiries, bookings, payments, coordinatorS
         .filter((p) => {
           if (!p.paid_at) return false;
           const d = new Date(p.paid_at);
-          return d.getMonth() === month.getMonth() && d.getFullYear() === month.getFullYear() && p.status === "paid";
+          return d.getMonth() === month.getMonth() && d.getFullYear() === month.getFullYear() && p.status === "paid" && isClientPayment(p);
         })
         .reduce((sum, p) => sum + p.amount, 0);
       return [label, count, revenue].join(",");
@@ -148,7 +152,7 @@ export function AdminReportsClient({ enquiries, bookings, payments, coordinatorS
       .filter((p) => {
         if (!p.paid_at) return false;
         const d = new Date(p.paid_at);
-        return d.getMonth() === month.getMonth() && d.getFullYear() === month.getFullYear() && p.status === "paid";
+        return d.getMonth() === month.getMonth() && d.getFullYear() === month.getFullYear() && p.status === "paid" && isClientPayment(p);
       })
       .reduce((sum, p) => sum + p.amount, 0);
     return { month: monthLabel, enquiries: count, revenue };
@@ -171,7 +175,8 @@ export function AdminReportsClient({ enquiries, bookings, payments, coordinatorS
     .sort((a, b) => b.count - a.count)
     .slice(0, 8);
 
-  const totalRevenue = payments.filter((p) => p.status === "paid").reduce((s, p) => s + p.amount, 0);
+  const totalRevenue = payments.filter((p) => p.status === "paid" && isClientPayment(p)).reduce((s, p) => s + p.amount, 0);
+  const artistPayouts = payments.filter((p) => p.type === "artist_settlement" && p.status === "paid").reduce((s, p) => s + p.amount, 0);
   const completedBookings = bookings.filter((b) => b.status === "completed").length;
 
   return (
@@ -212,11 +217,12 @@ export function AdminReportsClient({ enquiries, bookings, payments, coordinatorS
       </div>
 
       {/* Summary stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard title="Total Enquiries" value={enquiries.length} icon={FileText} color="gold" index={0} />
         <StatCard title="Total Revenue" value={formatCurrency(totalRevenue)} icon={DollarSign} color="green" index={1} />
-        <StatCard title="Completed Events" value={completedBookings} icon={Calendar} color="navy" index={2} />
-        <StatCard title="Conversion Rate" value={`${enquiries.length ? Math.round((completedBookings / enquiries.length) * 100) : 0}%`} icon={TrendingUp} color="navy" index={3} />
+        <StatCard title="Artist Payouts" value={formatCurrency(artistPayouts)} icon={DollarSign} color="gold" index={2} />
+        <StatCard title="Completed Events" value={completedBookings} icon={Calendar} color="navy" index={3} />
+        <StatCard title="Conversion Rate" value={`${enquiries.length ? Math.round((completedBookings / enquiries.length) * 100) : 0}%`} icon={TrendingUp} color="navy" index={4} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { Payment } from "@/types";
 import { formatCurrency, formatDate, getStatusColor, getStatusLabel } from "@/lib/utils";
+import { summarizePayments } from "@/lib/payments";
 import { db } from "@/lib/firebase/client";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { notifyUser } from "@/lib/notifications/client";
@@ -45,12 +46,21 @@ export function ClientPaymentsClient({ bookings, payments: initialPayments }: Pr
   const [payAmount, setPayAmount] = useState("");
   const [marking, setMarking] = useState(false);
 
-  const paidTotal = payments.filter((p) => p.status === "paid").reduce((s, p) => s + p.amount, 0);
-  const pendingTotal = bookings.reduce((s, b) => s + b.balance_amount, 0);
+  // "Paid"/"pending" are derived from the actual payments subcollection
+  // (advance + final only — never artist_settlement, which is money going
+  // OUT to the artist, not something the client paid) rather than trusting
+  // booking.balance_amount, which is only the original quote from when the
+  // booking was created and never updates as payments come in.
+  const paidTotal = payments.filter((p) => (p.type === "advance" || p.type === "final") && p.status === "paid").reduce((s, p) => s + p.amount, 0);
+  const pendingTotal = bookings.reduce(
+    (s, b) => s + summarizePayments(b.total_amount, payments.filter((p) => p.booking_id === b.id)).pendingBalance,
+    0
+  );
   const totalBookings = bookings.reduce((s, b) => s + b.total_amount, 0);
 
   const openPayDialog = (booking: Booking, type: "advance" | "final") => {
-    const amount = type === "advance" ? booking.advance_amount : booking.balance_amount;
+    const summary = summarizePayments(booking.total_amount, payments.filter((p) => p.booking_id === booking.id));
+    const amount = type === "advance" ? booking.advance_amount : summary.pendingBalance;
     setPayAmount(String(amount));
     setTransactionRef("");
     setPayDialog({ booking, type });
@@ -102,6 +112,7 @@ export function ClientPaymentsClient({ bookings, payments: initialPayments }: Pr
   const downloadInvoice = (booking: Booking) => {
     // Generate a simple text invoice and trigger download
     const bookingPayments = payments.filter((p) => p.booking_id === booking.id && p.status === "paid");
+    const summary = summarizePayments(booking.total_amount, bookingPayments);
     const lines = [
       "BOOKMYEVENTSTAR — INVOICE",
       "=".repeat(40),
@@ -110,8 +121,8 @@ export function ClientPaymentsClient({ bookings, payments: initialPayments }: Pr
       `Venue: ${booking.venue}, ${booking.city}`,
       "",
       `Total Amount:   ${formatCurrency(booking.total_amount)}`,
-      `Advance Paid:   ${formatCurrency(booking.advance_amount)}`,
-      `Balance Due:    ${formatCurrency(booking.balance_amount)}`,
+      `Amount Paid:    ${formatCurrency(summary.paidTotal)}`,
+      `Balance Due:    ${formatCurrency(summary.pendingBalance)}`,
       "",
       "Payment History:",
       ...bookingPayments.map((p) => `  ${p.type.toUpperCase()}: ${formatCurrency(p.amount)} — ${p.paid_at ? formatDate(p.paid_at) : "—"}`),
@@ -147,10 +158,11 @@ export function ClientPaymentsClient({ bookings, payments: initialPayments }: Pr
           ) : (
             bookings.map((booking, i) => {
               const bookingPayments = payments.filter((p) => p.booking_id === booking.id);
-              const advancePaid = bookingPayments.some((p) => p.type === "advance" && p.status === "paid");
-              const finalPaid = bookingPayments.some((p) => p.type === "final" && p.status === "paid");
+              const summary = summarizePayments(booking.total_amount, bookingPayments);
+              const advancePaid = summary.advancePaid;
+              const finalPaid = summary.finalPaid;
               const paidPct = booking.total_amount
-                ? Math.round((booking.advance_amount / booking.total_amount) * 100)
+                ? Math.round((summary.paidTotal / booking.total_amount) * 100)
                 : 0;
 
               return (
@@ -186,13 +198,13 @@ export function ClientPaymentsClient({ bookings, payments: initialPayments }: Pr
                       <p className="font-bold text-xs sm:text-sm mt-0.5 truncate">{formatCurrency(booking.total_amount)}</p>
                     </div>
                     <div className="text-center p-2.5 sm:p-3 rounded-xl bg-emerald-50">
-                      <p className="text-emerald-600 text-[10px] sm:text-xs">Advance</p>
-                      <p className="font-bold text-emerald-700 text-xs sm:text-sm mt-0.5 truncate">{formatCurrency(booking.advance_amount)}</p>
+                      <p className="text-emerald-600 text-[10px] sm:text-xs">Paid</p>
+                      <p className="font-bold text-emerald-700 text-xs sm:text-sm mt-0.5 truncate">{formatCurrency(summary.paidTotal)}</p>
                     </div>
-                    <div className={`text-center p-2.5 sm:p-3 rounded-xl ${booking.balance_amount > 0 ? "bg-amber-50" : "bg-emerald-50"}`}>
-                      <p className={`text-[10px] sm:text-xs ${booking.balance_amount > 0 ? "text-amber-600" : "text-emerald-600"}`}>Balance</p>
-                      <p className={`font-bold text-xs sm:text-sm mt-0.5 truncate ${booking.balance_amount > 0 ? "text-amber-700" : "text-emerald-700"}`}>
-                        {formatCurrency(booking.balance_amount)}
+                    <div className={`text-center p-2.5 sm:p-3 rounded-xl ${summary.pendingBalance > 0 ? "bg-amber-50" : "bg-emerald-50"}`}>
+                      <p className={`text-[10px] sm:text-xs ${summary.pendingBalance > 0 ? "text-amber-600" : "text-emerald-600"}`}>Balance</p>
+                      <p className={`font-bold text-xs sm:text-sm mt-0.5 truncate ${summary.pendingBalance > 0 ? "text-amber-700" : "text-emerald-700"}`}>
+                        {formatCurrency(summary.pendingBalance)}
                       </p>
                     </div>
                   </div>
@@ -221,14 +233,14 @@ export function ClientPaymentsClient({ bookings, payments: initialPayments }: Pr
                           Pay Advance — {formatCurrency(booking.advance_amount)}
                         </Button>
                       )}
-                      {advancePaid && !finalPaid && booking.balance_amount > 0 && (
+                      {advancePaid && !finalPaid && summary.pendingBalance > 0 && (
                         <Button
                           variant="outline"
                           className="w-full sm:w-auto h-11 sm:h-9 border-blue-300 text-blue-700 hover:bg-blue-50 text-sm"
                           onClick={() => openPayDialog(booking, "final")}
                         >
                           <CreditCard className="w-4 h-4 mr-2" />
-                          Pay Balance — {formatCurrency(booking.balance_amount)}
+                          Pay Balance — {formatCurrency(summary.pendingBalance)}
                         </Button>
                       )}
                       {advancePaid && finalPaid && (

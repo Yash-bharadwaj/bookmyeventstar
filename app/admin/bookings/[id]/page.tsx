@@ -2,20 +2,19 @@ import { redirect, notFound } from "next/navigation";
 import { getCurrentUser } from "@/lib/firebase/server";
 import { serialize } from "@/lib/firebase/firestore-utils";
 import { adminDb } from "@/lib/firebase/admin";
-import { CoordinatorBookingDetail } from "./CoordinatorBookingDetail";
+import { AdminBookingDetail } from "./AdminBookingDetail";
 
 function toIso(v: any) {
   return v && typeof v.toDate === "function" ? v.toDate().toISOString() : v;
 }
 
-export default async function CoordinatorBookingDetailPage({ params }: { params: { id: string } }) {
+export default async function AdminBookingDetailPage({ params }: { params: { id: string } }) {
   const user = await getCurrentUser();
-  if (!user || user.role !== "coordinator") redirect("/login");
+  if (!user || user.role !== "admin") redirect("/login");
 
   const bookingSnap = await adminDb.collection("bookings").doc(params.id).get();
   if (!bookingSnap.exists) notFound();
   const bookingData: any = bookingSnap.data();
-  if (bookingData.coordinator_id !== user.id) notFound();
 
   const [enquirySnap, artistProfileSnap, tasksSnap, paymentsSnap, artistShareSettingSnap] = await Promise.all([
     bookingData.enquiry_id ? adminDb.collection("enquiries").doc(bookingData.enquiry_id).get() : Promise.resolve(null),
@@ -30,13 +29,13 @@ export default async function CoordinatorBookingDetailPage({ params }: { params:
   const enquiryData: any = enquirySnap && enquirySnap.exists ? enquirySnap.data() : null;
   const artistProfileData: any = artistProfileSnap && artistProfileSnap.exists ? artistProfileSnap.data() : null;
 
-  const [clientSnap, artistUserSnap] = await Promise.all([
+  const [clientSnap, artistUserSnap, coordinatorSnap] = await Promise.all([
     enquiryData?.client_id ? adminDb.collection("users").doc(enquiryData.client_id).get() : Promise.resolve(null),
     bookingData.artist_id ? adminDb.collection("users").doc(bookingData.artist_id).get() : Promise.resolve(null),
+    bookingData.coordinator_id ? adminDb.collection("users").doc(bookingData.coordinator_id).get() : Promise.resolve(null),
   ]);
 
   const payments = paymentsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-  const settlementPayment = payments.find((p: any) => p.type === "artist_settlement" && p.status === "paid") ?? null;
 
   const booking = {
     id: bookingSnap.id,
@@ -50,8 +49,6 @@ export default async function CoordinatorBookingDetailPage({ params }: { params:
           client: clientSnap && clientSnap.exists ? { id: clientSnap.id, ...clientSnap.data() } : null,
         }
       : null,
-    // artist.user_id mirrors the artistProfiles doc id (== the artist's uid) so
-    // existing client-side code that reads booking.artist.user_id keeps working.
     artist: artistProfileData
       ? {
           id: bookingData.artist_id,
@@ -61,12 +58,10 @@ export default async function CoordinatorBookingDetailPage({ params }: { params:
           user: artistUserSnap && artistUserSnap.exists ? artistUserSnap.data() : null,
         }
       : null,
+    coordinator: coordinatorSnap && coordinatorSnap.exists ? { id: coordinatorSnap.id, ...coordinatorSnap.data() } : null,
     tasks: tasksSnap.docs.map((t) => ({ id: t.id, booking_id: bookingSnap.id, ...t.data() })),
     payments,
-    settlement: settlementPayment,
   };
 
-  return (
-    <CoordinatorBookingDetail booking={serialize(booking)} artistSharePct={artistSharePct} />
-  );
+  return <AdminBookingDetail booking={serialize(booking)} artistSharePct={artistSharePct} />;
 }
