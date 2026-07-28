@@ -9,13 +9,7 @@ export default async function AdminUsersPage() {
   if (!user) redirect("/login");
   if (user.role !== "admin") redirect("/login");
 
-  // "in" queries don't need a composite index as long as there's no
-  // combined orderBy on a different field — sorting happens client-side
-  // below instead.
-  const usersSnap = await adminDb
-    .collection("users")
-    .where("role", "in", ["client", "artist"])
-    .get();
+  const usersSnap = await adminDb.collection("users").get();
 
   const rawUsers = usersSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as AnyDoc);
   const artistIds = rawUsers.filter((u) => u.role === "artist").map((u) => u.id);
@@ -43,5 +37,5 @@ export default async function AdminUsersPage() {
       return bt - at;
     });
 
-  return <AdminUsersClient users={serialize(users) as any} />;
+  return <AdminUsersClient users={serialize(users) as any} currentAdminId={user.id} />;
 }

@@ -20,12 +20,14 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { formatDate, getInitials } from "@/lib/utils";
 
+type UserRole = "client" | "artist" | "coordinator" | "admin";
+
 interface RegisteredUser {
   id: string;
   name: string;
   email: string;
   phone: string;
-  role: "client" | "artist";
+  role: UserRole;
   is_active: boolean;
   created_at: string;
   is_verified: boolean | null;
@@ -37,15 +39,36 @@ interface RegisteredUser {
 
 const PAGE_SIZES = [10, 25, 50, 100];
 
+const ROLE_LABELS: Record<UserRole, string> = {
+  client: "Client",
+  artist: "Artist",
+  coordinator: "Coordinator",
+  admin: "Admin",
+};
+
+const ROLE_BADGE_VARIANT: Record<UserRole, "info" | "purple" | "warning" | "destructive"> = {
+  client: "info",
+  artist: "purple",
+  coordinator: "warning",
+  admin: "destructive",
+};
+
+const ROLE_AVATAR_COLOR: Record<UserRole, string> = {
+  client: "bg-blue-100 text-blue-700",
+  artist: "bg-purple-100 text-purple-700",
+  coordinator: "bg-gold-100 text-gold-700",
+  admin: "bg-red-100 text-red-700",
+};
+
 function csvEscape(value: string): string {
   if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
   return value;
 }
 
-export function AdminUsersClient({ users }: { users: RegisteredUser[] }) {
+export function AdminUsersClient({ users, currentAdminId }: { users: RegisteredUser[]; currentAdminId: string }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState<"all" | "client" | "artist">("all");
+  const [roleFilter, setRoleFilter] = useState<"all" | UserRole>("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
@@ -63,6 +86,8 @@ export function AdminUsersClient({ users }: { users: RegisteredUser[] }) {
 
   const clientCount = users.filter((u) => u.role === "client").length;
   const artistCount = users.filter((u) => u.role === "artist").length;
+  const coordinatorCount = users.filter((u) => u.role === "coordinator").length;
+  const adminCount = users.filter((u) => u.role === "admin").length;
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -230,6 +255,14 @@ export function AdminUsersClient({ users }: { users: RegisteredUser[] }) {
             <p className="text-lg font-display font-bold text-purple-700">{artistCount}</p>
             <p className="text-[11px] text-purple-500 font-medium">Artists</p>
           </div>
+          <div className="px-4 py-2 rounded-xl border bg-gold-50 border-gold-100">
+            <p className="text-lg font-display font-bold text-gold-700">{coordinatorCount}</p>
+            <p className="text-[11px] text-gold-600 font-medium">Coordinators</p>
+          </div>
+          <div className="px-4 py-2 rounded-xl border bg-red-50 border-red-100">
+            <p className="text-lg font-display font-bold text-red-700">{adminCount}</p>
+            <p className="text-[11px] text-red-500 font-medium">Admins</p>
+          </div>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={downloadCsv}>
@@ -257,6 +290,8 @@ export function AdminUsersClient({ users }: { users: RegisteredUser[] }) {
             <TabsTrigger value="all">All ({users.length})</TabsTrigger>
             <TabsTrigger value="client">Clients ({clientCount})</TabsTrigger>
             <TabsTrigger value="artist">Artists ({artistCount})</TabsTrigger>
+            <TabsTrigger value="coordinator">Coordinators ({coordinatorCount})</TabsTrigger>
+            <TabsTrigger value="admin">Admins ({adminCount})</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
@@ -287,20 +322,21 @@ export function AdminUsersClient({ users }: { users: RegisteredUser[] }) {
                   <tr key={u.id} className={`border-b last:border-0 hover:bg-accent/20 transition-colors ${!u.is_active ? "opacity-60" : ""}`}>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold text-xs flex-shrink-0 ${
-                          u.role === "artist" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"
-                        }`}>
+                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold text-xs flex-shrink-0 ${ROLE_AVATAR_COLOR[u.role]}`}>
                           {getInitials(u.name)}
                         </div>
                         <div className="min-w-0">
-                          <p className="font-medium truncate max-w-[220px]">{u.name}</p>
+                          <p className="font-medium truncate max-w-[220px]">
+                            {u.name}
+                            {u.id === currentAdminId && <span className="text-xs text-muted-foreground font-normal"> (you)</span>}
+                          </p>
                           <p className="text-xs text-muted-foreground truncate max-w-[220px]">{u.email}</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{u.phone}</td>
                     <td className="px-4 py-3">
-                      <Badge variant={u.role === "artist" ? "purple" : "info"} className="capitalize">{u.role}</Badge>
+                      <Badge variant={ROLE_BADGE_VARIANT[u.role]}>{ROLE_LABELS[u.role]}</Badge>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap items-center gap-2">
@@ -312,6 +348,7 @@ export function AdminUsersClient({ users }: { users: RegisteredUser[] }) {
                               ) : (
                                 <Switch
                                   checked={u.is_active}
+                                  disabled={u.id === currentAdminId}
                                   onCheckedChange={() => toggleActive(u)}
                                   aria-label={u.is_active ? `Deactivate ${u.name}` : `Activate ${u.name}`}
                                 />
@@ -322,7 +359,9 @@ export function AdminUsersClient({ users }: { users: RegisteredUser[] }) {
                             </div>
                           </TooltipTrigger>
                           <TooltipContent side="top">
-                            {u.is_active
+                            {u.id === currentAdminId
+                              ? "You can't deactivate your own account from here."
+                              : u.is_active
                               ? "Can sign in and use the platform normally. Toggle off to deactivate — this blocks sign-in immediately."
                               : "Deactivated — can't sign in. Toggle on to restore access."}
                           </TooltipContent>
@@ -360,14 +399,16 @@ export function AdminUsersClient({ users }: { users: RegisteredUser[] }) {
                           </TooltipTrigger>
                           <TooltipContent side="top">Edit name, email, or phone</TooltipContent>
                         </Tooltip>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button size="sm" variant="ghost" aria-label={`Delete ${u.name}`} onClick={() => setDeleteTarget(u)}>
-                              <Trash2 className="w-4 h-4 text-destructive" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="top">Permanently delete this account</TooltipContent>
-                        </Tooltip>
+                        {u.id !== currentAdminId && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button size="sm" variant="ghost" aria-label={`Delete ${u.name}`} onClick={() => setDeleteTarget(u)}>
+                                <Trash2 className="w-4 h-4 text-destructive" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top">Permanently delete this account</TooltipContent>
+                          </Tooltip>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -450,7 +491,7 @@ export function AdminUsersClient({ users }: { users: RegisteredUser[] }) {
       {/* Edit Dialog */}
       <Dialog open={!!editUser} onOpenChange={(o) => { if (!o) setEditUser(null); }}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Edit {editUser?.role === "artist" ? "Artist" : "Client"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Edit {editUser ? ROLE_LABELS[editUser.role] : "User"}</DialogTitle></DialogHeader>
           {editUser && (
             <div className="space-y-4 pt-2">
               <div className="space-y-1.5">
