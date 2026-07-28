@@ -49,7 +49,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { EVENT_TYPES, INDIA_CITIES } from "@/lib/utils";
+import { Combobox } from "@/components/ui/combobox";
+import { EVENT_TYPES } from "@/lib/utils";
 import { notifyAllAdmins } from "@/lib/notifications/client";
 
 const ENQUIRY_STEPS = [
@@ -96,6 +97,7 @@ export default function EnquiryPage() {
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [artistCategories, setArtistCategories] = useState<string[]>([]);
+  const [cities, setCities] = useState<{ name: string; state: string }[]>([]);
   const [dailyCount, setDailyCount] = useState<number | null>(null);
 
   const {
@@ -162,6 +164,13 @@ export default function EnquiryPage() {
   useEffect(() => {
     getDocs(collection(db, "categories")).then((snap) => {
       setArtistCategories(snap.docs.map((d) => d.data().name as string).sort());
+    });
+    getDocs(collection(db, "cities")).then((snap) => {
+      setCities(
+        snap.docs
+          .map((d) => ({ name: d.data().name as string, state: d.data().state as string }))
+          .sort((a, b) => a.name.localeCompare(b.name))
+      );
     });
   }, []);
 
@@ -827,18 +836,12 @@ export default function EnquiryPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-1.5">
                         <Label>City *</Label>
-                        <Select onValueChange={(val) => setValue("city", val)}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select city" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {INDIA_CITIES.map((c) => (
-                              <SelectItem key={c.name} value={c.name}>
-                                {c.name}, {c.state}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <Combobox
+                          options={cities.map((c) => ({ value: c.name, label: `${c.name}, ${c.state}` }))}
+                          onValueChange={(val) => setValue("city", val)}
+                          placeholder="Select city"
+                          searchPlaceholder="Search cities..."
+                        />
                         {errors.city && (
                           <p className="text-xs text-destructive">{errors.city.message}</p>
                         )}

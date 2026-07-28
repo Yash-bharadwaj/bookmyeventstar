@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { Badge } from "@/components/ui/badge";
 import { Proposal } from "@/types";
 import { formatDate, formatCurrency, getStatusColor, getStatusLabel } from "@/lib/utils";
@@ -1203,16 +1204,13 @@ export function CoordinatorProposalsClient({
               <div className="space-y-1.5">
                 <Label>City <span className="text-destructive">*</span></Label>
                 {cityList.length > 0 ? (
-                  <Select value={bookingCity} onValueChange={setBookingCity}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select city…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {cityList.map((c) => (
-                        <SelectItem key={c} value={c}>{c}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Combobox
+                    options={cityList.map((c) => ({ value: c, label: c }))}
+                    value={bookingCity}
+                    onValueChange={setBookingCity}
+                    placeholder="Select city…"
+                    searchPlaceholder="Search cities..."
+                  />
                 ) : (
                   <Input placeholder="e.g. Mumbai" value={bookingCity} onChange={(e) => setBookingCity(e.target.value)} />
                 )}

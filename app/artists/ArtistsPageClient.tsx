@@ -16,11 +16,14 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { ArtistProfile } from "@/types";
-import { formatCurrency, getInitials, INDIA_CITIES, EVENT_TYPES } from "@/lib/utils";
+import { formatCurrency, getInitials, EVENT_TYPES } from "@/lib/utils";
 import { useQuickEnquiry } from "@/hooks/useQuickEnquiry";
 
 /* ── Types ───────────────────────────────────────────── */
+type City = { name: string; state: string };
+
 type Artist = ArtistProfile & {
   user: { name: string; avatar_url?: string };
   media: { url: string; is_primary: boolean; type: string }[];
@@ -31,6 +34,7 @@ interface Props {
   initialCategory?: string;
   initialCity?: string;
   categories: string[];
+  cities: City[];
 }
 
 /* ── Category accent colors — brand rotation (gold → navy, 2-tone) ─── */
@@ -51,7 +55,7 @@ const catColor: Record<string, string> = {
 const getColor = (cats: string[]) => catColor[cats?.[0]] ?? "from-navy-800 to-navy-900";
 
 /* ── Artist Drawer ───────────────────────────────────── */
-function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void }) {
+function ArtistDrawer({ artist, onClose, cities }: { artist: Artist; onClose: () => void; cities: City[] }) {
   const [activeMediaIdx, setActiveMediaIdx] = useState(0);
   const color = getColor(artist.categories);
 
@@ -383,14 +387,13 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
 
                 <div className="space-y-1.5">
                   <Label className="text-xs font-semibold text-gray-600">Event City <span className="text-rose-500">*</span></Label>
-                  <Select onValueChange={(v) => setValue("city", v)}>
-                    <SelectTrigger className={errors.city ? "border-destructive" : ""}>
-                      <SelectValue placeholder="Select city..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {INDIA_CITIES.map((c) => <SelectItem key={c.name} value={c.name}>{c.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <Combobox
+                    options={cities.map((c) => ({ value: c.name, label: `${c.name}, ${c.state}` }))}
+                    onValueChange={(v) => setValue("city", v)}
+                    placeholder="Select city..."
+                    searchPlaceholder="Search cities..."
+                    className={errors.city ? "border-destructive" : ""}
+                  />
                   {errors.city && <p className="text-[10px] text-destructive">{errors.city.message}</p>}
                 </div>
 
@@ -435,7 +438,7 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
 }
 
 /* ── Main Component ──────────────────────────────────── */
-export function ArtistsPageClient({ artists, initialCategory, initialCity, categories }: Props) {
+export function ArtistsPageClient({ artists, initialCategory, initialCity, categories, cities }: Props) {
   // Pre-seed search from ?search= URL param (used by "View profile" links from proposals)
   const initialSearch = typeof window !== "undefined"
     ? new URLSearchParams(window.location.search).get("search") ?? ""
@@ -490,15 +493,14 @@ export function ArtistsPageClient({ artists, initialCategory, initialCity, categ
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gold-500 focus:border-gold-500"
               />
             </div>
-            <Select value={city} onValueChange={setCity}>
-              <SelectTrigger className="w-full sm:w-44">
-                <SelectValue placeholder="All Cities" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Cities</SelectItem>
-                {INDIA_CITIES.map((c) => <SelectItem key={c.name} value={c.name}>{c.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <Combobox
+              options={[{ value: "all", label: "All Cities" }, ...cities.map((c) => ({ value: c.name, label: c.name }))]}
+              value={city}
+              onValueChange={setCity}
+              placeholder="All Cities"
+              searchPlaceholder="Search cities..."
+              className="w-full sm:w-44"
+            />
             <Select value={sortBy} onValueChange={setSortBy}>
               <SelectTrigger className="w-full sm:w-44">
                 <SelectValue />
@@ -636,7 +638,7 @@ export function ArtistsPageClient({ artists, initialCategory, initialCity, categ
       {/* ── Artist Drawer ── */}
       <AnimatePresence>
         {selected && (
-          <ArtistDrawer artist={selected} onClose={() => setSelected(null)} />
+          <ArtistDrawer artist={selected} onClose={() => setSelected(null)} cities={cities} />
         )}
       </AnimatePresence>
     </>

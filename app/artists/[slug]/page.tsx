@@ -59,8 +59,12 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 }
 
 export default async function ArtistProfilePage({ params }: { params: { slug: string } }) {
-  const artist = await getArtistBySlug(params.slug);
+  const [artist, citiesSnap] = await Promise.all([
+    getArtistBySlug(params.slug),
+    adminDb.collection("cities").orderBy("name").get(),
+  ]);
   if (!artist) notFound();
+  const cities = citiesSnap.docs.map((d) => ({ name: d.data().name as string, state: d.data().state as string }));
 
   return (
     <div className="min-h-screen bg-white">
@@ -74,7 +78,7 @@ export default async function ArtistProfilePage({ params }: { params: { slug: st
       </nav>
 
       <div className="pt-20">
-        <ArtistProfilePageClient artist={serialize(artist) as any} />
+        <ArtistProfilePageClient artist={serialize(artist) as any} cities={cities} />
       </div>
     </div>
   );

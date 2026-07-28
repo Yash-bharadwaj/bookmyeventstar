@@ -10,10 +10,11 @@ export default async function ArtistProfilePage() {
   if (!user) redirect("/login");
   if (user.role !== "artist") redirect("/login");
 
-  const [artistProfileSnap, mediaSnap, categoriesSnap] = await Promise.all([
+  const [artistProfileSnap, mediaSnap, categoriesSnap, citiesSnap] = await Promise.all([
     adminDb.collection("artistProfiles").doc(user.id).get(),
     adminDb.collection("artistProfiles").doc(user.id).collection("media").get(),
     adminDb.collection("categories").orderBy("name").get(),
+    adminDb.collection("cities").orderBy("name").get(),
   ]);
 
   let artistProfile = artistProfileSnap.exists ? ({ id: user.id, ...artistProfileSnap.data() } as AnyDoc) : null;
@@ -23,6 +24,7 @@ export default async function ArtistProfilePage() {
   }
   const media = mediaSnap.docs.map((d) => ({ id: d.id, artist_id: user.id, ...d.data() }));
   const categoryNames = categoriesSnap.docs.map((d) => d.data().name as string);
+  const cityNames = citiesSnap.docs.map((d) => d.data().name as string);
 
   return (
     <ArtistProfileClient
@@ -30,6 +32,7 @@ export default async function ArtistProfilePage() {
       artistProfile={serialize(artistProfile) as any}
       media={serialize(media) as any}
       categories={categoryNames}
+      cities={cityNames}
     />
   );
 }

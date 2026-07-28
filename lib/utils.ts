@@ -116,25 +116,3 @@ export const ARTIST_CATEGORIES = [
   "Folk Artist",
 ];
 
-export const INDIA_CITIES = [
-  { name: "Mumbai", state: "Maharashtra" },
-  { name: "Delhi", state: "Delhi" },
-  { name: "Bengaluru", state: "Karnataka" },
-  { name: "Hyderabad", state: "Telangana" },
-  { name: "Chennai", state: "Tamil Nadu" },
-  { name: "Kolkata", state: "West Bengal" },
-  { name: "Pune", state: "Maharashtra" },
-  { name: "Ahmedabad", state: "Gujarat" },
-  { name: "Jaipur", state: "Rajasthan" },
-  { name: "Surat", state: "Gujarat" },
-  { name: "Lucknow", state: "Uttar Pradesh" },
-  { name: "Chandigarh", state: "Punjab" },
-  { name: "Kochi", state: "Kerala" },
-  { name: "Indore", state: "Madhya Pradesh" },
-  { name: "Bhopal", state: "Madhya Pradesh" },
-  { name: "Nagpur", state: "Maharashtra" },
-  { name: "Visakhapatnam", state: "Andhra Pradesh" },
-  { name: "Coimbatore", state: "Tamil Nadu" },
-  { name: "Gurgaon", state: "Haryana" },
-  { name: "Noida", state: "Uttar Pradesh" },
-];

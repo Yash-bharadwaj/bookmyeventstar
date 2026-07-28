@@ -12,7 +12,7 @@ export default async function CoordinatorProposalsPage() {
   const user = await getCurrentUser();
   if (!user || user.role !== "coordinator") redirect("/login");
 
-  const [proposalsSnap, enquiriesSnap, artistsSnap, citiesSettingSnap] = await Promise.all([
+  const [proposalsSnap, enquiriesSnap, artistsSnap, citiesSnap] = await Promise.all([
     adminDb.collection("proposals").where("coordinator_id", "==", user.id).orderBy("created_at", "desc").get(),
     adminDb.collection("enquiries").where("coordinator_id", "==", user.id).get(),
     adminDb
@@ -22,7 +22,7 @@ export default async function CoordinatorProposalsPage() {
       .where("is_profile_complete", "==", true)
       .orderBy("rating", "desc")
       .get(),
-    adminDb.collection("settings").doc("cities").get(),
+    adminDb.collection("cities").orderBy("name").get(),
   ]);
 
   const proposalsRaw = proposalsSnap.docs.map((d) => {
@@ -105,7 +105,7 @@ export default async function CoordinatorProposalsPage() {
     };
   });
 
-  const cityList: string[] = citiesSettingSnap.exists ? citiesSettingSnap.data()?.value ?? [] : [];
+  const cityList: string[] = citiesSnap.docs.map((d) => d.data().name as string);
 
   return (
     <CoordinatorProposalsClient

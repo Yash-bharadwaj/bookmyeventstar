@@ -31,9 +31,10 @@ export default async function ArtistsPage({
     query = query.where("cities", "array-contains", searchParams.city);
   }
 
-  const [artistsSnap, categoriesSnap] = await Promise.all([
+  const [artistsSnap, categoriesSnap, citiesSnap] = await Promise.all([
     query.limit(60).get(),
     adminDb.collection("categories").orderBy("name").get(),
+    adminDb.collection("cities").orderBy("name").get(),
   ]);
 
   let rawArtists = artistsSnap.docs.map((d) => ({ id: d.id, user_id: d.id, ...d.data() }));
@@ -59,6 +60,7 @@ export default async function ArtistsPage({
   });
 
   const categoryNames = categoriesSnap.docs.map((d) => d.data().name as string);
+  const cities = citiesSnap.docs.map((d) => ({ name: d.data().name as string, state: d.data().state as string }));
 
   return (
     <div className="min-h-screen bg-white">
@@ -84,6 +86,7 @@ export default async function ArtistsPage({
             initialCategory={searchParams.category}
             initialCity={searchParams.city}
             categories={categoryNames}
+            cities={cities}
           />
         </Suspense>
       </div>

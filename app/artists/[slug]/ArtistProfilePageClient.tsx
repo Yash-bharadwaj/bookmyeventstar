@@ -10,9 +10,12 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { ArtistProfile } from "@/types";
-import { formatCurrency, getInitials, INDIA_CITIES, EVENT_TYPES } from "@/lib/utils";
+import { formatCurrency, getInitials, EVENT_TYPES } from "@/lib/utils";
 import { useQuickEnquiry } from "@/hooks/useQuickEnquiry";
+
+type City = { name: string; state: string };
 
 type Artist = ArtistProfile & {
   user: { name: string; avatar_url?: string };
@@ -35,7 +38,7 @@ const catColor: Record<string, string> = {
 };
 const getColor = (cats: string[]) => catColor[cats?.[0]] ?? "from-navy-800 to-navy-900";
 
-export function ArtistProfilePageClient({ artist }: { artist: Artist }) {
+export function ArtistProfilePageClient({ artist, cities }: { artist: Artist; cities: City[] }) {
   const [activeMediaIdx, setActiveMediaIdx] = useState(0);
   const color = getColor(artist.categories);
 
@@ -294,14 +297,13 @@ export function ArtistProfilePageClient({ artist }: { artist: Artist }) {
 
                 <div className="space-y-1.5">
                   <Label className="text-xs font-semibold text-gray-600">Event City <span className="text-rose-500">*</span></Label>
-                  <Select onValueChange={(v) => setValue("city", v)}>
-                    <SelectTrigger className={errors.city ? "border-destructive" : ""}>
-                      <SelectValue placeholder="Select city..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {INDIA_CITIES.map((c) => <SelectItem key={c.name} value={c.name}>{c.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <Combobox
+                    options={cities.map((c) => ({ value: c.name, label: `${c.name}, ${c.state}` }))}
+                    onValueChange={(v) => setValue("city", v)}
+                    placeholder="Select city..."
+                    searchPlaceholder="Search cities..."
+                    className={errors.city ? "border-destructive" : ""}
+                  />
                   {errors.city && <p className="text-[10px] text-destructive">{errors.city.message}</p>}
                 </div>
 

@@ -19,7 +19,7 @@ import { uploadToCloudinary, deleteFromCloudinary } from "@/lib/cloudinary/clien
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import { ArtistProfile, ArtistMedia, User } from "@/types";
-import { INDIA_CITIES, formatCurrency, getInitials } from "@/lib/utils";
+import { formatCurrency, getInitials } from "@/lib/utils";
 import { evaluateArtistProfile, type ArtistProfileCompletionInput } from "@/lib/artist-profile-completion";
 import { ProfileCompletionGauge } from "@/components/artist/ProfileCompletionGauge";
 
@@ -46,9 +46,10 @@ interface Props {
   artistProfile: ArtistProfile | null;
   media?: ArtistMedia[];
   categories: string[];
+  cities: string[];
 }
 
-export function ArtistProfileClient({ user, artistProfile, media: initialMedia = [], categories }: Props) {
+export function ArtistProfileClient({ user, artistProfile, media: initialMedia = [], categories, cities }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -505,16 +506,16 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
               </div>
             )}
             <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
-              {INDIA_CITIES
-                .filter((city) => city.name.toLowerCase().includes(citySearch.toLowerCase()) && !selectedCities.includes(city.name))
-                .map((city) => (
+              {cities
+                .filter((name) => name.toLowerCase().includes(citySearch.toLowerCase()) && !selectedCities.includes(name))
+                .map((name) => (
                   <button
-                    key={city.name}
+                    key={name}
                     type="button"
-                    onClick={() => toggleCity(city.name)}
+                    onClick={() => toggleCity(name)}
                     className="px-3 py-1.5 rounded-full text-sm font-medium transition-all border border-border hover:border-navy-400 text-muted-foreground"
                   >
-                    {city.name}
+                    {name}
                   </button>
                 ))}
             </div>

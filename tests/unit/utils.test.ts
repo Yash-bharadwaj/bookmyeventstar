@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatCurrency, getInitials, getStatusColor, getStatusLabel, EVENT_TYPES, INDIA_CITIES } from "@/lib/utils";
+import { formatCurrency, getInitials, getStatusColor, getStatusLabel, EVENT_TYPES } from "@/lib/utils";
 
 describe("formatCurrency", () => {
   it("formats a whole-number amount as INR with no decimals", () => {
@@ -48,17 +48,5 @@ describe("getStatusLabel", () => {
 describe("static data sanity", () => {
   it("EVENT_TYPES has no duplicates", () => {
     expect(new Set(EVENT_TYPES).size).toBe(EVENT_TYPES.length);
-  });
-
-  it("INDIA_CITIES has no duplicate city names", () => {
-    const names = INDIA_CITIES.map((c) => c.name);
-    expect(new Set(names).size).toBe(names.length);
-  });
-
-  it("every INDIA_CITIES entry has both a name and a state", () => {
-    for (const c of INDIA_CITIES) {
-      expect(c.name.length).toBeGreaterThan(0);
-      expect(c.state.length).toBeGreaterThan(0);
-    }
   });
 });
