@@ -1,5 +1,7 @@
 import {
   signInWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
   signOut as firebaseSignOut,
   RecaptchaVerifier,
   signInWithPhoneNumber,
@@ -37,6 +39,17 @@ export async function signInWithEmail(email: string, password: string): Promise<
     throw err;
   }
   return cred;
+}
+
+/**
+ * Unlike signInWithEmail, this deliberately does NOT sync the session cookie
+ * itself — the caller must first check whether users/{uid} exists (a brand
+ * new Google identity has no profile/role/phone yet) before deciding whether
+ * it's safe to start a session. See app/login/page.tsx and
+ * app/register/page.tsx for the check-then-sync flow.
+ */
+export async function signInWithGoogle(): Promise<UserCredential> {
+  return signInWithPopup(auth, new GoogleAuthProvider());
 }
 
 export async function signOutEverywhere() {

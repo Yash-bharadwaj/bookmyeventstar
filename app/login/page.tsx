@@ -6,14 +6,16 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Mail, Lock, Eye, EyeOff, KeyRound } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, KeyRound, CalendarCheck, Mic2, Smartphone } from "lucide-react";
 import toast from "react-hot-toast";
 import { signInWithEmail } from "@/lib/firebase/auth-client";
 import { loginSchema, LoginFormData } from "@/lib/validations/auth";
+import { useGoogleSignIn } from "@/hooks/useGoogleSignIn";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { BrandLogo } from "@/components/brand/BrandLogo";
+import { GoogleIcon } from "@/components/ui/GoogleIcon";
 
 const CREDENTIAL_ERROR_CODES = new Set([
   "auth/invalid-credential",
@@ -28,6 +30,12 @@ function LoginForm() {
 
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const {
+    googleBusy, googleUser, pendingRole, setPendingRole,
+    phoneDigits: googlePhone, setPhoneDigits: setGooglePhone,
+    finishing: googleFinishing, startGoogleSignIn, finishGoogleSignup, cancelGoogleSignup,
+  } = useGoogleSignIn();
 
   const {
     register,
@@ -115,7 +123,80 @@ function LoginForm() {
           <h2 className="font-display text-3xl font-bold text-navy-900">Welcome back</h2>
           <p className="text-muted-foreground mt-2">Sign in with your email or mobile number</p>
 
+          {googleUser ? (
+            <div className="mt-8 space-y-5">
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-3.5 text-sm">
+                <p className="font-medium text-emerald-800">Signed in with Google</p>
+                <p className="text-emerald-700 text-xs mt-0.5">{googleUser.name || googleUser.email}</p>
+                <p className="text-emerald-700 text-xs mt-1">We couldn&apos;t find an account for this yet — let&apos;s finish setting one up.</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>What brings you here?</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { value: "client" as const, label: "I want to book artists", icon: CalendarCheck, color: "text-gold-600 bg-gold-50" },
+                    { value: "artist" as const, label: "I am an artist", icon: Mic2, color: "text-navy-700 bg-navy-50" },
+                  ].map((opt) => {
+                    const Icon = opt.icon;
+                    return (
+                      <label
+                        key={opt.value}
+                        className={`relative flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                          pendingRole === opt.value ? "border-gold-500 bg-gold-50" : "border-border hover:border-gold-300"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          className="sr-only"
+                          checked={pendingRole === opt.value}
+                          onChange={() => setPendingRole(opt.value)}
+                        />
+                        <div className={`w-9 h-9 rounded-xl ${opt.color} flex items-center justify-center`}>
+                          <Icon className="w-4 h-4" />
+                        </div>
+                        <span className="text-xs font-medium text-center leading-tight">{opt.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Mobile Number</Label>
+                <div className="flex gap-2">
+                  <div className="flex items-center px-3 rounded-xl border bg-muted text-sm font-medium text-muted-foreground whitespace-nowrap shrink-0">+91</div>
+                  <Input
+                    type="tel"
+                    inputMode="numeric"
+                    placeholder="9876543210"
+                    icon={<Smartphone className="w-4 h-4" />}
+                    value={googlePhone}
+                    onChange={(e) => setGooglePhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                    className="min-w-0"
+                  />
+                </div>
+              </div>
+
+              <Button type="button" onClick={finishGoogleSignup} loading={googleFinishing} className="w-full" size="lg">
+                Finish Sign Up
+              </Button>
+              <button type="button" onClick={cancelGoogleSignup} className="w-full text-center text-sm text-muted-foreground hover:text-foreground">
+                Use a different sign-in method
+              </button>
+            </div>
+          ) : (
           <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-5">
+            <Button type="button" variant="outline" className="w-full gap-2" onClick={startGoogleSignIn} loading={googleBusy}>
+              <GoogleIcon className="w-4 h-4" />
+              Continue with Google
+            </Button>
+            <div className="flex items-center gap-3">
+              <div className="h-px flex-1 bg-border" />
+              <span className="text-xs text-muted-foreground">or</span>
+              <div className="h-px flex-1 bg-border" />
+            </div>
+
             <div className="space-y-2">
               <Label>Email or mobile number</Label>
               <Input
@@ -171,6 +252,7 @@ function LoginForm() {
               </Link>
             </p>
           </form>
+          )}
         </motion.div>
       </div>
     </div>

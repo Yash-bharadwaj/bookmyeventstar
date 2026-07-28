@@ -7,19 +7,21 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
-  Mail, Lock, User, Phone, Eye, EyeOff, CalendarCheck, Mic2, Globe, CheckCircle2,
+  Mail, Lock, User, Phone, Eye, EyeOff, CalendarCheck, Mic2, CheckCircle2,
   Smartphone, ShieldCheck,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { cn } from "@/lib/utils";
 import { signInWithEmail } from "@/lib/firebase/auth-client";
 import { registerSchema, RegisterFormData } from "@/lib/validations/auth";
+import { useGoogleSignIn } from "@/hooks/useGoogleSignIn";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { OtpInput } from "@/components/ui/otp-input";
 import { ResendTimer } from "@/components/ui/resend-timer";
 import { BrandLogo } from "@/components/brand/BrandLogo";
+import { GoogleIcon } from "@/components/ui/GoogleIcon";
 
 const CLIENT_PANEL_STATS: [string, string][] = [
   ["Verified", "Every Artist"],
@@ -160,6 +162,11 @@ function ArtistRegisterForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const {
+    googleBusy, googleUser, phoneDigits: googlePhone, setPhoneDigits: setGooglePhone,
+    finishing: googleFinishing, startGoogleSignIn, finishGoogleSignup, cancelGoogleSignup,
+  } = useGoogleSignIn("artist");
+
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState("");
   const [otpBusy, setOtpBusy] = useState(false);
@@ -264,8 +271,52 @@ function ArtistRegisterForm() {
     }
   };
 
+  if (googleUser) {
+    return (
+      <div className="mt-4 space-y-3">
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-3.5 text-sm">
+          <p className="font-medium text-emerald-800">Signed in with Google</p>
+          <p className="text-emerald-700 text-xs mt-0.5">{googleUser.name || googleUser.email}</p>
+        </div>
+        <div className="space-y-1">
+          <Label>Mobile Number</Label>
+          <div className="flex gap-2">
+            <div className="flex items-center px-3 rounded-xl border bg-muted text-sm text-muted-foreground font-medium shrink-0">
+              +91
+            </div>
+            <Input
+              type="tel"
+              inputMode="numeric"
+              placeholder="9876543210"
+              icon={<Phone className="w-4 h-4" />}
+              value={googlePhone}
+              onChange={(e) => setGooglePhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+              className="min-w-0"
+            />
+          </div>
+        </div>
+        <Button type="button" onClick={finishGoogleSignup} loading={googleFinishing} className="w-full" size="lg">
+          Finish Sign Up
+        </Button>
+        <button type="button" onClick={cancelGoogleSignup} className="w-full text-center text-xs text-muted-foreground hover:text-foreground">
+          Use a different sign-in method
+        </button>
+      </div>
+    );
+  }
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="mt-4 space-y-3">
+      <Button type="button" variant="outline" className="w-full gap-2" onClick={startGoogleSignIn} loading={googleBusy}>
+        <GoogleIcon className="w-4 h-4" />
+        Continue with Google
+      </Button>
+      <div className="flex items-center gap-3">
+        <div className="h-px flex-1 bg-border" />
+        <span className="text-xs text-muted-foreground">or sign up with email</span>
+        <div className="h-px flex-1 bg-border" />
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label>Full Name</Label>
@@ -274,8 +325,8 @@ function ArtistRegisterForm() {
         <div className="space-y-1">
           <Label>Mobile Number</Label>
           <div className="flex gap-2">
-            <div className="flex items-center px-3 rounded-xl border bg-muted text-sm text-muted-foreground font-medium gap-1.5 shrink-0">
-              <Globe className="w-3.5 h-3.5" />+91
+            <div className="flex items-center px-3 rounded-xl border bg-muted text-sm text-muted-foreground font-medium shrink-0">
+              +91
             </div>
             <Input type="tel" placeholder="9876543210" maxLength={10} icon={<Phone className="w-4 h-4" />} error={errors.phone?.message} className="min-w-0" {...register("phone")} />
           </div>
@@ -397,6 +448,11 @@ function ClientRegisterForm() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
+  const {
+    googleBusy, googleUser, phoneDigits: googlePhone, setPhoneDigits: setGooglePhone,
+    finishing: googleFinishing, startGoogleSignIn, finishGoogleSignup, cancelGoogleSignup,
+  } = useGoogleSignIn("client");
+
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState("");
   const [otpBusy, setOtpBusy] = useState(false);
@@ -511,8 +567,50 @@ function ClientRegisterForm() {
     }
   };
 
+  if (googleUser) {
+    return (
+      <div className="mt-4 space-y-3">
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-3.5 text-sm">
+          <p className="font-medium text-emerald-800">Signed in with Google</p>
+          <p className="text-emerald-700 text-xs mt-0.5">{googleUser.name || googleUser.email}</p>
+        </div>
+        <div className="space-y-1">
+          <Label>Mobile Number</Label>
+          <div className="flex gap-2">
+            <div className="flex items-center px-3 rounded-xl border bg-muted text-sm font-medium text-muted-foreground whitespace-nowrap shrink-0">+91</div>
+            <Input
+              type="tel"
+              inputMode="numeric"
+              placeholder="9876543210"
+              icon={<Smartphone className="w-4 h-4" />}
+              value={googlePhone}
+              onChange={(e) => setGooglePhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+              className="min-w-0"
+            />
+          </div>
+        </div>
+        <Button type="button" onClick={finishGoogleSignup} loading={googleFinishing} className="w-full" size="lg">
+          Finish Sign Up
+        </Button>
+        <button type="button" onClick={cancelGoogleSignup} className="w-full text-center text-xs text-muted-foreground hover:text-foreground">
+          Use a different sign-in method
+        </button>
+      </div>
+    );
+  }
+
   return (
     <form onSubmit={onSubmit} className="mt-4 space-y-3">
+      <Button type="button" variant="outline" className="w-full gap-2" onClick={startGoogleSignIn} loading={googleBusy}>
+        <GoogleIcon className="w-4 h-4" />
+        Continue with Google
+      </Button>
+      <div className="flex items-center gap-3">
+        <div className="h-px flex-1 bg-border" />
+        <span className="text-xs text-muted-foreground">or sign up with email</span>
+        <div className="h-px flex-1 bg-border" />
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label>Full Name</Label>
