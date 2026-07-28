@@ -364,6 +364,12 @@ export default function EnquiryPage() {
         link: `/admin/enquiries/${enquiryRef.id}`,
       }).catch(() => {});
 
+      fetch("/api/enquiries/notify-artists", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enquiry_id: enquiryRef.id }),
+      }).catch(() => {});
+
       setSubmitted(true);
     } catch (err) {
       console.error("[enquiry] submit failed:", err);
@@ -557,6 +563,48 @@ export default function EnquiryPage() {
                       </div>
                     </div>
 
+                    {!hasSession && !emailVerified && (
+                      <div className="rounded-2xl border border-gold-200 bg-gold-50/50 p-4 space-y-3">
+                        <p className="text-xs font-medium text-gold-700 flex items-center gap-1.5">
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                          Verify your email
+                        </p>
+                        {!otpSent && (
+                          <Button type="button" onClick={handleSendOtp} loading={otpBusy} className="w-full">
+                            Send code
+                          </Button>
+                        )}
+
+                        {otpSent && (
+                          <div className="space-y-2">
+                            <OtpInput
+                              value={otpCode}
+                              onChange={setOtpCode}
+                              onComplete={(code) => handleVerifyOtp(code)}
+                              disabled={otpBusy}
+                              error={otpError}
+                              autoFocus
+                            />
+                            <Button type="button" onClick={() => handleVerifyOtp()} loading={otpBusy} className="w-full">
+                              Verify
+                            </Button>
+                          </div>
+                        )}
+                        {otpSent && (
+                          <div className="flex items-center justify-between text-xs">
+                            <ResendTimer seconds={resendIn} totalSeconds={45} onResend={handleSendOtp} disabled={otpBusy} />
+                            <button
+                              type="button"
+                              className="text-muted-foreground hover:text-navy-900"
+                              onClick={() => { setOtpSent(false); setOtpCode(""); }}
+                            >
+                              Edit email
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {!hasSession && (
                       <>
                         <div className="space-y-1.5">
@@ -577,48 +625,6 @@ export default function EnquiryPage() {
                             />
                           </div>
                         </div>
-
-                        {!emailVerified && (
-                          <div className="rounded-2xl border border-gold-200 bg-gold-50/50 p-4 space-y-3">
-                            <p className="text-xs font-medium text-gold-700 flex items-center gap-1.5">
-                              <ShieldCheck className="w-3.5 h-3.5" />
-                              Verify your email
-                            </p>
-                            {!otpSent && (
-                              <Button type="button" onClick={handleSendOtp} loading={otpBusy} className="w-full">
-                                Send code
-                              </Button>
-                            )}
-
-                            {otpSent && (
-                              <div className="space-y-2">
-                                <OtpInput
-                                  value={otpCode}
-                                  onChange={setOtpCode}
-                                  onComplete={(code) => handleVerifyOtp(code)}
-                                  disabled={otpBusy}
-                                  error={otpError}
-                                  autoFocus
-                                />
-                                <Button type="button" onClick={() => handleVerifyOtp()} loading={otpBusy} className="w-full">
-                                  Verify
-                                </Button>
-                              </div>
-                            )}
-                            {otpSent && (
-                              <div className="flex items-center justify-between text-xs">
-                                <ResendTimer seconds={resendIn} totalSeconds={45} onResend={handleSendOtp} disabled={otpBusy} />
-                                <button
-                                  type="button"
-                                  className="text-muted-foreground hover:text-navy-900"
-                                  onClick={() => { setOtpSent(false); setOtpCode(""); }}
-                                >
-                                  Edit email
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        )}
 
                         {emailVerified && (
                           <>
@@ -657,37 +663,53 @@ export default function EnquiryPage() {
                               </div>
                             </div>
 
-                            {/* Event manager toggle */}
-                            <button
-                              type="button"
-                              onClick={() => setIsEventManager((v) => !v)}
-                              className={`w-full flex items-start gap-3 rounded-2xl border p-3.5 text-left transition-all ${
-                                isEventManager
-                                  ? "border-gold-500 bg-gold-50 ring-1 ring-gold-500/30"
-                                  : "border-border hover:border-gold-200"
-                              }`}
-                            >
-                              <div
-                                className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                                  isEventManager ? "gold-gradient text-white" : "bg-muted text-muted-foreground"
-                                }`}
-                              >
-                                <Briefcase className="w-5 h-5" />
+                            <div className="space-y-1.5">
+                              <Label>Who is this booking for? *</Label>
+                              <div className="grid grid-cols-2 gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => { setIsEventManager(false); setValue("submitter_type", "personal"); }}
+                                  className={`flex flex-col items-center gap-1.5 rounded-2xl border p-3.5 text-center transition-all ${
+                                    !isEventManager
+                                      ? "border-gold-500 bg-gold-50 ring-1 ring-gold-500/30"
+                                      : "border-border hover:border-gold-200"
+                                  }`}
+                                >
+                                  <div
+                                    className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                                      !isEventManager ? "gold-gradient text-white" : "bg-muted text-muted-foreground"
+                                    }`}
+                                  >
+                                    <User className="w-4 h-4" />
+                                  </div>
+                                  <p className="font-medium text-sm text-navy-900">Myself</p>
+                                  <p className="text-[11px] text-muted-foreground leading-snug">
+                                    I&apos;m booking this event for myself
+                                  </p>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { setIsEventManager(true); setValue("submitter_type", "planner"); }}
+                                  className={`flex flex-col items-center gap-1.5 rounded-2xl border p-3.5 text-center transition-all ${
+                                    isEventManager
+                                      ? "border-gold-500 bg-gold-50 ring-1 ring-gold-500/30"
+                                      : "border-border hover:border-gold-200"
+                                  }`}
+                                >
+                                  <div
+                                    className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                                      isEventManager ? "gold-gradient text-white" : "bg-muted text-muted-foreground"
+                                    }`}
+                                  >
+                                    <Briefcase className="w-4 h-4" />
+                                  </div>
+                                  <p className="font-medium text-sm text-navy-900">Someone else / my client</p>
+                                  <p className="text-[11px] text-muted-foreground leading-snug">
+                                    I&apos;m an event planner or agency booking for a client
+                                  </p>
+                                </button>
                               </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="font-medium text-sm text-navy-900">
-                                  I&apos;m an event manager / planner
-                                </p>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  Booking on behalf of a client or agency
-                                </p>
-                              </div>
-                              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 ${
-                                isEventManager ? "border-gold-500 bg-gold-500" : "border-muted-foreground/40"
-                              }`}>
-                                {isEventManager && <CheckCircle2 className="w-3 h-3 text-white" />}
-                              </div>
-                            </button>
+                            </div>
 
                             <AnimatePresence>
                               {isEventManager && (
@@ -760,38 +782,6 @@ export default function EnquiryPage() {
                         </p>
                       </>
                     )}
-
-                    <div className="space-y-1.5">
-                      <Label>How did you hear about us?</Label>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                        {[
-                          { value: "website", label: "Website" },
-                          { value: "whatsapp", label: "WhatsApp" },
-                          { value: "email", label: "Email" },
-                          { value: "instagram", label: "Instagram" },
-                          { value: "referral", label: "Referral" },
-                          { value: "walk_in", label: "Walk-in" },
-                        ].map((opt) => {
-                          const selected = watch("source") === opt.value;
-                          return (
-                            <button
-                              key={opt.value}
-                              type="button"
-                              onClick={() =>
-                                setValue("source", opt.value as EnquiryFormValues["source"])
-                              }
-                              className={`py-3 px-2.5 rounded-xl border text-xs font-medium transition-all ${
-                                selected
-                                  ? "border-gold-500 bg-gold-50 text-gold-700"
-                                  : "border-border hover:border-gold-300"
-                              }`}
-                            >
-                              {opt.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
                   </motion.div>
                 )}
 

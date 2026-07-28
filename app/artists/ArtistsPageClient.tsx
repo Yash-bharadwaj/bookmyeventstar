@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Search, Star, MapPin, CheckCircle2,
-  X, Phone, Mail, User, Calendar,
+  X, Calendar,
   Mic2, Shield, TrendingUp, ChevronRight, Send,
   ArrowRight, Play, ChevronLeft, Images, Video,
 } from "lucide-react";
@@ -410,51 +410,41 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
                 </div>
               </div>
 
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                {/* Contact info — collapsed to a pill when logged in */}
-                {sessionUser ? (
-                  <div className="flex items-center gap-2.5 rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-emerald-900 truncate">{sessionUser.name}</p>
-                      <p className="text-xs text-emerald-700 truncate">{sessionUser.email} · +91 {sessionUser.phone}</p>
-                    </div>
-                    <a href="/client" className="text-xs text-emerald-600 hover:underline shrink-0">My account</a>
+              {!sessionUser ? (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-gray-200 bg-white p-4 text-center">
+                    <p className="text-sm text-navy-900 font-medium">
+                      Sign in to send a free enquiry for {artist.user.name}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      It takes under a minute — we just need to verify your email first.
+                    </p>
                   </div>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold text-gray-600">Your Name <span className="text-rose-500">*</span></Label>
-                        <Input
-                          placeholder="Rahul Sharma"
-                          icon={<User className="w-4 h-4" />}
-                          error={errors.name?.message}
-                          {...register("name")}
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold text-gray-600">Mobile Number <span className="text-rose-500">*</span></Label>
-                        <Input
-                          placeholder="9999999999"
-                          icon={<Phone className="w-4 h-4" />}
-                          error={errors.phone?.message}
-                          {...register("phone")}
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold text-gray-600">Email Address <span className="text-rose-500">*</span></Label>
-                      <Input
-                        type="email"
-                        placeholder="you@example.com"
-                        icon={<Mail className="w-4 h-4" />}
-                        error={errors.email?.message}
-                        {...register("email")}
-                      />
-                    </div>
-                  </>
-                )}
+                  <a href={`/enquiry?artist=${encodeURIComponent(artist.user.name)}`}>
+                    <Button
+                      size="lg"
+                      className={`w-full bg-gradient-to-r ${color} text-white border-0 shadow-lg hover:opacity-90 font-bold text-base`}
+                    >
+                      <Send className="w-4 h-4 mr-2" />
+                      Start My Enquiry
+                    </Button>
+                  </a>
+                  <p className="text-center text-xs text-muted-foreground">
+                    Already have an account?{" "}
+                    <a href="/login" className="text-navy-700 font-medium hover:underline">Log in</a>
+                  </p>
+                </div>
+              ) : (
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                {/* Contact info — collapsed to a pill for the signed-in client */}
+                <div className="flex items-center gap-2.5 rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-emerald-900 truncate">{sessionUser.name}</p>
+                    <p className="text-xs text-emerald-700 truncate">{sessionUser.email} · +91 {sessionUser.phone}</p>
+                  </div>
+                  <a href="/client" className="text-xs text-emerald-600 hover:underline shrink-0">My account</a>
+                </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
@@ -525,6 +515,7 @@ function ArtistDrawer({ artist, onClose }: { artist: Artist; onClose: () => void
                   No payment required now · Our team calls within 2 hours
                 </p>
               </form>
+              )}
             </>
           )}
         </div>

@@ -19,7 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Proposal } from "@/types";
 import { formatDate, formatCurrency, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { db } from "@/lib/firebase/client";
-import { notifyUser } from "@/lib/notifications/client";
+import { notifyUser, emailUser } from "@/lib/notifications/client";
 import { checkArtistsAvailability, AvailabilityStatus } from "@/lib/availability";
 import {
   collection, doc, addDoc, updateDoc, getDoc, getDocs,
@@ -288,6 +288,11 @@ export function CoordinatorProposalsClient({
         message: `Your proposal for ${enq.event_type} is ready. Please review the artist options.`,
         type: "success", link: "/client/proposals",
       });
+      emailUser(enq.client_id, {
+        title: "Your proposal is ready to review",
+        message: `Good news — we've put together artist options for your ${enq.event_type}. Head over to your proposals page to take a look and let us know which one you'd like to go with.`,
+        link: "/client/proposals",
+      }).catch(() => {});
     }
     toast.success("Proposal sent to client!");
     setSending(null);

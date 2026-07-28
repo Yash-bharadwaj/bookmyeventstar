@@ -8,6 +8,7 @@ import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard,
+  Bell,
   Users,
   Contact,
   Music,
@@ -36,6 +37,7 @@ const navConfig: Record<UserRole, { label: string; href: string; icon: React.Ele
     { label: "Enquiries", href: "/admin/enquiries", icon: FileText },
     { label: "Coordinators", href: "/admin/coordinators", icon: Users },
     { label: "Artists", href: "/admin/artists", icon: Music },
+    { label: "Bookings", href: "/admin/bookings", icon: Star },
     { label: "Reports", href: "/admin/reports", icon: BarChart3 },
     { label: "Settings", href: "/admin/settings", icon: Settings },
   ],
@@ -50,6 +52,7 @@ const navConfig: Record<UserRole, { label: string; href: string; icon: React.Ele
   ],
   artist: [
     { label: "Dashboard", href: "/artist", icon: LayoutDashboard },
+    { label: "Leads", href: "/artist/leads", icon: Bell },
     { label: "My Bookings", href: "/artist/bookings", icon: Star },
     { label: "Availability", href: "/artist/availability", icon: Calendar },
     { label: "My Profile", href: "/artist/profile", icon: UserCircle },

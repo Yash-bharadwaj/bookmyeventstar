@@ -153,5 +153,20 @@ service cloud.firestore {
         allow update, delete: if isAdmin();
       }
     }
+
+    // ─── artistLeads — matching artists notified about a new enquiry ───────
+    // No client PII lives here (no client_id/name/phone) — just enough for
+    // an artist to judge relevance and flag interest. Written only via the
+    // Admin SDK (the /api/enquiries/notify-artists matcher), never directly
+    // by a client, so there's no client-side create rule.
+    match /artistLeads/{leadId} {
+      allow read: if signedIn() && (resource.data.artist_id == request.auth.uid || isCoordinatorOrAdmin());
+      // The matching artist may only flip their own lead's status — never
+      // touch enquiry_id/artist_id or fabricate a lead for themselves.
+      allow update: if signedIn() && resource.data.artist_id == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updated_at']) &&
+        request.resource.data.status in ['interested', 'dismissed'];
+      allow create, delete: if isAdmin();
+    }
   }
 }
