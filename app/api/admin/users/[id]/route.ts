@@ -58,14 +58,33 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     update.email = emailStr;
   }
 
-  if (Object.keys(update).length === 0) {
+  // Password reset — sets a brand-new password directly via the Admin SDK.
+  // There is no way to view/recover the account's EXISTING password (it's
+  // never stored anywhere, only a one-way hash inside Firebase Auth) — this
+  // is a genuine reset, same as every "forgot password" flow anywhere else.
+  let passwordReset = false;
+  if (typeof body.password === "string" && body.password.length > 0) {
+    if (body.password.length < 8) {
+      return NextResponse.json({ error: "Password must be at least 8 characters." }, { status: 400 });
+    }
+    try {
+      await adminAuth.updateUser(params.id, { password: body.password });
+      passwordReset = true;
+    } catch (err) {
+      console.error("[admin/users PATCH] password reset failed:", err);
+      return NextResponse.json({ error: "Failed to reset password." }, { status: 500 });
+    }
+  }
+
+  if (Object.keys(update).length === 0 && !passwordReset) {
     return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
   }
 
-  update.updated_at = FieldValue.serverTimestamp();
-
   try {
-    await adminDb.collection("users").doc(params.id).update(update);
+    if (Object.keys(update).length > 0) {
+      update.updated_at = FieldValue.serverTimestamp();
+      await adminDb.collection("users").doc(params.id).update(update);
+    }
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("[admin/users PATCH] failed:", err);

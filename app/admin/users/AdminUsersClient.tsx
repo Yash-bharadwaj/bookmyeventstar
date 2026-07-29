@@ -6,6 +6,7 @@ import toast from "react-hot-toast";
 import {
   Search, Download, UserPlus, Pencil, Trash2, Loader2,
   ChevronLeft, ChevronRight, ShieldCheck, Eye, EyeOff as EyeOffIcon,
+  KeyRound, Copy, Shuffle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -78,6 +79,8 @@ export function AdminUsersClient({ users, currentAdminId }: { users: RegisteredU
 
   const [editUser, setEditUser] = useState<RegisteredUser | null>(null);
   const [editForm, setEditForm] = useState({ name: "", email: "", phone: "" });
+  const [newPassword, setNewPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState<RegisteredUser | null>(null);
@@ -137,6 +140,27 @@ export function AdminUsersClient({ users, currentAdminId }: { users: RegisteredU
   const openEdit = (u: RegisteredUser) => {
     setEditUser(u);
     setEditForm({ name: u.name, email: u.email, phone: u.phone });
+    setNewPassword("");
+    setShowNewPassword(false);
+  };
+
+  const generatePassword = () => {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%";
+    const bytes = new Uint32Array(12);
+    crypto.getRandomValues(bytes);
+    const pwd = Array.from(bytes, (n) => chars[n % chars.length]).join("");
+    setNewPassword(pwd);
+    setShowNewPassword(true);
+  };
+
+  const copyPassword = async () => {
+    if (!newPassword) return;
+    try {
+      await navigator.clipboard.writeText(newPassword);
+      toast.success("Password copied");
+    } catch {
+      toast.error("Could not copy — please select and copy it manually.");
+    }
   };
 
   const saveEdit = async () => {
@@ -145,14 +169,19 @@ export function AdminUsersClient({ users, currentAdminId }: { users: RegisteredU
       toast.error("Name, email, and phone are required");
       return;
     }
+    if (newPassword && newPassword.length < 8) {
+      toast.error("New password must be at least 8 characters");
+      return;
+    }
     setSaving(true);
     try {
       await patchUser(editUser.id, {
         name: editForm.name.trim(),
         email: editForm.email.trim(),
         phone: editForm.phone.trim(),
+        ...(newPassword ? { password: newPassword } : {}),
       });
-      toast.success("User updated");
+      toast.success(newPassword ? "User updated and password reset" : "User updated");
       setEditUser(null);
       router.refresh();
     } catch (err) {
@@ -507,6 +536,44 @@ export function AdminUsersClient({ users, currentAdminId }: { users: RegisteredU
                 <Label>Phone</Label>
                 <Input value={editForm.phone} onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))} />
               </div>
+
+              <div className="space-y-1.5 pt-1 border-t">
+                <Label className="flex items-center gap-1.5 pt-3">
+                  <KeyRound className="w-3.5 h-3.5 text-muted-foreground" />
+                  Reset Password (optional)
+                </Label>
+                <div className="flex gap-1.5">
+                  <div className="relative flex-1">
+                    <Input
+                      type={showNewPassword ? "text" : "password"}
+                      placeholder="Leave blank to keep their current password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="pr-9"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword((v) => !v)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      aria-label={showNewPassword ? "Hide password" : "Show password"}
+                    >
+                      {showNewPassword ? <EyeOffIcon className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <Button type="button" variant="outline" size="icon" title="Generate a password" onClick={generatePassword}>
+                    <Shuffle className="w-4 h-4" />
+                  </Button>
+                  {newPassword && (
+                    <Button type="button" variant="outline" size="icon" title="Copy password" onClick={copyPassword}>
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Passwords can&apos;t be viewed once set — this sets a brand-new one. Share it with them directly; they can change it after signing in.
+                </p>
+              </div>
+
               <div className="flex gap-2 pt-1">
                 <Button variant="outline" className="flex-1" onClick={() => setEditUser(null)}>Cancel</Button>
                 <Button className="flex-1" disabled={saving} onClick={saveEdit}>
