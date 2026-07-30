@@ -28,7 +28,7 @@ interface PendingGoogleUser {
  * missing: phone always, and role too if the caller didn't already fix one
  * (register's per-tab forms know their role already; login doesn't).
  */
-export function useGoogleSignIn(fixedRole?: Role) {
+export function useGoogleSignIn(fixedRole?: Role, redirectTo?: string | null) {
   const router = useRouter();
   const [googleBusy, setGoogleBusy] = useState(false);
   const [googleUser, setGoogleUser] = useState<PendingGoogleUser | null>(null);
@@ -47,7 +47,7 @@ export function useGoogleSignIn(fixedRole?: Role) {
         const role = (snap.data().role as string) ?? "client";
         await syncSessionCookie(idToken);
         toast.success("Welcome back!");
-        router.push(`/${role}`);
+        router.push(redirectTo ?? `/${role}`);
         router.refresh();
         return;
       }
@@ -103,7 +103,7 @@ export function useGoogleSignIn(fixedRole?: Role) {
       if (freshToken) await syncSessionCookie(freshToken);
 
       toast.success("Account created! Welcome to BookMyEventStar.");
-      router.push(`/${pendingRole}`);
+      router.push(redirectTo ?? `/${pendingRole}`);
       router.refresh();
     } catch (err) {
       console.error("[google-signin] finish failed:", err);

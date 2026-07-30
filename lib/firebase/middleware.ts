@@ -26,6 +26,13 @@ function roleForPath(pathname: string): (typeof ROLE_SECTIONS)[number] | null {
   return null;
 }
 
+// Only ever redirect back to a same-origin app path — never let a
+// `redirect` param carry a protocol-relative or absolute URL off-site.
+function safeRedirectTarget(value: string | null): string | null {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return null;
+  return value;
+}
+
 export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -40,13 +47,16 @@ export async function updateSession(request: NextRequest) {
 
   if (!decoded && !isLoginOrRegister) {
     const url = request.nextUrl.clone();
+    const target = pathname + request.nextUrl.search;
     url.pathname = "/login";
+    url.search = "";
+    url.searchParams.set("redirect", target);
     return NextResponse.redirect(url);
   }
 
   if (decoded && isLoginOrRegister) {
-    const url = request.nextUrl.clone();
-    url.pathname = `/${decoded.role}`;
+    const target = safeRedirectTarget(request.nextUrl.searchParams.get("redirect"));
+    const url = new URL(target ?? `/${decoded.role}`, request.url);
     return NextResponse.redirect(url);
   }
 

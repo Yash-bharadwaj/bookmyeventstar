@@ -23,10 +23,18 @@ const CREDENTIAL_ERROR_CODES = new Set([
   "auth/user-not-found",
 ]);
 
+// Only ever redirect back to a same-origin app path — never let a
+// `redirect` param carry a protocol-relative or absolute URL off-site.
+function safeRedirectTarget(value: string | null): string | null {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return null;
+  return value;
+}
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const prefillPhone = searchParams.get("phone") ?? "";
+  const redirectTo = safeRedirectTarget(searchParams.get("redirect"));
 
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -35,7 +43,7 @@ function LoginForm() {
     googleBusy, googleUser, pendingRole, setPendingRole,
     phoneDigits: googlePhone, setPhoneDigits: setGooglePhone,
     finishing: googleFinishing, startGoogleSignIn, finishGoogleSignup, cancelGoogleSignup,
-  } = useGoogleSignIn();
+  } = useGoogleSignIn(undefined, redirectTo);
 
   const {
     register,
@@ -61,7 +69,7 @@ function LoginForm() {
       const role = (claims.role as string) ?? "client";
 
       toast.success("Welcome back!");
-      router.push(`/${role}`);
+      router.push(redirectTo ?? `/${role}`);
       router.refresh();
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code;
