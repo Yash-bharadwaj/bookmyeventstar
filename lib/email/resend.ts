@@ -46,7 +46,7 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://bookmyeventstar.co
  */
 export function notificationEmailHtml({ message, link }: { message: string; link?: string }) {
   const button = link
-    ? `<a href="${SITE_URL}${link}" style="display:inline-block;margin-top:20px;background:#c8850f;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:10px 20px;border-radius:10px;">View details</a>`
+    ? `<a href="${SITE_URL}${link}" style="display:inline-block;margin-top:20px;background:#2c5282;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:10px 20px;border-radius:10px;">View details</a>`
     : "";
   return `
     <div style="font-family:-apple-system,Helvetica,Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#10161c;">

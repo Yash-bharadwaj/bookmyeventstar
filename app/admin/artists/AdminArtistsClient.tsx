@@ -13,7 +13,7 @@ import { ArtistProfile } from "@/types";
 import { formatCurrency, getInitials } from "@/lib/utils";
 import { db } from "@/lib/firebase/client";
 import { doc, updateDoc, writeBatch } from "firebase/firestore";
-import { notifyUser, notifyUserInBatch } from "@/lib/notifications/client";
+import { notifyUser, notifyUserInBatch, emailUser } from "@/lib/notifications/client";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 
@@ -62,14 +62,17 @@ export function AdminArtistsClient({ artists, categories }: { artists: ArtistWit
     const ids = Array.from(bulkSelected);
     const batch = writeBatch(db);
     const field = bulkAction === "verify" ? "is_verified" : "is_listed";
+    const payload = bulkAction === "verify"
+      ? { title: "You're Verified! 🎉", message: "Great news — your artist profile has been verified by our team and can now appear in client and coordinator searches.", type: "success" as const, link: "/artist/profile" }
+      : { title: "Profile Listed", message: "Your profile is now listed and can appear in client and coordinator searches once verified.", type: "success" as const, link: "/artist/profile" };
     for (const id of ids) {
       batch.update(doc(db, "artistProfiles", id), { [field]: true });
-      notifyUserInBatch(batch, id, bulkAction === "verify"
-        ? { title: "You're Verified! 🎉", message: "Your artist profile has been verified by our team. Complete your checklist to start appearing in searches.", type: "success", link: "/artist/profile" }
-        : { title: "Profile Listed", message: "Your profile is now listed and can appear in searches once your checklist and verification are complete.", type: "success", link: "/artist/profile" }
-      );
+      notifyUserInBatch(batch, id, payload);
     }
     await batch.commit();
+    if (bulkAction === "verify") {
+      ids.forEach((id) => emailUser(id, payload).catch(() => {}));
+    }
     toast.success(bulkAction === "verify"
       ? `${ids.length} artist${ids.length > 1 ? "s" : ""} verified`
       : `${ids.length} artist${ids.length > 1 ? "s" : ""} listed`);
@@ -104,20 +107,21 @@ export function AdminArtistsClient({ artists, categories }: { artists: ArtistWit
     setToggling(artistId);
     try {
       await updateDoc(doc(db, "artistProfiles", artistId), { is_verified: !current });
-      await notifyUser(artistId, current
+      const payload = current
         ? {
             title: "Verification Removed",
             message: "Your artist verification has been removed, so your profile won't appear in client or coordinator searches until it's restored.",
-            type: "warning",
+            type: "warning" as const,
             link: "/artist/profile",
           }
         : {
             title: "You're Verified! 🎉",
-            message: "Your artist profile has been verified by our team. Complete your checklist to start appearing in searches.",
-            type: "success",
+            message: "Great news — your artist profile has been verified by our team and can now appear in client and coordinator searches.",
+            type: "success" as const,
             link: "/artist/profile",
-          }
-      ).catch(() => {});
+          };
+      await notifyUser(artistId, payload).catch(() => {});
+      if (!current) emailUser(artistId, payload).catch(() => {});
       toast.success(current ? "Artist unverified" : "Artist verified!");
     } catch {
       toast.error("Failed to update");
