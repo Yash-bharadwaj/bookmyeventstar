@@ -765,6 +765,9 @@ export default function LandingPage() {
             <p className="text-xs text-white/30 text-center md:text-left max-w-xs">
               © 2026 · India&apos;s Premier Artist Booking Platform
             </p>
+            <a href="mailto:enquiry@bookmyeventstar.com" className="text-xs text-white/40 hover:text-white transition-colors">
+              enquiry@bookmyeventstar.com
+            </a>
           </div>
             <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm">
               {[["Browse Artists", "/artists"], ["Raise Enquiry", "/enquiry"], ["Login", "/login"], ["Register", "/register"]].map(([label, href]) => (
