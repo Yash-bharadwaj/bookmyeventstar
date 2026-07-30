@@ -19,7 +19,6 @@ export default async function CoordinatorProposalsPage() {
       .collection("artistProfiles")
       .where("is_verified", "==", true)
       .where("is_listed", "==", true)
-      .where("is_profile_complete", "==", true)
       .orderBy("rating", "desc")
       .get(),
     adminDb.collection("cities").orderBy("name").get(),

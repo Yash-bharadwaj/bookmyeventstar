@@ -16,7 +16,6 @@ export async function GET() {
     .collection("artistProfiles")
     .where("is_verified", "==", true)
     .where("is_listed", "==", true)
-    .where("is_profile_complete", "==", true)
     .orderBy("rating", "desc")
     .limit(4)
     .get();

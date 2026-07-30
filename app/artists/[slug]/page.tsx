@@ -13,8 +13,8 @@ async function getArtistBySlug(slug: string): Promise<AnyDoc | null> {
   const doc = snap.docs[0];
   const data = doc.data() as AnyDoc;
   // Same visibility gate the /artists directory itself applies — a link to
-  // an unlisted/unverified/incomplete profile should 404, not leak a draft.
-  if (!data.is_verified || !data.is_listed || !data.is_profile_complete) return null;
+  // an unlisted/unverified profile should 404, not leak a draft.
+  if (!data.is_verified || !data.is_listed) return null;
 
   const [userSnap, mediaSnap] = await Promise.all([
     adminDb.collection("users").doc(doc.id).get(),

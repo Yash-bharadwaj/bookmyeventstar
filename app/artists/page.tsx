@@ -19,7 +19,6 @@ export default async function ArtistsPage({
     .collection("artistProfiles")
     .where("is_verified", "==", true)
     .where("is_listed", "==", true)
-    .where("is_profile_complete", "==", true)
     .orderBy("rating", "desc") as FirebaseFirestore.Query;
 
   // Firestore only supports a single array-contains clause per query — apply

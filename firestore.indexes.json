@@ -61,7 +61,6 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "is_listed", "order": "ASCENDING" },
-        { "fieldPath": "is_profile_complete", "order": "ASCENDING" },
         { "fieldPath": "is_verified", "order": "ASCENDING" },
         { "fieldPath": "rating", "order": "DESCENDING" }
       ]
@@ -96,7 +95,6 @@
       "fields": [
         { "fieldPath": "categories", "arrayConfig": "CONTAINS" },
         { "fieldPath": "is_listed", "order": "ASCENDING" },
-        { "fieldPath": "is_profile_complete", "order": "ASCENDING" },
         { "fieldPath": "is_verified", "order": "ASCENDING" },
         { "fieldPath": "rating", "order": "DESCENDING" }
       ]

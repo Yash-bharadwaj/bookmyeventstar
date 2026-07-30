@@ -139,19 +139,17 @@ export function AdminArtistsClient({ artists, categories }: { artists: ArtistWit
           }
         : {
             title: "Profile Listed",
-            message: "Your profile is now listed and can appear in searches once your checklist and verification are complete.",
+            message: "Your profile is now listed and can appear in client and coordinator searches once verified.",
             type: "success",
             link: "/artist/profile",
           }
       ).catch(() => {});
       if (!currentListed) {
         const a = artists.find((x) => x.id === artistId);
-        if (a?.is_profile_complete && a.is_verified) {
-          toast.success("Artist listed and eligible to appear on explore once filters match.");
+        if (a?.is_verified) {
+          toast.success("Artist listed and now visible to clients & coordinators.");
         } else {
-          toast.success(
-            "Listed. Explore requires a complete profile checklist, verification, and this listing toggle."
-          );
+          toast.success("Listed. They'll appear in searches once also verified.");
         }
       } else {
         toast.success("Artist hidden from client & coordinator browse");
