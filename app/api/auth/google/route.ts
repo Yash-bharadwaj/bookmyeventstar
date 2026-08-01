@@ -16,7 +16,7 @@ const PHONE_REGEX = /^[6-9]\d{9}$/;
  */
 export async function POST(req: NextRequest) {
   try {
-    const { idToken, phone, role, category } = await req.json();
+    const { idToken, phone, role, category, city, area, budgetMin, budgetMax } = await req.json();
 
     if (typeof idToken !== "string" || !idToken) {
       return NextResponse.json({ error: "Missing sign-in token." }, { status: 400 });
@@ -31,6 +31,15 @@ export async function POST(req: NextRequest) {
     const categoryStr = String(category ?? "").trim() || null;
     if (role === "artist" && !categoryStr) {
       return NextResponse.json({ error: "Select what kind of artist you are." }, { status: 400 });
+    }
+    const cityStr = String(city ?? "").trim() || null;
+    const areaStr = String(area ?? "").trim() || null;
+    const budgetMinNum = Number(budgetMin) || 0;
+    const budgetMaxNum = budgetMax != null ? Number(budgetMax) || null : null;
+    if (role === "artist") {
+      if (!cityStr) return NextResponse.json({ error: "Select your city." }, { status: 400 });
+      if (!areaStr) return NextResponse.json({ error: "Enter your area / locality." }, { status: 400 });
+      if (budgetMinNum < 2000) return NextResponse.json({ error: "Select your starting price range." }, { status: 400 });
     }
 
     let decoded: { uid: string; email?: string; email_verified?: boolean; name?: string };
@@ -71,8 +80,11 @@ export async function POST(req: NextRequest) {
         await adminDb.collection("artistProfiles").doc(decoded.uid).set({
           bio: "",
           categories: categoryStr ? [categoryStr] : [],
-          cities: [],
-          base_price: 0,
+          cities: cityStr ? [cityStr] : [],
+          area: areaStr,
+          base_price: budgetMinNum,
+          budget_min: budgetMinNum || null,
+          budget_max: budgetMaxNum,
           pricing_details: {},
           rating: 0,
           total_bookings: 0,

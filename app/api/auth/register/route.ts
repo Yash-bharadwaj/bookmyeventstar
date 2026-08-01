@@ -14,6 +14,7 @@ export async function POST(req: NextRequest) {
     const {
       name, email, phone, password, role, emailVerificationToken, emailVerificationExpires,
       isEventManager, companyName, instagramHandle, websiteUrl, category,
+      city, area, budgetMin, budgetMax,
     } = await req.json();
 
     // Basic server-side validation
@@ -27,6 +28,10 @@ export async function POST(req: NextRequest) {
     if (role === "artist" && !categoryStr) {
       return NextResponse.json({ error: "Select what kind of artist you are." }, { status: 400 });
     }
+    const cityStr = String(city ?? "").trim() || null;
+    const areaStr = String(area ?? "").trim() || null;
+    const budgetMinNum = Number(budgetMin) || 0;
+    const budgetMaxNum = budgetMax != null ? Number(budgetMax) || null : null;
 
     const isManager = role === "client" && Boolean(isEventManager);
     const companyStr = String(companyName ?? "").trim() || null;
@@ -61,6 +66,15 @@ export async function POST(req: NextRequest) {
     // OTP step in that flow.
     if ((role === "client" || role === "artist") && callerRole !== "admin" && !verifyEmailVerification(email, emailVerificationToken, emailVerificationExpires)) {
       return NextResponse.json({ error: "Please verify your email before creating an account." }, { status: 403 });
+    }
+
+    // Location + starting budget are compulsory on the self-service artist
+    // signup form — an admin adding an artist from Admin > Users doesn't go
+    // through that form, so this stays skippable there, same as the OTP gate.
+    if (role === "artist" && callerRole !== "admin") {
+      if (!cityStr) return NextResponse.json({ error: "Select your city." }, { status: 400 });
+      if (!areaStr) return NextResponse.json({ error: "Enter your area / locality." }, { status: 400 });
+      if (budgetMinNum < 2000) return NextResponse.json({ error: "Select your starting price range." }, { status: 400 });
     }
 
     let userId: string;
@@ -104,8 +118,11 @@ export async function POST(req: NextRequest) {
         await adminDb.collection("artistProfiles").doc(userId).set({
           bio: "",
           categories: categoryStr ? [categoryStr] : [],
-          cities: [],
-          base_price: 0,
+          cities: cityStr ? [cityStr] : [],
+          area: areaStr,
+          base_price: budgetMinNum,
+          budget_min: budgetMinNum || null,
+          budget_max: budgetMaxNum,
           pricing_details: {},
           rating: 0,
           total_bookings: 0,

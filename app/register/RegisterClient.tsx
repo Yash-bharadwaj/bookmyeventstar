@@ -16,12 +16,15 @@ import { signInWithEmail } from "@/lib/firebase/auth-client";
 import { registerSchema, RegisterFormData } from "@/lib/validations/auth";
 import { useGoogleSignIn } from "@/hooks/useGoogleSignIn";
 import { useCategories } from "@/hooks/useCategories";
+import { useCities } from "@/hooks/useCities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { OtpInput } from "@/components/ui/otp-input";
 import { ResendTimer } from "@/components/ui/resend-timer";
 import { ArtistCategorySelect } from "@/components/artist/ArtistCategorySelect";
+import { ArtistLocationSelect } from "@/components/artist/ArtistLocationSelect";
+import { BudgetRangeSelect, getBudgetBand } from "@/components/artist/BudgetRangeSelect";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { GoogleIcon } from "@/components/ui/GoogleIcon";
 
@@ -170,8 +173,14 @@ function ArtistRegisterForm() {
   const {
     googleBusy, googleUser, phoneDigits: googlePhone, setPhoneDigits: setGooglePhone,
     category: googleCategory, setCategory: setGoogleCategory,
+    city: googleCity, setCity: setGoogleCity,
+    area: googleArea, setArea: setGoogleArea,
+    budgetRange: googleBudgetRange, setBudgetRange: setGoogleBudgetRange,
     finishing: googleFinishing, startGoogleSignIn, finishGoogleSignup, cancelGoogleSignup,
   } = useGoogleSignIn("artist");
+  // The hook only tracks city/area/budget (what the API needs) — "state" is
+  // purely a local filter for the cascading dropdown, never submitted.
+  const [googleLocationState, setGoogleLocationState] = useState("");
 
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState("");
@@ -188,7 +197,12 @@ function ArtistRegisterForm() {
   });
   const email = watch("email");
   const category = watch("category");
+  const locationState = watch("state");
+  const locationCity = watch("city");
+  const locationArea = watch("area");
+  const budgetRange = watch("budgetRange");
   const { categories } = useCategories();
+  const { cities } = useCities();
 
   useEffect(() => {
     if (resendIn <= 0) return;
@@ -252,6 +266,7 @@ function ArtistRegisterForm() {
     if (!emailVerified) { toast.error("Please verify your email first"); return; }
     setLoading(true);
     try {
+      const band = getBudgetBand(data.budgetRange ?? "");
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -262,6 +277,10 @@ function ArtistRegisterForm() {
           password: data.password,
           role: "artist",
           category: data.category,
+          city: data.city,
+          area: data.area,
+          budgetMin: band?.min,
+          budgetMax: band?.max,
           emailVerificationToken: verificationToken,
           emailVerificationExpires: verificationExpires,
         }),
@@ -307,6 +326,18 @@ function ArtistRegisterForm() {
         <div className="space-y-1">
           <Label>What kind of artist are you?</Label>
           <ArtistCategorySelect categories={categories} value={googleCategory} onChange={setGoogleCategory} />
+        </div>
+        <div className="space-y-1">
+          <Label>Where do you perform?</Label>
+          <ArtistLocationSelect
+            cities={cities}
+            value={{ state: googleLocationState, city: googleCity, area: googleArea }}
+            onChange={(v) => { setGoogleLocationState(v.state); setGoogleCity(v.city); setGoogleArea(v.area); }}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label>Starting price range</Label>
+          <BudgetRangeSelect value={googleBudgetRange} onChange={setGoogleBudgetRange} />
         </div>
         <Button type="button" onClick={finishGoogleSignup} loading={googleFinishing} className="w-full" size="lg">
           Finish Sign Up
@@ -354,6 +385,29 @@ function ArtistRegisterForm() {
           onChange={(v) => setValue("category", v, { shouldValidate: true })}
         />
         {errors.category?.message && <p className="text-xs text-destructive">{errors.category.message}</p>}
+      </div>
+
+      <div className="space-y-1">
+        <Label>Where do you perform?</Label>
+        <ArtistLocationSelect
+          cities={cities}
+          value={{ state: locationState ?? "", city: locationCity ?? "", area: locationArea ?? "" }}
+          onChange={(v) => {
+            setValue("state", v.state, { shouldValidate: true });
+            setValue("city", v.city, { shouldValidate: true });
+            setValue("area", v.area, { shouldValidate: true });
+          }}
+          errors={{ state: errors.state?.message, city: errors.city?.message, area: errors.area?.message }}
+        />
+      </div>
+
+      <div className="space-y-1">
+        <Label>Starting price range</Label>
+        <BudgetRangeSelect
+          value={budgetRange ?? ""}
+          onChange={(v) => setValue("budgetRange", v, { shouldValidate: true })}
+          error={errors.budgetRange?.message}
+        />
       </div>
 
       <div className={cn(

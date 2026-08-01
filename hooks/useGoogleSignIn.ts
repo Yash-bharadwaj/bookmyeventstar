@@ -6,6 +6,7 @@ import toast from "react-hot-toast";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase/client";
 import { signInWithGoogle, syncSessionCookie, signOutEverywhere } from "@/lib/firebase/auth-client";
+import { getBudgetBand } from "@/components/artist/BudgetRangeSelect";
 
 type Role = "client" | "artist";
 
@@ -35,6 +36,9 @@ export function useGoogleSignIn(fixedRole?: Role, redirectTo?: string | null) {
   const [pendingRole, setPendingRole] = useState<Role | undefined>(fixedRole);
   const [phoneDigits, setPhoneDigits] = useState("");
   const [category, setCategory] = useState("");
+  const [city, setCity] = useState("");
+  const [area, setArea] = useState("");
+  const [budgetRange, setBudgetRange] = useState("");
   const [finishing, setFinishing] = useState(false);
 
   const startGoogleSignIn = async () => {
@@ -85,14 +89,29 @@ export function useGoogleSignIn(fixedRole?: Role, redirectTo?: string | null) {
     const digits = phoneDigits.replace(/\D/g, "");
     if (!/^[6-9]\d{9}$/.test(digits)) { toast.error("Enter a valid 10-digit mobile number"); return; }
     if (!pendingRole) { toast.error("Please choose an account type"); return; }
-    if (pendingRole === "artist" && !category) { toast.error("Select what kind of artist you are"); return; }
+    if (pendingRole === "artist") {
+      if (!category) { toast.error("Select what kind of artist you are"); return; }
+      if (!city) { toast.error("Select your city"); return; }
+      if (!area.trim()) { toast.error("Enter your area / locality"); return; }
+      if (!budgetRange) { toast.error("Select your starting price range"); return; }
+    }
+    const band = pendingRole === "artist" ? getBudgetBand(budgetRange) : undefined;
 
     setFinishing(true);
     try {
       const res = await fetch("/api/auth/google", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken: googleUser.idToken, phone: digits, role: pendingRole, category }),
+        body: JSON.stringify({
+          idToken: googleUser.idToken,
+          phone: digits,
+          role: pendingRole,
+          category,
+          city,
+          area: area.trim(),
+          budgetMin: band?.min,
+          budgetMax: band?.max,
+        }),
       });
       const json = await res.json();
       if (!res.ok) { toast.error(json.error ?? "Could not finish setting up your account."); return; }
@@ -124,6 +143,12 @@ export function useGoogleSignIn(fixedRole?: Role, redirectTo?: string | null) {
     setPhoneDigits,
     category,
     setCategory,
+    city,
+    setCity,
+    area,
+    setArea,
+    budgetRange,
+    setBudgetRange,
     finishing,
     startGoogleSignIn,
     finishGoogleSignup,

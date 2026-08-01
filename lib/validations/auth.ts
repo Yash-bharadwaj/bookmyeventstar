@@ -22,14 +22,31 @@ export const registerSchema = z
     confirmPassword: z.string(),
     role: z.enum(["client", "artist"]),
     category: z.string().optional(),
+    state: z.string().optional(),
+    city: z.string().optional(),
+    area: z.string().optional(),
+    budgetRange: z.string().optional(),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match",
     path: ["confirmPassword"],
   })
   .superRefine((data, ctx) => {
-    if (data.role === "artist" && !data.category?.trim()) {
+    if (data.role !== "artist") return;
+    if (!data.category?.trim()) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Select what kind of artist you are", path: ["category"] });
+    }
+    if (!data.state?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Select your state", path: ["state"] });
+    }
+    if (!data.city?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Select your city", path: ["city"] });
+    }
+    if (!data.area?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter your area / locality", path: ["area"] });
+    }
+    if (!data.budgetRange?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Select your starting price range", path: ["budgetRange"] });
     }
   });
 
