@@ -15,7 +15,7 @@ import { useCategories } from "@/hooks/useCategories";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ArtistCategorySelect } from "@/components/artist/ArtistCategorySelect";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { GoogleIcon } from "@/components/ui/GoogleIcon";
 
@@ -177,16 +177,7 @@ function LoginForm() {
               {pendingRole === "artist" && (
                 <div className="space-y-2">
                   <Label>What kind of artist are you?</Label>
-                  <Select value={googleCategory} onValueChange={setGoogleCategory}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a category — Dancer, DJ, Magician..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((cat) => (
-                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <ArtistCategorySelect categories={categories} value={googleCategory} onChange={setGoogleCategory} />
                 </div>
               )}
 

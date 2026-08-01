@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { OtpInput } from "@/components/ui/otp-input";
 import { ResendTimer } from "@/components/ui/resend-timer";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ArtistCategorySelect } from "@/components/artist/ArtistCategorySelect";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { GoogleIcon } from "@/components/ui/GoogleIcon";
 
@@ -306,16 +306,7 @@ function ArtistRegisterForm() {
         </div>
         <div className="space-y-1">
           <Label>What kind of artist are you?</Label>
-          <Select value={googleCategory} onValueChange={setGoogleCategory}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select a category — Dancer, DJ, Magician..." />
-            </SelectTrigger>
-            <SelectContent>
-              {categories.map((cat) => (
-                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <ArtistCategorySelect categories={categories} value={googleCategory} onChange={setGoogleCategory} />
         </div>
         <Button type="button" onClick={finishGoogleSignup} loading={googleFinishing} className="w-full" size="lg">
           Finish Sign Up
@@ -357,16 +348,11 @@ function ArtistRegisterForm() {
 
       <div className="space-y-1">
         <Label>What kind of artist are you?</Label>
-        <Select value={category ?? ""} onValueChange={(v) => setValue("category", v, { shouldValidate: true })}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select a category — Dancer, DJ, Magician..." />
-          </SelectTrigger>
-          <SelectContent>
-            {categories.map((cat) => (
-              <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <ArtistCategorySelect
+          categories={categories}
+          value={category ?? ""}
+          onChange={(v) => setValue("category", v, { shouldValidate: true })}
+        />
         {errors.category?.message && <p className="text-xs text-destructive">{errors.category.message}</p>}
       </div>
 

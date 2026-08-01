@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
+import { ArtistCategorySelect } from "@/components/artist/ArtistCategorySelect";
 import { formatDate, getInitials } from "@/lib/utils";
 
 type UserRole = "client" | "artist" | "coordinator" | "admin";
@@ -500,14 +501,11 @@ export function AdminUsersClient({ users, currentAdminId, categoryOptions }: { u
             {addForm.role === "artist" && (
               <div className="space-y-1.5">
                 <Label>Category</Label>
-                <Select value={addForm.category} onValueChange={(v) => setAddForm((f) => ({ ...f, category: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Dancer, DJ, Magician..." /></SelectTrigger>
-                  <SelectContent>
-                    {categoryOptions.map((cat) => (
-                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <ArtistCategorySelect
+                  categories={categoryOptions}
+                  value={addForm.category}
+                  onChange={(v) => setAddForm((f) => ({ ...f, category: v }))}
+                />
               </div>
             )}
             <div className="space-y-1.5">
