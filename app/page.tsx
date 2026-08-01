@@ -8,7 +8,7 @@ import {
   Users, Globe, Phone, Mail, Search,
   Mic2, Award, Zap, Shield, Clock,
   Mic, Headphones, Laugh, Music2, Guitar, Wand2,
-  Megaphone, PersonStanding, Menu, X,
+  Megaphone, PersonStanding, Menu, X, Heart,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -782,6 +782,14 @@ export default function LandingPage() {
               </a>
             </div>
           </div>
+          <a
+            href="https://wa.me/919963082319"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-8 pt-6 border-t border-white/10 flex items-center justify-center gap-1.5 text-xs text-white/30 hover:text-white/60 transition-colors"
+          >
+            Built and designed with <Heart className="w-3.5 h-3.5 text-gold-400 fill-gold-400" /> by Yashwanth Bharadwaj
+          </a>
         </div>
       </footer>
     </div>
