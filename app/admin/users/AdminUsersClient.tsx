@@ -20,7 +20,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { ArtistCategorySelect } from "@/components/artist/ArtistCategorySelect";
-import { formatDate, getInitials } from "@/lib/utils";
+import { formatDateTime, getInitials } from "@/lib/utils";
 
 type UserRole = "client" | "artist" | "coordinator" | "admin";
 
@@ -65,6 +65,29 @@ const ROLE_AVATAR_COLOR: Record<UserRole, string> = {
 function csvEscape(value: string): string {
   if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
   return value;
+}
+
+function CopyIconButton({ value, label }: { value: string; label: string }) {
+  const copy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success(`${label} copied`);
+    } catch {
+      toast.error("Could not copy — please select and copy it manually.");
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title={`Copy ${label.toLowerCase()}`}
+      className="flex-shrink-0 text-muted-foreground/40 hover:text-navy-600 transition-colors"
+    >
+      <Copy className="w-3 h-3" />
+    </button>
+  );
 }
 
 export function AdminUsersClient({ users, currentAdminId, categoryOptions }: { users: RegisteredUser[]; currentAdminId: string; categoryOptions: string[] }) {
@@ -253,7 +276,7 @@ export function AdminUsersClient({ users, currentAdminId, categoryOptions }: { u
       u.phone,
       u.role,
       u.is_active ? "Active" : "Inactive",
-      formatDate(u.created_at),
+      formatDateTime(u.created_at),
       u.role === "artist" ? (u.is_verified ? "Yes" : "No") : "",
       u.role === "artist" ? (u.is_listed ? "Yes" : "No") : "",
       u.role === "artist" ? String(u.rating ?? "") : "",
@@ -338,7 +361,7 @@ export function AdminUsersClient({ users, currentAdminId, categoryOptions }: { u
                 <th className="text-left px-4 py-3 min-w-[130px]">Phone</th>
                 <th className="text-left px-4 py-3 min-w-[90px]">Role</th>
                 <th className="text-left px-4 py-3 min-w-[110px]">Status</th>
-                <th className="text-left px-4 py-3 min-w-[100px]">Registered</th>
+                <th className="text-left px-4 py-3 min-w-[150px]">Registered</th>
                 <th className="text-right px-4 py-3 min-w-[110px]">Actions</th>
               </tr>
             </thead>
@@ -358,15 +381,26 @@ export function AdminUsersClient({ users, currentAdminId, categoryOptions }: { u
                           {getInitials(u.name)}
                         </div>
                         <div className="min-w-0">
-                          <p className="font-medium truncate max-w-[220px]">
-                            {u.name}
-                            {u.id === currentAdminId && <span className="text-xs text-muted-foreground font-normal"> (you)</span>}
-                          </p>
-                          <p className="text-xs text-muted-foreground truncate max-w-[220px]">{u.email}</p>
+                          <div className="flex items-center gap-1 min-w-0">
+                            <p className="font-medium truncate max-w-[190px]">
+                              {u.name}
+                              {u.id === currentAdminId && <span className="text-xs text-muted-foreground font-normal"> (you)</span>}
+                            </p>
+                            <CopyIconButton value={u.name} label="Name" />
+                          </div>
+                          <div className="flex items-center gap-1 min-w-0">
+                            <p className="text-xs text-muted-foreground truncate max-w-[190px]">{u.email}</p>
+                            <CopyIconButton value={u.email} label="Email" />
+                          </div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">{u.phone}</td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      <div className="flex items-center gap-1.5">
+                        <span>{u.phone || "—"}</span>
+                        {u.phone && <CopyIconButton value={u.phone} label="Phone" />}
+                      </div>
+                    </td>
                     <td className="px-4 py-3">
                       <Badge variant={ROLE_BADGE_VARIANT[u.role]}>
                         {u.role === "artist" && u.categories && u.categories.length > 0
@@ -424,7 +458,7 @@ export function AdminUsersClient({ users, currentAdminId, categoryOptions }: { u
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{formatDate(u.created_at)}</td>
+                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{formatDateTime(u.created_at)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
                         <Tooltip>
