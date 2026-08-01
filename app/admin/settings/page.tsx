@@ -9,9 +9,10 @@ export default async function AdminSettingsPage() {
   if (!user) redirect("/login");
   if (user.role !== "admin") redirect("/login");
 
-  const [categoriesSnap, citiesSnap, settingsSnap] = await Promise.all([
+  const [categoriesSnap, citiesSnap, areasSnap, settingsSnap] = await Promise.all([
     adminDb.collection("categories").orderBy("name").get(),
     adminDb.collection("cities").orderBy("name").get(),
+    adminDb.collection("areas").orderBy("name").get(),
     adminDb.getAll(
       adminDb.collection("settings").doc("artist_share_pct"),
       adminDb.collection("settings").doc("coordinator_workload_max"),
@@ -21,6 +22,7 @@ export default async function AdminSettingsPage() {
 
   const categories = categoriesSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
   const cities = citiesSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const areas = areasSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
   const [artistShareDoc, workloadMaxDoc, advancePctDoc] = settingsSnap;
   const platformSettings = {
@@ -33,6 +35,7 @@ export default async function AdminSettingsPage() {
     <AdminSettingsClient
       categories={serialize(categories) as any}
       cities={serialize(cities) as any}
+      areas={serialize(areas) as any}
       platformSettings={platformSettings}
     />
   );

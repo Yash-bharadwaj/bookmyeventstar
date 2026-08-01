@@ -33,6 +33,8 @@ export default async function AdminUsersPage() {
         categories: profile?.categories ?? null,
         rating: profile?.rating ?? null,
         total_bookings: profile?.total_bookings ?? null,
+        city: profile?.cities?.[0] ?? null,
+        area: profile?.area ?? null,
       } as AnyDoc;
     })
     .sort((a, b) => {

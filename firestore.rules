@@ -70,6 +70,13 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAdmin();
     }
+    // Locality/area within a city — same public-read/admin-write shape as
+    // categories/cities. Starts empty per city; artist signup falls back to
+    // free text ("Others") until admin populates a city's areas.
+    match /areas/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
 
     // ─── settings — public read (client app needs e.g. the cities list),
     // admin-managed ───────────────────────────────────────────────────────

@@ -37,15 +37,33 @@ function isListedProfile(a: ArtistWithUser) {
   return a.is_listed !== false;
 }
 
+function uniqueCities(artists: ArtistWithUser[]) {
+  const s = new Set<string>();
+  artists.forEach((a) => (a.cities ?? []).forEach((c) => s.add(c)));
+  return Array.from(s).sort();
+}
+
+function uniqueAreas(artists: ArtistWithUser[], cityFilter: string) {
+  const pool = cityFilter ? artists.filter((a) => (a.cities ?? []).includes(cityFilter)) : artists;
+  const s = new Set<string>();
+  pool.forEach((a) => { if (a.area) s.add(a.area); });
+  return Array.from(s).sort();
+}
+
 export function AdminArtistsClient({ artists, categories }: { artists: ArtistWithUser[]; categories: string[] }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [verifyTab, setVerifyTab] = useState("all");
   const [listTab, setListTab] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [cityFilter, setCityFilter] = useState("");
+  const [areaFilter, setAreaFilter] = useState("");
   const [showCategoryFilter, setShowCategoryFilter] = useState(false);
   const [toggling, setToggling] = useState<string | null>(null);
   const [listingToggling, setListingToggling] = useState<string | null>(null);
+
+  const allCities = uniqueCities(artists);
+  const allAreas = uniqueAreas(artists, cityFilter);
 
   const unverifiedCount = artists.filter((a) => !a.is_verified).length;
   const hiddenCount = artists.filter((a) => a.is_listed === false).length;
@@ -86,7 +104,8 @@ export function AdminArtistsClient({ artists, categories }: { artists: ArtistWit
     const matchesSearch =
       a.user.name.toLowerCase().includes(search.toLowerCase()) ||
       a.user.email.toLowerCase().includes(search.toLowerCase()) ||
-      (a.cities ?? []).some((c) => c.toLowerCase().includes(search.toLowerCase()));
+      (a.cities ?? []).some((c) => c.toLowerCase().includes(search.toLowerCase())) ||
+      (a.area ?? "").toLowerCase().includes(search.toLowerCase());
 
     const matchesVerify =
       verifyTab === "all" ? true :
@@ -99,8 +118,10 @@ export function AdminArtistsClient({ artists, categories }: { artists: ArtistWit
       !isListedProfile(a);
 
     const matchesCategory = !categoryFilter || a.categories.includes(categoryFilter);
+    const matchesCity = !cityFilter || (a.cities ?? []).includes(cityFilter);
+    const matchesArea = !areaFilter || a.area === areaFilter;
 
-    return matchesSearch && matchesVerify && matchesList && matchesCategory;
+    return matchesSearch && matchesVerify && matchesList && matchesCategory && matchesCity && matchesArea;
   });
 
   const toggleVerify = async (artistId: string, current: boolean) => {
@@ -233,11 +254,11 @@ export function AdminArtistsClient({ artists, categories }: { artists: ArtistWit
           size="sm"
           onClick={() => setShowCategoryFilter((v) => !v)}
         >
-          <Filter className="w-4 h-4 mr-1.5" />Category
-          {categoryFilter && <span className="ml-1.5 w-2 h-2 rounded-full bg-white inline-block" />}
+          <Filter className="w-4 h-4 mr-1.5" />Filters
+          {(categoryFilter || cityFilter || areaFilter) && <span className="ml-1.5 w-2 h-2 rounded-full bg-white inline-block" />}
         </Button>
-        {categoryFilter && (
-          <Button variant="ghost" size="sm" onClick={() => setCategoryFilter("")}>
+        {(categoryFilter || cityFilter || areaFilter) && (
+          <Button variant="ghost" size="sm" onClick={() => { setCategoryFilter(""); setCityFilter(""); setAreaFilter(""); }}>
             <X className="w-3.5 h-3.5 mr-1" />Clear
           </Button>
         )}
@@ -251,23 +272,65 @@ export function AdminArtistsClient({ artists, categories }: { artists: ArtistWit
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden"
           >
-            <div className="flex flex-wrap gap-2 p-3 rounded-xl bg-muted/20 border">
-              {categories.map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => {
-                    setCategoryFilter((prev) => prev === cat ? "" : cat);
-                    setShowCategoryFilter(false);
-                  }}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
-                    categoryFilter === cat
-                      ? "bg-navy-600 text-white border-navy-600"
-                      : "bg-background border-border text-muted-foreground hover:border-navy-400"
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
+            <div className="p-3 rounded-xl bg-muted/20 border space-y-3">
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Category</p>
+                <div className="flex flex-wrap gap-2">
+                  {categories.map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setCategoryFilter((prev) => prev === cat ? "" : cat)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                        categoryFilter === cat
+                          ? "bg-navy-600 text-white border-navy-600"
+                          : "bg-background border-border text-muted-foreground hover:border-navy-400"
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">City</p>
+                <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto pr-1">
+                  {allCities.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No cities on file yet</p>
+                  ) : allCities.map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => { setCityFilter((prev) => prev === c ? "" : c); setAreaFilter(""); }}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                        cityFilter === c
+                          ? "bg-gold-600 text-white border-gold-600"
+                          : "bg-background border-border text-muted-foreground hover:border-gold-400"
+                      }`}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Area / Locality</p>
+                <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto pr-1">
+                  {allAreas.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">{cityFilter ? "No areas on file for this city" : "No areas on file yet"}</p>
+                  ) : allAreas.map((ar) => (
+                    <button
+                      key={ar}
+                      onClick={() => setAreaFilter((prev) => prev === ar ? "" : ar)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                        areaFilter === ar
+                          ? "bg-emerald-600 text-white border-emerald-600"
+                          : "bg-background border-border text-muted-foreground hover:border-emerald-400"
+                      }`}
+                    >
+                      {ar}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </motion.div>
         )}
@@ -376,6 +439,7 @@ export function AdminArtistsClient({ artists, categories }: { artists: ArtistWit
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <MapPin className="w-3 h-3" />{artist.cities.slice(0, 3).join(", ")}
                     {artist.cities.length > 3 && ` +${artist.cities.length - 3}`}
+                    {artist.area && ` · ${artist.area}`}
                   </div>
                 )}
               </div>

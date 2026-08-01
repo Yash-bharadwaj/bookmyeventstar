@@ -31,6 +31,7 @@ export default async function CoordinatorArtistsPage() {
 
   const mappedArtists = artistsRaw.map((a: any, i: number) => ({
     ...a,
+    area: a.area ?? null,
     user: usersById[a.id] ?? null,
     media: mediaSnaps[i].docs.map((m) => ({ id: m.id, ...m.data() })),
   }));

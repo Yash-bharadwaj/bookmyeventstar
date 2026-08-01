@@ -18,7 +18,7 @@ import { useRouter } from "next/navigation";
 
 interface Artist {
   id: string; categories: string[]; cities: string[]; base_price: number;
-  rating: number; total_bookings: number; bio?: string;
+  rating: number; total_bookings: number; bio?: string; area?: string | null;
   is_verified: boolean; experience_years?: number;
   user: { name: string; email: string; phone: string; avatar_url?: string } | null;
   media: { url: string; is_primary: boolean; type: string }[];
@@ -48,6 +48,14 @@ function uniqueCities(artists: Artist[]) {
   return Array.from(s).sort();
 }
 
+// derive unique areas, optionally scoped to the currently selected cities
+function uniqueAreas(artists: Artist[], cities: string[]) {
+  const pool = cities.length === 0 ? artists : artists.filter((a) => cities.some((c) => a.cities.includes(c)));
+  const s = new Set<string>();
+  pool.forEach((a) => { if (a.area) s.add(a.area); });
+  return Array.from(s).sort();
+}
+
 export function ArtistSearchClient({ artists, enquiries, allCategories }: Props) {
   const router = useRouter();
 
@@ -59,6 +67,7 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
   const [search, setSearch]               = useState("");
   const [categories, setCategories]       = useState<string[]>([]);
   const [cities, setCities]               = useState<string[]>([]);
+  const [areas, setAreas]                 = useState<string[]>([]);
   const [minRating, setMinRating]         = useState(0);
   const [maxPrice, setMaxPrice]           = useState<number | "">("");
   const [minPrice, setMinPrice]           = useState<number | "">("");
@@ -70,6 +79,12 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
   const [photoIdx, setPhotoIdx]           = useState(0);
 
   const allCities = useMemo(() => uniqueCities(artists), [artists]);
+  const allAreas = useMemo(() => uniqueAreas(artists, cities), [artists, cities]);
+
+  // Narrowing the city selection can drop areas that no longer apply.
+  useEffect(() => {
+    setAreas((prev) => prev.filter((a) => allAreas.includes(a)));
+  }, [allAreas]);
 
   // ── Availability for the selected enquiry's event date ──
   const [availabilityMap, setAvailabilityMap] = useState<Record<string, AvailabilityStatus>>({});
@@ -101,16 +116,19 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
   const toggleCity = (c: string) =>
     setCities((prev) => prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]);
 
+  const toggleArea = (a: string) =>
+    setAreas((prev) => prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]);
+
   const toggleShortlist = (id: string) =>
     setShortlisted((prev) => { const n = new Set(Array.from(prev)); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const clearAllFilters = () => {
-    setSearch(""); setCategories([]); setCities([]);
+    setSearch(""); setCategories([]); setCities([]); setAreas([]);
     setMinRating(0); setMinPrice(""); setMaxPrice(""); setVerifiedOnly(false);
   };
 
   const activeFilterCount = [
-    search, ...categories, ...cities,
+    search, ...categories, ...cities, ...areas,
     minRating > 0, minPrice !== "" && minPrice > 0, maxPrice !== "",
     verifiedOnly,
   ].filter(Boolean).length;
@@ -126,12 +144,13 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
 
       const matchCat = categories.length === 0 || categories.some((c) => a.categories.includes(c));
       const matchCity = cities.length === 0 || cities.some((c) => a.cities.includes(c));
+      const matchArea = areas.length === 0 || (!!a.area && areas.includes(a.area));
       const matchRating = a.rating >= minRating;
       const matchMinPrice = minPrice === "" || a.base_price >= Number(minPrice);
       const matchMaxPrice = maxPrice === "" || a.base_price <= Number(maxPrice);
       const matchVerified = !verifiedOnly || a.is_verified;
 
-      return matchSearch && matchCat && matchCity && matchRating && matchMinPrice && matchMaxPrice && matchVerified;
+      return matchSearch && matchCat && matchCity && matchArea && matchRating && matchMinPrice && matchMaxPrice && matchVerified;
     });
 
     list = [...list].sort((a, b) => {
@@ -153,7 +172,7 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
     }
 
     return list;
-  }, [artists, search, categories, cities, minRating, minPrice, maxPrice, verifiedOnly, sortBy, enquiry, availabilityMap]);
+  }, [artists, search, categories, cities, areas, minRating, minPrice, maxPrice, verifiedOnly, sortBy, enquiry, availabilityMap]);
 
   const shortlistedArtists = artists.filter((a) => shortlisted.has(a.id));
 
@@ -308,6 +327,29 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                 </div>
               </div>
 
+              {/* Areas — multi-select chips, scoped to selected cities */}
+              {allAreas.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2.5">Area / Locality</p>
+                  <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto pr-1">
+                    {allAreas.map((a) => (
+                      <button
+                        key={a}
+                        onClick={() => toggleArea(a)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all flex-shrink-0 ${
+                          areas.includes(a)
+                            ? "bg-emerald-600 text-white border-emerald-600"
+                            : "bg-background border-border text-muted-foreground hover:border-emerald-400"
+                        }`}
+                      >
+                        {areas.includes(a) && <Check className="w-3 h-3 inline mr-1" />}
+                        {a}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Price range + Rating + Verified — in a row */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {/* Min price */}
@@ -390,7 +432,7 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
               </div>
 
               {/* Active filters summary */}
-              {(categories.length > 0 || cities.length > 0) && (
+              {(categories.length > 0 || cities.length > 0 || areas.length > 0) && (
                 <div className="flex flex-wrap gap-2 pt-2 border-t">
                   {categories.map((c) => (
                     <span key={c} className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-navy-100 text-navy-700 text-xs font-medium">
@@ -402,6 +444,12 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                     <span key={c} className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-gold-100 text-gold-700 text-xs font-medium">
                       <MapPin className="w-3 h-3" />{c}
                       <button onClick={() => toggleCity(c)}><X className="w-3 h-3" /></button>
+                    </span>
+                  ))}
+                  {areas.map((a) => (
+                    <span key={a} className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-medium">
+                      <MapPin className="w-3 h-3" />{a}
+                      <button onClick={() => toggleArea(a)}><X className="w-3 h-3" /></button>
                     </span>
                   ))}
                 </div>
@@ -596,7 +644,10 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                     {/* Cities */}
                     <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
                       <MapPin className="w-3 h-3 flex-shrink-0" />
-                      <span className="truncate">{artist.cities.slice(0, 3).join(", ")}{artist.cities.length > 3 ? ` +${artist.cities.length - 3}` : ""}</span>
+                      <span className="truncate">
+                        {artist.cities.slice(0, 3).join(", ")}{artist.cities.length > 3 ? ` +${artist.cities.length - 3}` : ""}
+                        {artist.area && ` · ${artist.area}`}
+                      </span>
                     </div>
 
                     {/* Price */}

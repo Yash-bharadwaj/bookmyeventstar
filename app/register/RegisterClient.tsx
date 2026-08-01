@@ -17,6 +17,7 @@ import { registerSchema, RegisterFormData } from "@/lib/validations/auth";
 import { useGoogleSignIn } from "@/hooks/useGoogleSignIn";
 import { useCategories } from "@/hooks/useCategories";
 import { useCities } from "@/hooks/useCities";
+import { useAreas } from "@/hooks/useAreas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -203,6 +204,7 @@ function ArtistRegisterForm() {
   const budgetRange = watch("budgetRange");
   const { categories } = useCategories();
   const { cities } = useCities();
+  const { areas } = useAreas();
 
   useEffect(() => {
     if (resendIn <= 0) return;
@@ -331,6 +333,7 @@ function ArtistRegisterForm() {
           <Label>Where do you perform?</Label>
           <ArtistLocationSelect
             cities={cities}
+            areas={areas}
             value={{ state: googleLocationState, city: googleCity, area: googleArea }}
             onChange={(v) => { setGoogleLocationState(v.state); setGoogleCity(v.city); setGoogleArea(v.area); }}
           />
@@ -391,6 +394,7 @@ function ArtistRegisterForm() {
         <Label>Where do you perform?</Label>
         <ArtistLocationSelect
           cities={cities}
+          areas={areas}
           value={{ state: locationState ?? "", city: locationCity ?? "", area: locationArea ?? "" }}
           onChange={(v) => {
             setValue("state", v.state, { shouldValidate: true });

@@ -225,6 +225,12 @@ export interface City {
   state: string;
 }
 
+export interface Area {
+  id: string;
+  name: string;
+  city: string;
+}
+
 export interface Message {
   id: string;
   enquiry_id: string;

@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
+import { Combobox } from "@/components/ui/combobox";
 import { ArtistCategorySelect } from "@/components/artist/ArtistCategorySelect";
 import { formatDateTime, getInitials } from "@/lib/utils";
 
@@ -37,6 +38,8 @@ interface RegisteredUser {
   categories: string[] | null;
   rating: number | null;
   total_bookings: number | null;
+  city: string | null;
+  area: string | null;
 }
 
 const PAGE_SIZES = [10, 25, 50, 100];
@@ -94,6 +97,8 @@ export function AdminUsersClient({ users, currentAdminId, categoryOptions }: { u
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<"all" | UserRole>("all");
+  const [cityFilter, setCityFilter] = useState("");
+  const [areaFilter, setAreaFilter] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
@@ -116,10 +121,21 @@ export function AdminUsersClient({ users, currentAdminId, categoryOptions }: { u
   const coordinatorCount = users.filter((u) => u.role === "coordinator").length;
   const adminCount = users.filter((u) => u.role === "admin").length;
 
+  const cityOptions = useMemo(
+    () => Array.from(new Set(users.map((u) => u.city).filter((c): c is string => !!c))).sort().map((c) => ({ value: c, label: c })),
+    [users]
+  );
+  const areaOptions = useMemo(() => {
+    const pool = cityFilter ? users.filter((u) => u.city === cityFilter) : users;
+    return Array.from(new Set(pool.map((u) => u.area).filter((a): a is string => !!a))).sort().map((a) => ({ value: a, label: a }));
+  }, [users, cityFilter]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return users.filter((u) => {
       if (roleFilter !== "all" && u.role !== roleFilter) return false;
+      if (cityFilter && u.city !== cityFilter) return false;
+      if (areaFilter && u.area !== areaFilter) return false;
       if (!q) return true;
       return (
         u.name.toLowerCase().includes(q) ||
@@ -127,7 +143,7 @@ export function AdminUsersClient({ users, currentAdminId, categoryOptions }: { u
         u.phone.toLowerCase().includes(q)
       );
     });
-  }, [users, search, roleFilter]);
+  }, [users, search, roleFilter, cityFilter, areaFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -269,11 +285,13 @@ export function AdminUsersClient({ users, currentAdminId, categoryOptions }: { u
   };
 
   const downloadCsv = () => {
-    const header = ["Name", "Email", "Phone", "Role", "Status", "Registered", "Verified", "Listed", "Rating", "Bookings"];
+    const header = ["Name", "Email", "Phone", "City", "Area", "Role", "Status", "Registered", "Verified", "Listed", "Rating", "Bookings"];
     const rows = filtered.map((u) => [
       u.name,
       u.email,
       u.phone,
+      u.city ?? "",
+      u.area ?? "",
       u.role,
       u.is_active ? "Active" : "Inactive",
       formatDateTime(u.created_at),
@@ -349,6 +367,29 @@ export function AdminUsersClient({ users, currentAdminId, categoryOptions }: { u
             <TabsTrigger value="admin">Admins ({adminCount})</TabsTrigger>
           </TabsList>
         </Tabs>
+        <div className="w-44">
+          <Combobox
+            options={cityOptions}
+            value={cityFilter}
+            onValueChange={(v) => { setCityFilter(v); setAreaFilter(""); resetPage(); }}
+            placeholder="Filter by city"
+            searchPlaceholder="Search cities..."
+          />
+        </div>
+        <div className="w-44">
+          <Combobox
+            options={areaOptions}
+            value={areaFilter}
+            onValueChange={(v) => { setAreaFilter(v); resetPage(); }}
+            placeholder="Filter by area"
+            searchPlaceholder="Search areas..."
+          />
+        </div>
+        {(cityFilter || areaFilter) && (
+          <Button variant="ghost" size="sm" onClick={() => { setCityFilter(""); setAreaFilter(""); resetPage(); }}>
+            Clear location
+          </Button>
+        )}
       </div>
 
       {/* Table */}
@@ -359,6 +400,7 @@ export function AdminUsersClient({ users, currentAdminId, categoryOptions }: { u
               <tr className="border-b bg-muted/30 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                 <th className="text-left px-4 py-3 min-w-[220px]">User</th>
                 <th className="text-left px-4 py-3 min-w-[130px]">Phone</th>
+                <th className="text-left px-4 py-3 min-w-[140px]">Location</th>
                 <th className="text-left px-4 py-3 min-w-[90px]">Role</th>
                 <th className="text-left px-4 py-3 min-w-[110px]">Status</th>
                 <th className="text-left px-4 py-3 min-w-[150px]">Registered</th>
@@ -368,7 +410,7 @@ export function AdminUsersClient({ users, currentAdminId, categoryOptions }: { u
             <tbody>
               {pageRows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-16 text-muted-foreground">
+                  <td colSpan={7} className="text-center py-16 text-muted-foreground">
                     No users match your search.
                   </td>
                 </tr>
@@ -400,6 +442,14 @@ export function AdminUsersClient({ users, currentAdminId, categoryOptions }: { u
                         <span>{u.phone || "—"}</span>
                         {u.phone && <CopyIconButton value={u.phone} label="Phone" />}
                       </div>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {u.city ? (
+                        <div className="text-sm">
+                          <p className="truncate max-w-[160px]">{u.city}</p>
+                          {u.area && <p className="text-xs text-muted-foreground/70 truncate max-w-[160px]">{u.area}</p>}
+                        </div>
+                      ) : "—"}
                     </td>
                     <td className="px-4 py-3">
                       <Badge variant={ROLE_BADGE_VARIANT[u.role]}>

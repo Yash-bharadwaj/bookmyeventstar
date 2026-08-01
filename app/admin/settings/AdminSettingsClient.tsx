@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Plus, Pencil, Trash2, Check, X, Loader2, Music2, MapPin,
+  Plus, Pencil, Trash2, Check, X, Loader2, Music2, MapPin, Navigation,
   Mic2, Music, Headphones, Users, Smile, Wand2, Tv2, Volume2,
   Star, Award, Zap, Radio, Lightbulb, Mic, type LucideIcon,
 } from "lucide-react";
@@ -11,7 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Category, City } from "@/types";
+import { Combobox } from "@/components/ui/combobox";
+import { Category, City, Area } from "@/types";
 import { Settings } from "lucide-react";
 import { db } from "@/lib/firebase/client";
 import { collection, addDoc, updateDoc, deleteDoc, doc, setDoc, serverTimestamp } from "firebase/firestore";
@@ -76,14 +77,17 @@ function IconPicker({ value, onChange }: { value: string; onChange: (key: string
 export function AdminSettingsClient({
   categories: initialCategories,
   cities: initialCities,
+  areas: initialAreas,
   platformSettings,
 }: {
   categories: Category[];
   cities: City[];
+  areas: Area[];
   platformSettings?: { artist_share_pct: number; coordinator_workload_max: number; advance_payment_pct: number };
 }) {
   const [categories, setCategories] = useState(initialCategories);
   const [cities, setCities] = useState(initialCities);
+  const [areas, setAreas] = useState(initialAreas);
 
   // Category form state
   const [newCatName, setNewCatName] = useState("");
@@ -107,6 +111,24 @@ export function AdminSettingsClient({
   const [savingCity, setSavingCity] = useState(false);
   const [deletingCity, setDeletingCity] = useState<string | null>(null);
   const [showAddCity, setShowAddCity] = useState(false);
+
+  // Area form state
+  const [newAreaName, setNewAreaName] = useState("");
+  const [newAreaCity, setNewAreaCity] = useState("");
+  const [addingArea, setAddingArea] = useState(false);
+  const [editingArea, setEditingArea] = useState<string | null>(null);
+  const [editAreaName, setEditAreaName] = useState("");
+  const [editAreaCity, setEditAreaCity] = useState("");
+  const [savingArea, setSavingArea] = useState(false);
+  const [deletingArea, setDeletingArea] = useState<string | null>(null);
+  const [showAddArea, setShowAddArea] = useState(false);
+  const [areaCityFilter, setAreaCityFilter] = useState("");
+
+  const cityOptions = useMemo(() => cities.map((c) => ({ value: c.name, label: `${c.name}, ${c.state}` })), [cities]);
+  const visibleAreas = useMemo(
+    () => (areaCityFilter ? areas.filter((a) => a.city === areaCityFilter) : areas),
+    [areas, areaCityFilter]
+  );
 
   // --- Categories ---
   const addCategory = async () => {
@@ -248,6 +270,75 @@ export function AdminSettingsClient({
     );
   };
 
+  // --- Areas ---
+  const addArea = async () => {
+    if (!newAreaName.trim() || !newAreaCity.trim()) { toast.error("Area name and city required"); return; }
+    setAddingArea(true);
+    try {
+      const ref = await addDoc(collection(db, "areas"), {
+        name: newAreaName.trim(),
+        city: newAreaCity.trim(),
+        created_at: serverTimestamp(),
+      });
+      setAreas((prev) => [...prev, { id: ref.id, name: newAreaName.trim(), city: newAreaCity.trim() } as Area]);
+      setNewAreaName(""); setNewAreaCity("");
+      setShowAddArea(false);
+      toast.success("Area added!");
+    } catch {
+      toast.error("Failed to add area");
+    }
+    setAddingArea(false);
+  };
+
+  const startEditArea = (area: Area) => {
+    setEditingArea(area.id);
+    setEditAreaName(area.name);
+    setEditAreaCity(area.city);
+  };
+
+  const saveEditArea = async (id: string) => {
+    setSavingArea(true);
+    try {
+      await updateDoc(doc(db, "areas", id), { name: editAreaName.trim(), city: editAreaCity.trim() });
+      setAreas((prev) => prev.map((a) => a.id === id ? { ...a, name: editAreaName.trim(), city: editAreaCity.trim() } : a));
+      setEditingArea(null);
+      toast.success("Area updated!");
+    } catch {
+      toast.error("Failed to update");
+    }
+    setSavingArea(false);
+  };
+
+  const deleteArea = (id: string) => {
+    const target = areas.find((a) => a.id === id);
+    if (!target) return;
+    setAreas((prev) => prev.filter((a) => a.id !== id));
+    let cancelled = false;
+    const tid = window.setTimeout(async () => {
+      if (cancelled) return;
+      try {
+        await deleteDoc(doc(db, "areas", id));
+      } catch {
+        toast.error("Failed to delete area");
+        setAreas((prev) => [...prev, target].sort((a, b) => a.name.localeCompare(b.name)));
+      }
+    }, 5000);
+    toast(
+      (t) => (
+        <span className="flex items-center gap-3 text-sm">
+          &ldquo;{target.name}&rdquo; deleted
+          <button
+            className="font-semibold text-navy-600 underline"
+            onClick={() => { cancelled = true; clearTimeout(tid); toast.dismiss(t.id); setAreas((prev) => [...prev, target].sort((a, b) => a.name.localeCompare(b.name))); }}
+          >
+            Undo
+          </button>
+        </span>
+      ),
+      { duration: 5000 }
+    );
+  };
+
   const [artistShare, setArtistShare] = useState(platformSettings?.artist_share_pct ?? 70);
   const [workloadMax, setWorkloadMax] = useState(platformSettings?.coordinator_workload_max ?? 8);
   const [advancePct, setAdvancePct] = useState(platformSettings?.advance_payment_pct ?? 30);
@@ -280,6 +371,9 @@ export function AdminSettingsClient({
           </TabsTrigger>
           <TabsTrigger value="cities">
             <MapPin className="w-4 h-4 mr-1.5" />Cities ({cities.length})
+          </TabsTrigger>
+          <TabsTrigger value="areas">
+            <Navigation className="w-4 h-4 mr-1.5" />Areas ({areas.length})
           </TabsTrigger>
           <TabsTrigger value="platform">
             <Settings className="w-4 h-4 mr-1.5" />Platform
@@ -486,6 +580,132 @@ export function AdminSettingsClient({
                 ))}
                 {cities.length === 0 && (
                   <tr><td colSpan={3} className="py-8 text-center text-muted-foreground text-sm">No cities yet</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </TabsContent>
+
+        {/* Areas Tab */}
+        <TabsContent value="areas" className="mt-6 space-y-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-sm text-muted-foreground">{areas.length} localities configured</p>
+            <div className="flex items-center gap-2">
+              <div className="w-48">
+                <Combobox
+                  options={cityOptions}
+                  value={areaCityFilter}
+                  onValueChange={setAreaCityFilter}
+                  placeholder="Filter by city"
+                  searchPlaceholder="Search cities..."
+                />
+              </div>
+              {areaCityFilter && (
+                <Button variant="ghost" size="sm" onClick={() => setAreaCityFilter("")}>Clear</Button>
+              )}
+              <Button size="sm" onClick={() => setShowAddArea((v) => !v)}>
+                <Plus className="w-4 h-4 mr-1.5" />Add Area
+              </Button>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground -mt-2">
+            Optional per-city localities artists can pick from at signup — if a city has none listed yet, artists can type their own.
+          </p>
+
+          <AnimatePresence>
+            {showAddArea && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="rounded-xl border p-4 bg-muted/20 space-y-3">
+                  <p className="text-sm font-semibold">New Area</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Area Name *</Label>
+                      <Input placeholder="e.g. Koramangala" value={newAreaName} onChange={(e) => setNewAreaName(e.target.value)} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">City *</Label>
+                      <Combobox
+                        options={cityOptions}
+                        value={newAreaCity}
+                        onValueChange={setNewAreaCity}
+                        placeholder="Select city"
+                        searchPlaceholder="Search cities..."
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button size="sm" variant="outline" onClick={() => setShowAddArea(false)}>Cancel</Button>
+                    <Button size="sm" onClick={addArea} loading={addingArea}>Add Area</Button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <div className="rounded-2xl border overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b bg-muted/30">
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase">Area</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase">City</th>
+                  <th className="px-4 py-3 w-24" />
+                </tr>
+              </thead>
+              <tbody>
+                {visibleAreas.map((area, i) => (
+                  <motion.tr
+                    key={area.id}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: i * 0.02 }}
+                    className="border-b last:border-0 hover:bg-accent/20"
+                  >
+                    <td className="px-4 py-3 font-medium text-sm">
+                      {editingArea === area.id ? (
+                        <Input value={editAreaName} onChange={(e) => setEditAreaName(e.target.value)} className="max-w-[200px]" />
+                      ) : area.name}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-muted-foreground">
+                      {editingArea === area.id ? (
+                        <div className="max-w-[220px]">
+                          <Combobox options={cityOptions} value={editAreaCity} onValueChange={setEditAreaCity} placeholder="Select city" />
+                        </div>
+                      ) : area.city}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1 justify-end">
+                        {editingArea === area.id ? (
+                          <>
+                            <Button size="icon" variant="ghost" className="h-7 w-7 text-emerald-600" onClick={() => saveEditArea(area.id)} disabled={savingArea}>
+                              {savingArea ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingArea(null)}>
+                              <X className="w-3.5 h-3.5" />
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => startEditArea(area)}>
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 hover:text-red-600" onClick={() => deleteArea(area.id)} disabled={deletingArea === area.id}>
+                              {deletingArea === area.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </motion.tr>
+                ))}
+                {visibleAreas.length === 0 && (
+                  <tr><td colSpan={3} className="py-8 text-center text-muted-foreground text-sm">
+                    {areaCityFilter ? "No areas for this city yet" : "No areas yet"}
+                  </td></tr>
                 )}
               </tbody>
             </table>
