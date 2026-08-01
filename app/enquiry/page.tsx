@@ -66,7 +66,12 @@ function maskPhone(digits: string): string {
   return d.length < 10 ? `+91 ${digits}` : `+91 •••••${d.slice(-4)}`;
 }
 
-export default function EnquiryPage() {
+// Client bookings are paused for now — only artist registration/sign-in is
+// live. The real multi-step enquiry form below is untouched and fully wired;
+// it's just not the default export, so it's a one-line flip to bring back
+// (rename this back to `export default function EnquiryPage()` and delete
+// the placeholder further down).
+function EnquiryFormLegacy() {
   const [sessionReady, setSessionReady] = useState(false);
   const [hasSession, setHasSession] = useState(false);
   const [phonePreview, setPhonePreview] = useState("");
@@ -962,6 +967,37 @@ export default function EnquiryPage() {
             </div>
           </form>
         </div>
+      </div>
+    </div>
+  );
+}
+
+export default function EnquiryPage() {
+  return (
+    <div className="min-h-screen navy-gradient flex items-center justify-center p-6">
+      <div className="text-center max-w-sm">
+        <div className="flex justify-center mb-6">
+          <BrandLogo href="/" size="md" />
+        </div>
+        <div className="w-20 h-20 rounded-2xl bg-white/10 flex items-center justify-center mx-auto mb-6 border border-white/10">
+          <Sparkles className="w-10 h-10 text-gold-400" />
+        </div>
+        <h1 className="text-2xl font-bold text-white mb-3">Launching Soon 🎭</h1>
+        <p className="text-white/60 text-sm leading-relaxed mb-2">
+          Booking an artist here isn&apos;t live yet. Turns out, like most artists, it&apos;s arriving fashionably late.
+        </p>
+        <p className="text-white/40 text-xs leading-relaxed mb-6">
+          Meanwhile, if you&apos;re the talent — we&apos;re very much open for business.
+        </p>
+        <Link
+          href="/register?role=artist"
+          className="block w-full py-3 rounded-xl bg-gradient-to-r from-gold-500 to-gold-600 text-white font-semibold text-sm hover:opacity-90 transition-opacity"
+        >
+          I&apos;m an Artist — Sign Me Up
+        </Link>
+        <Link href="/" className="block mt-4 text-white/40 text-xs hover:text-white/70 transition-colors">
+          Back to home
+        </Link>
       </div>
     </div>
   );

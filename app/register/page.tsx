@@ -8,7 +8,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Mail, Lock, User, Phone, Eye, EyeOff, CalendarCheck, Mic2, CheckCircle2,
-  Smartphone, ShieldCheck,
+  Smartphone, ShieldCheck, Sparkles,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { cn } from "@/lib/utils";
@@ -137,7 +137,10 @@ function RegisterForm() {
             })}
           </div>
 
-          {selectedRole === "client" ? <ClientRegisterForm /> : <ArtistRegisterForm />}
+          {/* Client bookings are paused for now — ClientRegisterForm below is
+              untouched and fully wired, just swapped out for a placeholder.
+              Flip this back to `<ClientRegisterForm />` to re-enable. */}
+          {selectedRole === "client" ? <ClientBookingComingSoon /> : <ArtistRegisterForm />}
 
           <p className="mt-4 text-center text-sm text-muted-foreground">
             Already have an account?{" "}
@@ -464,6 +467,20 @@ function ArtistRegisterForm() {
         Create Account
       </Button>
     </form>
+  );
+}
+
+function ClientBookingComingSoon() {
+  return (
+    <div className="mt-6 text-center rounded-2xl border border-gold-200 bg-gold-50/50 p-6">
+      <div className="w-14 h-14 rounded-2xl gold-gradient flex items-center justify-center mx-auto mb-4">
+        <Sparkles className="w-7 h-7 text-white" />
+      </div>
+      <h3 className="font-display font-bold text-lg text-navy-900 mb-1.5">Launching Soon 🎭</h3>
+      <p className="text-sm text-muted-foreground leading-relaxed">
+        Booking an artist here isn&apos;t live yet. Turns out, like most artists, it&apos;s arriving fashionably late.
+      </p>
+    </div>
   );
 }
 
