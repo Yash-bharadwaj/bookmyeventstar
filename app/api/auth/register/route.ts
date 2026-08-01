@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { SESSION_COOKIE_NAME } from "@/lib/firebase/session";
 import { verifyEmailVerification } from "@/lib/email/verification-token";
 import { notifyAllAdminsServer } from "@/lib/notifications/server";
+import { sendEmail, artistWelcomeEmailHtml } from "@/lib/email/resend";
 
 const PRIVILEGED_ROLES = ["coordinator", "admin"];
 
@@ -12,7 +13,7 @@ export async function POST(req: NextRequest) {
   try {
     const {
       name, email, phone, password, role, emailVerificationToken, emailVerificationExpires,
-      isEventManager, companyName, instagramHandle, websiteUrl,
+      isEventManager, companyName, instagramHandle, websiteUrl, category,
     } = await req.json();
 
     // Basic server-side validation
@@ -21,6 +22,10 @@ export async function POST(req: NextRequest) {
     }
     if (!["client", "artist", "coordinator", "admin"].includes(role)) {
       return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+    }
+    const categoryStr = String(category ?? "").trim() || null;
+    if (role === "artist" && !categoryStr) {
+      return NextResponse.json({ error: "Select what kind of artist you are." }, { status: 400 });
     }
 
     const isManager = role === "client" && Boolean(isEventManager);
@@ -98,7 +103,7 @@ export async function POST(req: NextRequest) {
       if (role === "artist") {
         await adminDb.collection("artistProfiles").doc(userId).set({
           bio: "",
-          categories: [],
+          categories: categoryStr ? [categoryStr] : [],
           cities: [],
           base_price: 0,
           pricing_details: {},
@@ -122,12 +127,21 @@ export async function POST(req: NextRequest) {
     // Only for genuine self-registration — an admin adding a user from
     // Admin > Users already knows about it, no need to notify themselves.
     if ((role === "client" || role === "artist") && callerRole !== "admin") {
+      const roleLabel = role === "artist" && categoryStr ? categoryStr : role;
       notifyAllAdminsServer({
-        title: `New ${role} registered — ${name}`,
-        message: `${name} (${email}, ${phone_e164}) just created a ${role} account.`,
+        title: `New ${roleLabel} registered — ${name}`,
+        message: `${name} (${email}, ${phone_e164}) just created a ${role} account${role === "artist" && categoryStr ? ` (${categoryStr})` : ""}.`,
         type: "info",
         link: "/admin/users",
       }).catch((err) => console.error("[register] admin notify failed:", err));
+    }
+
+    if (role === "artist") {
+      sendEmail({
+        to: email,
+        subject: "Welcome to the Star Community! 🌟",
+        html: artistWelcomeEmailHtml({ name, category: categoryStr ?? undefined }),
+      }).catch((err) => console.error("[register] artist welcome email failed:", err));
     }
 
     return NextResponse.json({ success: true });

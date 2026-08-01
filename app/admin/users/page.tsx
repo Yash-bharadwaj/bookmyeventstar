@@ -9,7 +9,11 @@ export default async function AdminUsersPage() {
   if (!user) redirect("/login");
   if (user.role !== "admin") redirect("/login");
 
-  const usersSnap = await adminDb.collection("users").get();
+  const [usersSnap, categoriesSnap] = await Promise.all([
+    adminDb.collection("users").get(),
+    adminDb.collection("categories").orderBy("name").get(),
+  ]);
+  const categoryOptions = categoriesSnap.docs.map((d) => d.data().name as string);
 
   const rawUsers = usersSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as AnyDoc);
   const artistIds = rawUsers.filter((u) => u.role === "artist").map((u) => u.id);
@@ -37,5 +41,5 @@ export default async function AdminUsersPage() {
       return bt - at;
     });
 
-  return <AdminUsersClient users={serialize(users) as any} currentAdminId={user.id} />;
+  return <AdminUsersClient users={serialize(users) as any} currentAdminId={user.id} categoryOptions={categoryOptions} />;
 }

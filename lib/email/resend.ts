@@ -55,3 +55,32 @@ export function notificationEmailHtml({ message, link }: { message: string; link
     </div>
   `;
 }
+
+/** Sent once, right after a brand-new artist finishes signup (email/password
+ * or Google) — the one "welcome to the community" moment, distinct from the
+ * plainer notificationEmailHtml shell used for ongoing account events. */
+export function artistWelcomeEmailHtml({ name, category }: { name: string; category?: string }) {
+  const roleLabel = category ? `a <strong>${category}</strong>` : "an artist";
+  return `
+    <div style="font-family:-apple-system,Helvetica,Arial,sans-serif;max-width:480px;margin:0 auto;">
+      <div style="background:linear-gradient(135deg,#1a202c,#2c5282);padding:36px 28px;border-radius:16px 16px 0 0;text-align:center;">
+        <p style="font-size:34px;margin:0 0 8px;line-height:1;">🌟</p>
+        <h1 style="color:#ffffff;font-size:21px;margin:0;font-weight:700;">Welcome to the Star Community!</h1>
+      </div>
+      <div style="background:#ffffff;padding:28px;border:1px solid #E2E8F0;border-top:none;border-radius:0 0 16px 16px;">
+        <p style="font-size:15px;color:#1F2937;line-height:1.6;margin:0 0 16px;">Hi ${name},</p>
+        <p style="font-size:15px;color:#1F2937;line-height:1.6;margin:0 0 16px;">
+          Thank you for registering as ${roleLabel} on BookMyEventStar! We're thrilled to have you join our growing community of performers.
+        </p>
+        <p style="font-size:14px;color:#1F2937;line-height:1.6;margin:0 0 10px;font-weight:600;">Here's what happens next:</p>
+        <ul style="font-size:14px;color:#1F2937;line-height:1.8;margin:0 0 22px;padding-left:20px;">
+          <li>Complete your profile — bio, price, cities, and a few great photos</li>
+          <li>Our team reviews and verifies your profile</li>
+          <li>Once verified, coordinators and clients can find and book you</li>
+        </ul>
+        <a href="${SITE_URL}/artist/profile" style="display:inline-block;background:#2c5282;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:12px 24px;border-radius:10px;">Complete My Profile →</a>
+        <p style="font-size:13px;color:#6b7280;margin:26px 0 0;">Welcome aboard — let's get you booked!<br/>— Team BookMyEventStar</p>
+      </div>
+    </div>
+  `;
+}

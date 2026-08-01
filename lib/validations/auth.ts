@@ -21,10 +21,16 @@ export const registerSchema = z
     password: z.string().min(8, "Password must be at least 8 characters"),
     confirmPassword: z.string(),
     role: z.enum(["client", "artist"]),
+    category: z.string().optional(),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match",
     path: ["confirmPassword"],
+  })
+  .superRefine((data, ctx) => {
+    if (data.role === "artist" && !data.category?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Select what kind of artist you are", path: ["category"] });
+    }
   });
 
 export type LoginFormData = z.infer<typeof loginSchema>;

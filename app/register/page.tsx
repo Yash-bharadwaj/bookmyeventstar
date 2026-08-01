@@ -15,11 +15,13 @@ import { cn } from "@/lib/utils";
 import { signInWithEmail } from "@/lib/firebase/auth-client";
 import { registerSchema, RegisterFormData } from "@/lib/validations/auth";
 import { useGoogleSignIn } from "@/hooks/useGoogleSignIn";
+import { useCategories } from "@/hooks/useCategories";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { OtpInput } from "@/components/ui/otp-input";
 import { ResendTimer } from "@/components/ui/resend-timer";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { GoogleIcon } from "@/components/ui/GoogleIcon";
 
@@ -164,6 +166,7 @@ function ArtistRegisterForm() {
 
   const {
     googleBusy, googleUser, phoneDigits: googlePhone, setPhoneDigits: setGooglePhone,
+    category: googleCategory, setCategory: setGoogleCategory,
     finishing: googleFinishing, startGoogleSignIn, finishGoogleSignup, cancelGoogleSignup,
   } = useGoogleSignIn("artist");
 
@@ -176,11 +179,13 @@ function ArtistRegisterForm() {
   const [verificationToken, setVerificationToken] = useState("");
   const [verificationExpires, setVerificationExpires] = useState(0);
 
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<RegisterFormData>({
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
     defaultValues: { role: "artist" },
   });
   const email = watch("email");
+  const category = watch("category");
+  const { categories } = useCategories();
 
   useEffect(() => {
     if (resendIn <= 0) return;
@@ -253,6 +258,7 @@ function ArtistRegisterForm() {
           phone: data.phone,
           password: data.password,
           role: "artist",
+          category: data.category,
           emailVerificationToken: verificationToken,
           emailVerificationExpires: verificationExpires,
         }),
@@ -295,6 +301,19 @@ function ArtistRegisterForm() {
             />
           </div>
         </div>
+        <div className="space-y-1">
+          <Label>What kind of artist are you?</Label>
+          <Select value={googleCategory} onValueChange={setGoogleCategory}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select a category — Dancer, DJ, Magician..." />
+            </SelectTrigger>
+            <SelectContent>
+              {categories.map((cat) => (
+                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <Button type="button" onClick={finishGoogleSignup} loading={googleFinishing} className="w-full" size="lg">
           Finish Sign Up
         </Button>
@@ -331,6 +350,21 @@ function ArtistRegisterForm() {
             <Input type="tel" placeholder="9876543210" maxLength={10} icon={<Phone className="w-4 h-4" />} error={errors.phone?.message} className="min-w-0" {...register("phone")} />
           </div>
         </div>
+      </div>
+
+      <div className="space-y-1">
+        <Label>What kind of artist are you?</Label>
+        <Select value={category ?? ""} onValueChange={(v) => setValue("category", v, { shouldValidate: true })}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select a category — Dancer, DJ, Magician..." />
+          </SelectTrigger>
+          <SelectContent>
+            {categories.map((cat) => (
+              <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {errors.category?.message && <p className="text-xs text-destructive">{errors.category.message}</p>}
       </div>
 
       <div className={cn(

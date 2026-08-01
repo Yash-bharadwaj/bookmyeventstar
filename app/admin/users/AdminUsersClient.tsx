@@ -66,7 +66,7 @@ function csvEscape(value: string): string {
   return value;
 }
 
-export function AdminUsersClient({ users, currentAdminId }: { users: RegisteredUser[]; currentAdminId: string }) {
+export function AdminUsersClient({ users, currentAdminId, categoryOptions }: { users: RegisteredUser[]; currentAdminId: string; categoryOptions: string[] }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<"all" | UserRole>("all");
@@ -75,7 +75,7 @@ export function AdminUsersClient({ users, currentAdminId }: { users: RegisteredU
 
   const [showAdd, setShowAdd] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [addForm, setAddForm] = useState({ role: "client" as "client" | "artist", name: "", email: "", phone: "", password: "" });
+  const [addForm, setAddForm] = useState({ role: "client" as "client" | "artist", name: "", email: "", phone: "", password: "", category: "" });
 
   const [editUser, setEditUser] = useState<RegisteredUser | null>(null);
   const [editForm, setEditForm] = useState({ name: "", email: "", phone: "" });
@@ -216,6 +216,7 @@ export function AdminUsersClient({ users, currentAdminId }: { users: RegisteredU
       return;
     }
     if (addForm.password.length < 8) { toast.error("Password must be at least 8 characters"); return; }
+    if (addForm.role === "artist" && !addForm.category) { toast.error("Select the artist's category"); return; }
     setCreating(true);
     try {
       const res = await fetch("/api/auth/register", {
@@ -227,13 +228,14 @@ export function AdminUsersClient({ users, currentAdminId }: { users: RegisteredU
           phone: addForm.phone.trim(),
           password: addForm.password,
           role: addForm.role,
+          category: addForm.category,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to create account");
       toast.success(`${addForm.name} added as ${addForm.role}`);
       setShowAdd(false);
-      setAddForm({ role: "client", name: "", email: "", phone: "", password: "" });
+      setAddForm({ role: "client", name: "", email: "", phone: "", password: "", category: "" });
       router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create account");
@@ -365,7 +367,11 @@ export function AdminUsersClient({ users, currentAdminId }: { users: RegisteredU
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{u.phone}</td>
                     <td className="px-4 py-3">
-                      <Badge variant={ROLE_BADGE_VARIANT[u.role]}>{ROLE_LABELS[u.role]}</Badge>
+                      <Badge variant={ROLE_BADGE_VARIANT[u.role]}>
+                        {u.role === "artist" && u.categories && u.categories.length > 0
+                          ? u.categories.join(", ")
+                          : ROLE_LABELS[u.role]}
+                      </Badge>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap items-center gap-2">
@@ -491,6 +497,19 @@ export function AdminUsersClient({ users, currentAdminId }: { users: RegisteredU
                 </SelectContent>
               </Select>
             </div>
+            {addForm.role === "artist" && (
+              <div className="space-y-1.5">
+                <Label>Category</Label>
+                <Select value={addForm.category} onValueChange={(v) => setAddForm((f) => ({ ...f, category: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Dancer, DJ, Magician..." /></SelectTrigger>
+                  <SelectContent>
+                    {categoryOptions.map((cat) => (
+                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label>Full Name</Label>
               <Input value={addForm.name} onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))} />

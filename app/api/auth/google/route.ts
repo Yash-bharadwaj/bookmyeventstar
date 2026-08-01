@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { notifyAllAdminsServer } from "@/lib/notifications/server";
+import { sendEmail, artistWelcomeEmailHtml } from "@/lib/email/resend";
 
 const PHONE_REGEX = /^[6-9]\d{9}$/;
 
@@ -15,7 +16,7 @@ const PHONE_REGEX = /^[6-9]\d{9}$/;
  */
 export async function POST(req: NextRequest) {
   try {
-    const { idToken, phone, role } = await req.json();
+    const { idToken, phone, role, category } = await req.json();
 
     if (typeof idToken !== "string" || !idToken) {
       return NextResponse.json({ error: "Missing sign-in token." }, { status: 400 });
@@ -26,6 +27,10 @@ export async function POST(req: NextRequest) {
     const digits = String(phone ?? "").replace(/\D/g, "");
     if (!PHONE_REGEX.test(digits)) {
       return NextResponse.json({ error: "Enter a valid 10-digit mobile number." }, { status: 400 });
+    }
+    const categoryStr = String(category ?? "").trim() || null;
+    if (role === "artist" && !categoryStr) {
+      return NextResponse.json({ error: "Select what kind of artist you are." }, { status: 400 });
     }
 
     let decoded: { uid: string; email?: string; email_verified?: boolean; name?: string };
@@ -65,7 +70,7 @@ export async function POST(req: NextRequest) {
       if (role === "artist") {
         await adminDb.collection("artistProfiles").doc(decoded.uid).set({
           bio: "",
-          categories: [],
+          categories: categoryStr ? [categoryStr] : [],
           cities: [],
           base_price: 0,
           pricing_details: {},
@@ -84,12 +89,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Could not finish setting up your account. Please try again." }, { status: 500 });
     }
 
+    const roleLabel = role === "artist" && categoryStr ? categoryStr : role;
     notifyAllAdminsServer({
-      title: `New ${role} registered — ${name}`,
-      message: `${name} (${decoded.email}, ${phone_e164}) just created a ${role} account via Google.`,
+      title: `New ${roleLabel} registered — ${name}`,
+      message: `${name} (${decoded.email}, ${phone_e164}) just created a ${role} account via Google${role === "artist" && categoryStr ? ` (${categoryStr})` : ""}.`,
       type: "info",
       link: "/admin/users",
     }).catch((err) => console.error("[auth/google] admin notify failed:", err));
+
+    if (role === "artist") {
+      sendEmail({
+        to: decoded.email,
+        subject: "Welcome to the Star Community! 🌟",
+        html: artistWelcomeEmailHtml({ name, category: categoryStr ?? undefined }),
+      }).catch((err) => console.error("[auth/google] artist welcome email failed:", err));
+    }
 
     return NextResponse.json({ success: true });
   } catch (err) {

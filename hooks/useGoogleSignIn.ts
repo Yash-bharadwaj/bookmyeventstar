@@ -34,6 +34,7 @@ export function useGoogleSignIn(fixedRole?: Role, redirectTo?: string | null) {
   const [googleUser, setGoogleUser] = useState<PendingGoogleUser | null>(null);
   const [pendingRole, setPendingRole] = useState<Role | undefined>(fixedRole);
   const [phoneDigits, setPhoneDigits] = useState("");
+  const [category, setCategory] = useState("");
   const [finishing, setFinishing] = useState(false);
 
   const startGoogleSignIn = async () => {
@@ -84,13 +85,14 @@ export function useGoogleSignIn(fixedRole?: Role, redirectTo?: string | null) {
     const digits = phoneDigits.replace(/\D/g, "");
     if (!/^[6-9]\d{9}$/.test(digits)) { toast.error("Enter a valid 10-digit mobile number"); return; }
     if (!pendingRole) { toast.error("Please choose an account type"); return; }
+    if (pendingRole === "artist" && !category) { toast.error("Select what kind of artist you are"); return; }
 
     setFinishing(true);
     try {
       const res = await fetch("/api/auth/google", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken: googleUser.idToken, phone: digits, role: pendingRole }),
+        body: JSON.stringify({ idToken: googleUser.idToken, phone: digits, role: pendingRole, category }),
       });
       const json = await res.json();
       if (!res.ok) { toast.error(json.error ?? "Could not finish setting up your account."); return; }
@@ -120,6 +122,8 @@ export function useGoogleSignIn(fixedRole?: Role, redirectTo?: string | null) {
     setPendingRole,
     phoneDigits,
     setPhoneDigits,
+    category,
+    setCategory,
     finishing,
     startGoogleSignIn,
     finishGoogleSignup,
