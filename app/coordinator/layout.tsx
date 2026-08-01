@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/firebase/server";
 import { serialize } from "@/lib/firebase/firestore-utils";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+
+export const metadata: Metadata = {
+  title: "Coordinator Dashboard",
+  robots: { index: false, follow: false },
+};
 
 export default async function CoordinatorSectionLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();

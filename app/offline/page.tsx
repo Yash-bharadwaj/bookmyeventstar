@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
 import { WifiOff } from "lucide-react";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "You're Offline",
+  robots: { index: false, follow: false },
+};
 
 export default function OfflinePage() {
   return (

@@ -6,6 +6,8 @@ import { serialize, type AnyDoc } from "@/lib/firebase/firestore-utils";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { ArtistProfilePageClient } from "./ArtistProfilePageClient";
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://bookmyeventstar.com";
+
 async function getArtistBySlug(slug: string): Promise<AnyDoc | null> {
   const snap = await adminDb.collection("artistProfiles").where("slug", "==", slug).limit(1).get();
   if (snap.empty) return null;
@@ -34,7 +36,7 @@ async function getArtistBySlug(slug: string): Promise<AnyDoc | null> {
 
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
   const artist = await getArtistBySlug(params.slug);
-  if (!artist) return { title: "Artist not found" };
+  if (!artist) return { title: "Artist not found", robots: { index: false, follow: false } };
 
   const category = artist.categories?.[0] ?? "Performer";
   const city = artist.cities?.[0] ?? "India";
@@ -45,15 +47,24 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   const primaryPhoto = artist.media.find((m: any) => m.type === "photo" && m.is_primary)?.url
     ?? artist.media.find((m: any) => m.type === "photo")?.url
     ?? artist.user.avatar_url;
+  const url = `/artists/${params.slug}`;
 
   return {
     title,
     description,
+    alternates: { canonical: url },
     openGraph: {
       title,
       description,
       type: "profile",
+      url,
       ...(primaryPhoto ? { images: [{ url: primaryPhoto }] } : {}),
+    },
+    twitter: {
+      card: primaryPhoto ? "summary_large_image" : "summary",
+      title,
+      description,
+      ...(primaryPhoto ? { images: [primaryPhoto] } : {}),
     },
   };
 }
@@ -66,8 +77,40 @@ export default async function ArtistProfilePage({ params }: { params: { slug: st
   if (!artist) notFound();
   const cities = citiesSnap.docs.map((d) => ({ name: d.data().name as string, state: d.data().state as string }));
 
+  const category = artist.categories?.[0] ?? "Performer";
+  const city = artist.cities?.[0];
+  const primaryPhoto = artist.media.find((m: any) => m.type === "photo" && m.is_primary)?.url
+    ?? artist.media.find((m: any) => m.type === "photo")?.url
+    ?? artist.user.avatar_url;
+
+  const personJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    name: artist.user.name,
+    url: `${SITE_URL}/artists/${params.slug}`,
+    ...(primaryPhoto ? { image: primaryPhoto } : {}),
+    ...(artist.bio?.trim() ? { description: artist.bio.trim() } : {}),
+    jobTitle: category,
+    ...(city ? { address: { "@type": "PostalAddress", addressLocality: city, addressCountry: "IN" } } : {}),
+    ...(artist.base_price
+      ? {
+          makesOffer: {
+            "@type": "Offer",
+            priceCurrency: "INR",
+            price: artist.base_price,
+            availability: "https://schema.org/InStock",
+            url: `${SITE_URL}/artists/${params.slug}`,
+          },
+        }
+      : {}),
+  };
+
   return (
     <div className="min-h-screen bg-white">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(personJsonLd) }}
+      />
       <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-b">
         <div className="max-w-3xl mx-auto px-4 h-20 flex items-center justify-between">
           <BrandLogo size="md" href="/" priority />

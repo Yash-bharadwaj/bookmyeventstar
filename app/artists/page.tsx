@@ -7,7 +7,14 @@ import { BrandLogo } from "@/components/brand/BrandLogo";
 
 export const metadata = {
   title: "Browse Artists",
-  description: "Find and book top performers, singers, DJs, comedians and more across India",
+  description:
+    "Browse verified singers, DJs, comedians, anchors, bands, and performers across India. Filter by category, city, and budget — book with a coordinator's help.",
+  alternates: { canonical: "/artists" },
+  openGraph: {
+    url: "/artists",
+    title: "Browse Artists | BookMyEventStar",
+    description: "Find and book top performers, singers, DJs, comedians and more across India.",
+  },
 };
 
 export default async function ArtistsPage({
