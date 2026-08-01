@@ -1,0 +1,25 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Artist profile photo — one per uid, publicly readable, only the
+    // owner can write, images only, capped at 10MB.
+    match /artist-media/profile/{uid} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Artist portfolio photos/videos — publicly readable, only the owner
+    // can write, capped at 50MB (video).
+    match /artist-media/{uid}/{mediaId} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.size < 50 * 1024 * 1024
+        && (request.resource.contentType.matches('image/.*') || request.resource.contentType.matches('video/.*'));
+    }
+  }
+}
