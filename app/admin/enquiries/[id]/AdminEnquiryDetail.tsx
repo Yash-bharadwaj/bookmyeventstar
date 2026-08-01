@@ -5,13 +5,15 @@ import { motion } from "framer-motion";
 import {
   ArrowLeft, Calendar, MapPin, IndianRupee, User, Phone, Mail,
   FileText, Clock, CheckCircle, Send, ClipboardList, UserCheck, AlertTriangle,
+  Ban, Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatDate, formatCurrency, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { db } from "@/lib/firebase/client";
-import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { doc, updateDoc, serverTimestamp, writeBatch, collection, query, where, getDocs } from "firebase/firestore";
 import { notifyUser } from "@/lib/notifications/client";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
@@ -43,8 +45,46 @@ export function AdminEnquiryDetail({ enquiry, proposals, coordinators }: Props) 
   const [coordinatorId, setCoordinatorId] = useState(enquiry.coordinator_id ?? "");
   const [saving, setSaving] = useState(false);
   const [assigning, setAssigning] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<"reject" | "delete" | null>(null);
+  const [processingAction, setProcessingAction] = useState(false);
 
   const currentStepIndex = STATUS_FLOW.findIndex((s) => s.key === status);
+
+  const runConfirmedAction = async () => {
+    if (!confirmAction) return;
+    setProcessingAction(true);
+    try {
+      if (confirmAction === "reject") {
+        await updateDoc(doc(db, "enquiries", enquiry.id), {
+          status: "cancelled",
+          updated_at: serverTimestamp(),
+        });
+        if (enquiry.client_id) {
+          await notifyUser(enquiry.client_id, {
+            title: "Enquiry Update",
+            message: `Your ${enquiry.event_type} enquiry has been declined.`,
+            type: "info",
+            link: `/client/enquiries/${enquiry.id}`,
+          }).catch(() => {});
+        }
+        toast.success("Enquiry rejected");
+        setStatus("cancelled");
+        setConfirmAction(null);
+        router.refresh();
+      } else {
+        const proposalsSnap = await getDocs(query(collection(db, "proposals"), where("enquiry_id", "==", enquiry.id)));
+        const batch = writeBatch(db);
+        proposalsSnap.forEach((p) => batch.delete(p.ref));
+        batch.delete(doc(db, "enquiries", enquiry.id));
+        await batch.commit();
+        toast.success("Enquiry deleted");
+        router.push("/admin/enquiries");
+      }
+    } catch {
+      toast.error(confirmAction === "reject" ? "Failed to reject enquiry" : "Failed to delete enquiry");
+      setProcessingAction(false);
+    }
+  };
 
   const saveUpdate = async () => {
     setSaving(true);
@@ -112,9 +152,19 @@ export function AdminEnquiryDetail({ enquiry, proposals, coordinators }: Props) 
             Enquiry #{enquiry.id.slice(0, 8).toUpperCase()} · Submitted {formatDate(enquiry.created_at)}
           </p>
         </div>
-        <span className={`px-3 py-1.5 rounded-full text-sm font-semibold ${getStatusColor(enquiry.status)}`}>
-          {getStatusLabel(enquiry.status)}
-        </span>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={`px-3 py-1.5 rounded-full text-sm font-semibold ${getStatusColor(enquiry.status)}`}>
+            {getStatusLabel(enquiry.status)}
+          </span>
+          {enquiry.status !== "cancelled" && enquiry.status !== "completed" && (
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setConfirmAction("reject")}>
+              <Ban className="w-3.5 h-3.5" />Reject
+            </Button>
+          )}
+          <Button variant="destructive" size="sm" className="gap-1.5" onClick={() => setConfirmAction("delete")}>
+            <Trash2 className="w-3.5 h-3.5" />Delete
+          </Button>
+        </div>
       </div>
 
       {/* Progress Timeline */}
@@ -308,6 +358,32 @@ export function AdminEnquiryDetail({ enquiry, proposals, coordinators }: Props) 
           </div>
         )}
       </div>
+
+      {/* Reject / Delete confirmation */}
+      <Dialog open={!!confirmAction} onOpenChange={(open) => !open && setConfirmAction(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{confirmAction === "delete" ? "Delete Enquiry" : "Reject Enquiry"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {confirmAction === "delete"
+                ? "This permanently deletes this enquiry and any linked proposals. This cannot be undone."
+                : "The client will be notified that their enquiry has been declined. You can still reassign it later."}
+            </p>
+            <div className="flex gap-3 justify-end">
+              <Button variant="outline" onClick={() => setConfirmAction(null)}>Cancel</Button>
+              <Button variant="destructive" onClick={runConfirmedAction} loading={processingAction}>
+                {confirmAction === "delete" ? (
+                  <><Trash2 className="w-4 h-4 mr-2" />Delete Enquiry</>
+                ) : (
+                  <><Ban className="w-4 h-4 mr-2" />Reject Enquiry</>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

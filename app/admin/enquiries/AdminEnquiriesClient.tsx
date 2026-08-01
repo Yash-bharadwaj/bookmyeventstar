@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Eye, Clock, ChevronRight, Search, AlertCircle, UserCheck } from "lucide-react";
+import { Eye, Clock, ChevronRight, Search, AlertCircle, UserCheck, Ban, Trash2 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Enquiry } from "@/types";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -11,8 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatDate, formatCurrency, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { db } from "@/lib/firebase/client";
-import { doc, writeBatch, serverTimestamp } from "firebase/firestore";
-import { notifyUserInBatch, emailUser } from "@/lib/notifications/client";
+import { doc, writeBatch, serverTimestamp, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { notifyUserInBatch, notifyUser, emailUser } from "@/lib/notifications/client";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -55,6 +55,9 @@ export function AdminEnquiriesClient({ enquiries, coordinators }: Props) {
   const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
   const [bulkAssignCoord, setBulkAssignCoord] = useState("");
   const [bulkAssigning, setBulkAssigning] = useState(false);
+  // Reject / delete
+  const [confirmAction, setConfirmAction] = useState<{ type: "reject" | "delete"; enquiry: Enquiry } | null>(null);
+  const [processingAction, setProcessingAction] = useState(false);
 
   const toggleBulkSelect = (id: string) =>
     setBulkSelected((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
@@ -121,6 +124,44 @@ export function AdminEnquiriesClient({ enquiries, coordinators }: Props) {
     setAssigning(false);
     setAssignDialogOpen(false);
     router.refresh();
+  };
+
+  const runConfirmedAction = async () => {
+    if (!confirmAction) return;
+    const { type, enquiry } = confirmAction;
+    setProcessingAction(true);
+    try {
+      if (type === "reject") {
+        await updateDoc(doc(db, "enquiries", enquiry.id), {
+          status: "cancelled",
+          updated_at: serverTimestamp(),
+        });
+        if (enquiry.client_id) {
+          await notifyUser(enquiry.client_id, {
+            title: "Enquiry Update",
+            message: `Your ${enquiry.event_type} enquiry has been declined.`,
+            type: "info",
+            link: `/client/enquiries/${enquiry.id}`,
+          }).catch(() => {});
+        }
+        toast.success("Enquiry rejected");
+      } else {
+        // Proposals become meaningless without their parent enquiry — clean
+        // them up in the same batch rather than leaving orphaned records.
+        const proposalsSnap = await getDocs(query(collection(db, "proposals"), where("enquiry_id", "==", enquiry.id)));
+        const batch = writeBatch(db);
+        proposalsSnap.forEach((p) => batch.delete(p.ref));
+        batch.delete(doc(db, "enquiries", enquiry.id));
+        await batch.commit();
+        toast.success("Enquiry deleted");
+      }
+      setConfirmAction(null);
+      router.refresh();
+    } catch {
+      toast.error(type === "reject" ? "Failed to reject enquiry" : "Failed to delete enquiry");
+    } finally {
+      setProcessingAction(false);
+    }
   };
 
   const filterBySearch = (list: Enquiry[]) =>
@@ -210,6 +251,30 @@ export function AdminEnquiriesClient({ enquiries, coordinators }: Props) {
               <UserCheck className="w-3.5 h-3.5 mr-1" />Assign
             </Button>
           )}
+        </div>
+
+        {/* Reject / Delete */}
+        <div className="flex items-center gap-0.5 flex-shrink-0">
+          {e.status !== "cancelled" && e.status !== "completed" && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-amber-600 hover:bg-amber-50"
+              title="Reject enquiry"
+              onClick={() => setConfirmAction({ type: "reject", enquiry: e })}
+            >
+              <Ban className="w-3.5 h-3.5" />
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-muted-foreground hover:text-red-600 hover:bg-red-50"
+            title="Delete enquiry"
+            onClick={() => setConfirmAction({ type: "delete", enquiry: e })}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </Button>
         </div>
 
         {/* View */}
@@ -367,6 +432,47 @@ export function AdminEnquiriesClient({ enquiries, coordinators }: Props) {
                 <Button variant="outline" onClick={() => setAssignDialogOpen(false)}>Cancel</Button>
                 <Button onClick={confirmAssign} loading={assigning} disabled={!selectedCoordinator}>
                   <UserCheck className="w-4 h-4 mr-2" />Assign Coordinator
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Reject / Delete confirmation */}
+      <Dialog open={!!confirmAction} onOpenChange={(open) => !open && setConfirmAction(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {confirmAction?.type === "delete" ? "Delete Enquiry" : "Reject Enquiry"}
+            </DialogTitle>
+          </DialogHeader>
+          {confirmAction && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-muted/40 border text-sm space-y-1.5">
+                <p className="font-semibold">{confirmAction.enquiry.event_type} — {confirmAction.enquiry.city}</p>
+                <p className="text-muted-foreground text-xs">
+                  Client: <span className="font-medium text-foreground">{confirmAction.enquiry.client?.name}</span>
+                  {" · "}Date: {formatDate(confirmAction.enquiry.event_date)}
+                </p>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {confirmAction.type === "delete"
+                  ? "This permanently deletes the enquiry and any linked proposals. This cannot be undone."
+                  : "The client will be notified that their enquiry has been declined. You can still reassign it later."}
+              </p>
+              <div className="flex gap-3 justify-end">
+                <Button variant="outline" onClick={() => setConfirmAction(null)}>Cancel</Button>
+                <Button
+                  variant="destructive"
+                  onClick={runConfirmedAction}
+                  loading={processingAction}
+                >
+                  {confirmAction.type === "delete" ? (
+                    <><Trash2 className="w-4 h-4 mr-2" />Delete Enquiry</>
+                  ) : (
+                    <><Ban className="w-4 h-4 mr-2" />Reject Enquiry</>
+                  )}
                 </Button>
               </div>
             </div>

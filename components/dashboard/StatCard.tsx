@@ -1,7 +1,8 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { LucideIcon, TrendingUp, TrendingDown } from "lucide-react";
+import { LucideIcon, TrendingUp, TrendingDown, ChevronRight } from "lucide-react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 interface StatCardProps {
@@ -12,6 +13,8 @@ interface StatCardProps {
   trend?: { value: number; label: string };
   color?: "indigo" | "blue" | "green" | "red" | "gold" | "amber" | "navy";
   index?: number;
+  /** When set, the whole card becomes a link and shows a hover affordance. */
+  href?: string;
 }
 
 const colorMap = {
@@ -83,18 +86,20 @@ export function StatCard({
   trend,
   color = "indigo",
   index = 0,
+  href,
 }: StatCardProps) {
   const colors = colorMap[color];
   const shadowColor = shadowColors[colors.bg];
 
-  return (
+  const card = (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.1, duration: 0.4 }}
       whileHover={{ y: -2, boxShadow: `0 8px 30px ${shadowColor}` }}
       className={cn(
-        "relative overflow-hidden rounded-2xl border bg-card p-6 shadow-sm transition-colors cursor-default",
+        "group relative overflow-hidden rounded-2xl border bg-card p-6 shadow-sm transition-colors",
+        href ? "cursor-pointer" : "cursor-default",
         colors.border
       )}
     >
@@ -122,6 +127,13 @@ export function StatCard({
           <Icon className="w-6 h-6" />
         </div>
       </div>
+
+      {href && (
+        <ChevronRight className="absolute bottom-4 right-4 w-4 h-4 text-muted-foreground/30 group-hover:text-muted-foreground/60 group-hover:translate-x-0.5 transition-all" />
+      )}
     </motion.div>
   );
+
+  if (!href) return card;
+  return <Link href={href}>{card}</Link>;
 }

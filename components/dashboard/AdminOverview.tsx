@@ -142,10 +142,10 @@ export function AdminOverview({ stats, pipelineCounts: globalCounts, recentEnqui
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total Enquiries" value={stats.total_enquiries} icon={FileText}  color="gold"  trend={stats.enq_trend != null ? { value: stats.enq_trend, label: "vs last month" } : undefined} index={0} />
-        <StatCard title="Active Bookings" value={stats.active_bookings} icon={CheckCircle} color="green"  trend={stats.bk_trend != null ? { value: stats.bk_trend, label: "vs last month" } : undefined} index={1} />
-        <StatCard title="Artists Listed"  value={stats.artists_count}   icon={Music}      color="gold" index={2} />
-        <StatCard title="Coordinators"    value={stats.coordinators_count} icon={Users}   color="navy"   index={3} />
+        <StatCard title="Total Enquiries" value={stats.total_enquiries} icon={FileText}  color="gold"  trend={stats.enq_trend != null ? { value: stats.enq_trend, label: "vs last month" } : undefined} index={0} href="/admin/enquiries" />
+        <StatCard title="Active Bookings" value={stats.active_bookings} icon={CheckCircle} color="green"  trend={stats.bk_trend != null ? { value: stats.bk_trend, label: "vs last month" } : undefined} index={1} href="/admin/bookings" />
+        <StatCard title="Artists Listed"  value={stats.artists_count}   icon={Music}      color="gold" index={2} href="/admin/artists" />
+        <StatCard title="Coordinators"    value={stats.coordinators_count} icon={Users}   color="navy"   index={3} href="/admin/coordinators" />
       </div>
 
       {/* Pipeline - clickable */}

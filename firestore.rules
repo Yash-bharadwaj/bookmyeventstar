@@ -90,6 +90,10 @@ service cloud.firestore {
       // touch their OWN enquiry (e.g. adding follow-up notes) — not a
       // field-level restriction, but scoped to documents they own.
       allow update: if isCoordinatorOrAdmin() || resource.data.client_id == request.auth.uid;
+      // Hard delete (vs. the "cancelled" status used for a soft reject) is
+      // admin-only — coordinators can reject/reassign but shouldn't be able
+      // to erase the record entirely.
+      allow delete: if isAdmin();
 
       match /messages/{msgId} {
         allow read: if signedIn() && (
