@@ -3,7 +3,6 @@ import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { cookies } from "next/headers";
 import { SESSION_COOKIE_NAME } from "@/lib/firebase/session";
-import { verifyEmailVerification } from "@/lib/email/verification-token";
 import { notifyAllAdminsServer } from "@/lib/notifications/server";
 import { sendEmail, artistWelcomeEmailHtml } from "@/lib/email/resend";
 
@@ -12,13 +11,15 @@ const PRIVILEGED_ROLES = ["coordinator", "admin"];
 export async function POST(req: NextRequest) {
   try {
     const {
-      name, email, phone, password, role, emailVerificationToken, emailVerificationExpires,
+      name, email, phone, password, role,
       isEventManager, companyName, instagramHandle, websiteUrl, category,
       city, area, budgetMin, budgetMax,
     } = await req.json();
 
-    // Basic server-side validation
-    if (!name || !email || !password || !phone || !role) {
+    // Basic server-side validation — password is only required for the
+    // admin-createUser branch below; self-service client/artist signup
+    // proves identity via a phone-verified session instead.
+    if (!name || !email || !phone || !role) {
       return NextResponse.json({ error: "All fields are required" }, { status: 400 });
     }
     if (!["client", "artist", "coordinator", "admin"].includes(role)) {
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Resolve the caller's own role once — used both for the privileged-role
-    // gate below and to let an admin skip the client email-OTP requirement
+    // gate below and to let an admin skip the client phone-OTP requirement
     // when creating an account on someone's behalf (e.g. from Admin > Users).
     const cookieStore = await cookies();
     const sessionToken = cookieStore.get(SESSION_COOKIE_NAME)?.value;
@@ -59,43 +60,61 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Only admins can create this account type." }, { status: 403 });
     }
 
-    // Clients and artists must both prove ownership of their email via the
-    // OTP flow first — the token here is only minted by a successful
-    // /api/auth/email-otp/verify. An admin creating the account directly
-    // (Admin > Users) is trusted and skips this — there's no self-service
-    // OTP step in that flow.
-    if ((role === "client" || role === "artist") && callerRole !== "admin" && !verifyEmailVerification(email, emailVerificationToken, emailVerificationExpires)) {
-      return NextResponse.json({ error: "Please verify your email before creating an account." }, { status: 403 });
-    }
-
     // Location + starting budget are compulsory on the self-service artist
     // signup form — an admin adding an artist from Admin > Users doesn't go
-    // through that form, so this stays skippable there, same as the OTP gate.
+    // through that form, so this stays skippable there, same as the phone
+    // verification gate below.
     if (role === "artist" && callerRole !== "admin") {
       if (!cityStr) return NextResponse.json({ error: "Select your city." }, { status: 400 });
       if (!areaStr) return NextResponse.json({ error: "Enter your area / locality." }, { status: 400 });
       if (budgetMinNum < 2000) return NextResponse.json({ error: "Select your starting price range." }, { status: 400 });
     }
 
+    const phone_e164 = String(phone).startsWith("+91") ? phone : "+91" + phone;
+    const isSelfServiceSignup = (role === "client" || role === "artist") && callerRole !== "admin";
+
     let userId: string;
-    try {
-      const authUser = await adminAuth.createUser({ email, password, displayName: name });
-      userId = authUser.uid;
-    } catch (err) {
-      const code = (err as { code?: string }).code ?? "";
-      if (code === "auth/email-already-exists") {
-        return NextResponse.json({ error: "An account with this email already exists." }, { status: 409 });
+    if (isSelfServiceSignup) {
+      // Client/artist self-signup proves identity via Firebase Phone Auth
+      // (SMS OTP) with an email/password credential linked to that same
+      // account client-side — the session cookie here IS the proof, so
+      // there's no password to create an account with in this branch; the
+      // Firebase Auth user already exists.
+      if (!caller) {
+        return NextResponse.json({ error: "Please verify your mobile number before creating an account." }, { status: 403 });
       }
-      if (code === "auth/invalid-password") {
-        return NextResponse.json({ error: "Password must be at least 6 characters." }, { status: 400 });
+      if (caller.phone_number !== phone_e164) {
+        return NextResponse.json({ error: "Mobile number doesn't match the verified session." }, { status: 403 });
       }
-      console.error("[register] createUser error:", err);
-      return NextResponse.json({ error: "Could not create account — please try again." }, { status: 400 });
+      if (String(caller.email ?? "").toLowerCase() !== String(email).toLowerCase()) {
+        return NextResponse.json({ error: "Email doesn't match the verified session." }, { status: 403 });
+      }
+      const existing = await adminDb.collection("users").doc(caller.uid).get();
+      if (existing.exists) {
+        return NextResponse.json({ error: "This mobile number is already registered — please log in instead." }, { status: 409 });
+      }
+      userId = caller.uid;
+    } else {
+      if (!password) {
+        return NextResponse.json({ error: "Password is required" }, { status: 400 });
+      }
+      try {
+        const authUser = await adminAuth.createUser({ email, password, displayName: name });
+        userId = authUser.uid;
+      } catch (err) {
+        const code = (err as { code?: string }).code ?? "";
+        if (code === "auth/email-already-exists") {
+          return NextResponse.json({ error: "An account with this email already exists." }, { status: 409 });
+        }
+        if (code === "auth/invalid-password") {
+          return NextResponse.json({ error: "Password must be at least 6 characters." }, { status: 400 });
+        }
+        console.error("[register] createUser error:", err);
+        return NextResponse.json({ error: "Could not create account — please try again." }, { status: 400 });
+      }
     }
 
     await adminAuth.setCustomUserClaims(userId, { role });
-
-    const phone_e164 = String(phone).startsWith("+91") ? phone : "+91" + phone;
 
     try {
       await adminDb.collection("users").doc(userId).set({
@@ -135,8 +154,11 @@ export async function POST(req: NextRequest) {
         });
       }
     } catch (err) {
-      // Roll back the auth user if profile creation fails
-      await adminAuth.deleteUser(userId).catch(() => {});
+      // Roll back the auth user if profile creation fails — but only one we
+      // created ourselves above. A self-service signup's Auth user already
+      // existed before this call (phone-verified client-side), so leaving it
+      // in place just means a retry can complete the same account.
+      if (!isSelfServiceSignup) await adminAuth.deleteUser(userId).catch(() => {});
       console.error("[register] profile write failed:", err);
       return NextResponse.json({ error: "Failed to create profile. Please try again." }, { status: 500 });
     }

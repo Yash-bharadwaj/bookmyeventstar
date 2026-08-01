@@ -31,9 +31,11 @@ import {
   collection, doc, getDoc, getDocs, addDoc, updateDoc,
   query, where, getCountFromServer, Timestamp,
 } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, type ConfirmationResult } from "firebase/auth";
 import { auth, db } from "@/lib/firebase/client";
-import { signInWithEmail, signOutEverywhere } from "@/lib/firebase/auth-client";
+import {
+  sendPhoneOtp, resetRecaptcha, linkPasswordCredential, syncSessionCookie, signOutEverywhere,
+} from "@/lib/firebase/auth-client";
 import { enquiryFormSchema, EnquiryFormValues } from "@/lib/validations/enquiry";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -86,16 +88,14 @@ function EnquiryFormLegacy() {
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  // Email verification (OTP once at signup — phone-auth SMS is unreliable
-  // without Firebase billing, so email is the verified channel instead)
+  // Mobile number verification (Firebase Phone Auth OTP once at signup)
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState("");
   const [otpBusy, setOtpBusy] = useState(false);
   const [otpError, setOtpError] = useState(false);
   const [resendIn, setResendIn] = useState(0);
-  const [emailVerified, setEmailVerified] = useState(false);
-  const [verificationToken, setVerificationToken] = useState("");
-  const [verificationExpires, setVerificationExpires] = useState(0);
+  const [phoneVerified, setPhoneVerified] = useState(false);
+  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
 
   // Enquiry wizard state
   const [step, setStep] = useState(0);
@@ -194,22 +194,18 @@ function EnquiryFormLegacy() {
   };
 
   const handleSendOtp = async () => {
-    const email = watch("email")?.trim();
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast.error("Enter a valid email address first"); return; }
+    const digits = phoneDigits.replace(/\D/g, "").slice(-10);
+    if (!/^[6-9]\d{9}$/.test(digits)) { toast.error("Enter a valid 10-digit mobile number"); return; }
     setOtpBusy(true);
     try {
-      const res = await fetch("/api/auth/email-otp/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-      const json = await res.json();
-      if (!res.ok) { toast.error(json.error ?? "Could not send the code — please try again."); return; }
+      const result = await sendPhoneOtp(`+91${digits}`);
+      setConfirmationResult(result);
       setOtpSent(true);
       setResendIn(45);
-      toast.success("Code sent to your email");
+      toast.success("Code sent to your mobile");
     } catch (err) {
-      console.error("[enquiry] email-otp send failed:", err);
+      console.error("[enquiry] phone-otp send failed:", err);
+      resetRecaptcha();
       toast.error("Could not send the code — please try again.");
     } finally {
       setOtpBusy(false);
@@ -218,30 +214,18 @@ function EnquiryFormLegacy() {
 
   const handleVerifyOtp = async (codeOverride?: string) => {
     const code = (codeOverride ?? otpCode).trim();
-    if (code.length !== 6) { toast.error("Enter the 6-digit code"); return; }
-    const email = watch("email")?.trim();
+    if (!confirmationResult || code.length !== 6) { toast.error("Enter the 6-digit code"); return; }
     setOtpBusy(true);
     try {
-      const res = await fetch("/api/auth/email-otp/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, code }),
-      });
-      const json = await res.json();
-      if (!res.ok || !json.verified) {
-        toast.error(json.error ?? "Incorrect code — please try again.");
-        setOtpError(true);
-        setOtpCode("");
-        setTimeout(() => setOtpError(false), 500);
-        return;
-      }
-      setVerificationToken(json.token);
-      setVerificationExpires(json.expires);
-      setEmailVerified(true);
-      toast.success("Email verified");
+      await confirmationResult.confirm(code);
+      setPhoneVerified(true);
+      toast.success("Mobile number verified");
     } catch (err) {
-      console.error("[enquiry] email-otp verify failed:", err);
-      toast.error("Something went wrong — please try again.");
+      console.error("[enquiry] phone-otp verify failed:", err);
+      toast.error("Incorrect code — please try again.");
+      setOtpError(true);
+      setOtpCode("");
+      setTimeout(() => setOtpError(false), 500);
     } finally {
       setOtpBusy(false);
     }
@@ -255,9 +239,7 @@ function EnquiryFormLegacy() {
     if (!valid) return;
 
     if (step === 0 && !hasSession) {
-      const d = phoneDigits.replace(/\D/g, "");
-      if (!/^[6-9]\d{9}$/.test(d)) { toast.error("Enter a valid 10-digit mobile number"); return; }
-      if (!emailVerified) { toast.error("Please verify your email first"); return; }
+      if (!phoneVerified) { toast.error("Please verify your mobile number first"); return; }
       if (password.length < 8) { toast.error("Password must be at least 8 characters"); return; }
       if (password !== confirmPassword) { toast.error("Passwords do not match"); return; }
       if (isEventManager) {
@@ -280,12 +262,20 @@ function EnquiryFormLegacy() {
 
       // Brand-new visitor — finish account setup, then continue
       if (!clientId) {
-        if (!emailVerified) {
-          toast.error("Please verify your email first");
+        if (!phoneVerified) {
+          toast.error("Please verify your mobile number first");
           setStep(0);
           return;
         }
         const d = phoneDigits.replace(/\D/g, "");
+
+        // Ignore link failures here (e.g. "already linked") rather than
+        // guessing what they mean — could be a genuine duplicate account, or
+        // just resuming after a network failure earlier in this same signup.
+        // Either way, /api/auth/register's checks below are the actual
+        // source of truth.
+        await linkPasswordCredential(data.email, password).catch(() => {});
+        await syncSessionCookie(await auth.currentUser!.getIdToken());
 
         let res: Response;
         try {
@@ -296,10 +286,7 @@ function EnquiryFormLegacy() {
               name: data.name,
               email: data.email,
               phone: d,
-              password,
               role: "client",
-              emailVerificationToken: verificationToken,
-              emailVerificationExpires: verificationExpires,
               isEventManager,
               companyName:     isEventManager ? companyName     : undefined,
               instagramHandle: isEventManager ? instagramHandle : undefined,
@@ -314,6 +301,7 @@ function EnquiryFormLegacy() {
         const json = await res.json();
         if (!res.ok) {
           if (res.status === 409) {
+            await signOutEverywhere();
             toast("You already have an account. Redirecting to login…", { icon: "ℹ️" });
             window.location.href = `/login?email=${encodeURIComponent(data.email)}`;
             return;
@@ -322,9 +310,8 @@ function EnquiryFormLegacy() {
           return;
         }
 
-        const cred = await signInWithEmail(data.email, password);
         setPhonePreview(maskPhone(d));
-        clientId = cred.user.uid;
+        clientId = auth.currentUser!.uid;
       }
 
       const todayStart = new Date();
@@ -448,6 +435,7 @@ function EnquiryFormLegacy() {
 
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-navy-900 via-navy-800 to-navy-950 flex items-center justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))] overflow-hidden">
+      <div id="recaptcha-container" />
       <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full bg-gold-500/5 blur-3xl pointer-events-none" />
 
       <div className="relative w-full max-w-2xl">
@@ -560,64 +548,11 @@ function EnquiryFormLegacy() {
                           type="email"
                           placeholder="you@example.com"
                           icon={<Mail className="w-4 h-4" />}
-                          rightIcon={!hasSession && emailVerified ? (
-                            <motion.span
-                              initial={{ scale: 0, rotate: -45 }}
-                              animate={{ scale: 1, rotate: 0 }}
-                              transition={{ type: "spring", stiffness: 500, damping: 15 }}
-                            >
-                              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                            </motion.span>
-                          ) : undefined}
-                          success={!hasSession && emailVerified}
                           error={errors.email?.message}
-                          disabled={!hasSession && (otpSent || emailVerified)}
                           {...register("email")}
                         />
                       </div>
                     </div>
-
-                    {!hasSession && !emailVerified && (
-                      <div className="rounded-2xl border border-gold-200 bg-gold-50/50 p-4 space-y-3">
-                        <p className="text-xs font-medium text-gold-700 flex items-center gap-1.5">
-                          <ShieldCheck className="w-3.5 h-3.5" />
-                          Verify your email
-                        </p>
-                        {!otpSent && (
-                          <Button type="button" onClick={handleSendOtp} loading={otpBusy} className="w-full">
-                            Send code
-                          </Button>
-                        )}
-
-                        {otpSent && (
-                          <div className="space-y-2">
-                            <OtpInput
-                              value={otpCode}
-                              onChange={setOtpCode}
-                              onComplete={(code) => handleVerifyOtp(code)}
-                              disabled={otpBusy}
-                              error={otpError}
-                              autoFocus
-                            />
-                            <Button type="button" onClick={() => handleVerifyOtp()} loading={otpBusy} className="w-full">
-                              Verify
-                            </Button>
-                          </div>
-                        )}
-                        {otpSent && (
-                          <div className="flex items-center justify-between text-xs">
-                            <ResendTimer seconds={resendIn} totalSeconds={45} onResend={handleSendOtp} disabled={otpBusy} />
-                            <button
-                              type="button"
-                              className="text-muted-foreground hover:text-navy-900"
-                              onClick={() => { setOtpSent(false); setOtpCode(""); }}
-                            >
-                              Edit email
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
 
                     {!hasSession && (
                       <>
@@ -633,14 +568,67 @@ function EnquiryFormLegacy() {
                               autoComplete="tel-national"
                               placeholder="9876543210"
                               icon={<Smartphone className="w-4 h-4" />}
+                              rightIcon={phoneVerified ? (
+                                <motion.span
+                                  initial={{ scale: 0, rotate: -45 }}
+                                  animate={{ scale: 1, rotate: 0 }}
+                                  transition={{ type: "spring", stiffness: 500, damping: 15 }}
+                                >
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                                </motion.span>
+                              ) : undefined}
+                              success={phoneVerified}
                               value={phoneDigits}
+                              disabled={otpSent || phoneVerified}
                               onChange={(e) => setPhoneDigits(e.target.value.replace(/\D/g, "").slice(0, 10))}
                               className="min-w-0"
                             />
                           </div>
                         </div>
 
-                        {emailVerified && (
+                        {!phoneVerified && (
+                          <div className="rounded-2xl border border-gold-200 bg-gold-50/50 p-4 space-y-3">
+                            <p className="text-xs font-medium text-gold-700 flex items-center gap-1.5">
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                              Verify your mobile number
+                            </p>
+                            {!otpSent && (
+                              <Button type="button" onClick={handleSendOtp} loading={otpBusy} className="w-full">
+                                Send code
+                              </Button>
+                            )}
+
+                            {otpSent && (
+                              <div className="space-y-2">
+                                <OtpInput
+                                  value={otpCode}
+                                  onChange={setOtpCode}
+                                  onComplete={(code) => handleVerifyOtp(code)}
+                                  disabled={otpBusy}
+                                  error={otpError}
+                                  autoFocus
+                                />
+                                <Button type="button" onClick={() => handleVerifyOtp()} loading={otpBusy} className="w-full">
+                                  Verify
+                                </Button>
+                              </div>
+                            )}
+                            {otpSent && (
+                              <div className="flex items-center justify-between text-xs">
+                                <ResendTimer seconds={resendIn} totalSeconds={45} onResend={handleSendOtp} disabled={otpBusy} />
+                                <button
+                                  type="button"
+                                  className="text-muted-foreground hover:text-navy-900"
+                                  onClick={() => { setOtpSent(false); setOtpCode(""); }}
+                                >
+                                  Edit number
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {phoneVerified && (
                           <>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                               <div className="space-y-1.5">

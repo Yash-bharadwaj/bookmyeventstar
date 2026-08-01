@@ -79,10 +79,13 @@ export async function sendPhoneOtp(e164Phone: string): Promise<ConfirmationResul
 }
 
 /** Attaches password-login capability to a phone-verified account (so future
- * logins don't need SMS again) using the same synthetic-email convention as
- * before. Call right after a fresh signup's OTP confirms. */
-export async function linkPasswordCredential(syntheticEmail: string, password: string) {
+ * logins don't need SMS again), using the account's real email. Call right
+ * after a fresh signup's OTP confirms. Throws (e.g. `auth/provider-already-
+ * linked`) if the current user already has an email credential — callers
+ * should treat that as non-fatal and let the server-side registration check
+ * decide whether this is a genuine duplicate or a resumed signup. */
+export async function linkPasswordCredential(email: string, password: string) {
   if (!auth.currentUser) throw new Error("No signed-in user to link a password to.");
-  const credential = EmailAuthProvider.credential(syntheticEmail, password);
+  const credential = EmailAuthProvider.credential(email, password);
   await linkWithCredential(auth.currentUser, credential);
 }
