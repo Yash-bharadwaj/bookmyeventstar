@@ -65,7 +65,7 @@ export async function notifyMatchingArtistsServer(enquiry: MatchableEnquiry): Pr
   await batch.commit();
 
   const message = `A new ${enquiry.event_type} enquiry in ${enquiry.city} matches your profile. Let us know if you're interested — it only takes a tap.`;
-  const html = notificationEmailHtml({ message, link: "/artist/leads" });
+  const html = notificationEmailHtml({ title: "New event lead near you", message, link: "/artist/leads" });
   await Promise.all(
     chosen.map(async (artist) => {
       await notifyUserServer(artist.id, {

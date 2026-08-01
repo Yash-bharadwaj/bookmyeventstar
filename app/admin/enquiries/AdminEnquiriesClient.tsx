@@ -13,6 +13,7 @@ import { formatDate, formatCurrency, getStatusColor, getStatusLabel } from "@/li
 import { db } from "@/lib/firebase/client";
 import { doc, writeBatch, serverTimestamp, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { notifyUserInBatch, notifyUser, emailUser } from "@/lib/notifications/client";
+import { enquiryAssignmentDetails } from "@/lib/notifications/enquiryDetails";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -115,11 +116,15 @@ export function AdminEnquiriesClient({ enquiries, coordinators }: Props) {
       link: `/coordinator/enquiries/${selectedEnquiry.id}`,
     });
     await batch.commit();
-    emailUser(selectedCoordinator, {
-      title: "New Enquiry Assigned",
-      message: `You have been assigned an enquiry for ${selectedEnquiry.event_type} in ${selectedEnquiry.city}.`,
-      link: `/coordinator/enquiries/${selectedEnquiry.id}`,
-    });
+    emailUser(
+      selectedCoordinator,
+      {
+        title: "New Enquiry Assigned",
+        message: `You have been assigned an enquiry for ${selectedEnquiry.event_type} in ${selectedEnquiry.city}.`,
+        link: `/coordinator/enquiries/${selectedEnquiry.id}`,
+      },
+      enquiryAssignmentDetails(selectedEnquiry)
+    );
     toast.success("Coordinator assigned!");
     setAssigning(false);
     setAssignDialogOpen(false);

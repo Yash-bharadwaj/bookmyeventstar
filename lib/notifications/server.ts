@@ -1,7 +1,7 @@
 import { adminDb } from "@/lib/firebase/admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { sendEmail, notificationEmailHtml } from "@/lib/email/resend";
-import type { NotifyPayload } from "./types";
+import type { NotifyPayload, EmailDetail } from "./types";
 
 /** Server-side (Admin SDK) equivalent of notifyUser, for API routes. */
 export async function notifyUserServer(uid: string, payload: NotifyPayload): Promise<void> {
@@ -39,7 +39,7 @@ export async function notifyAllAdminsServer(payload: NotifyPayload): Promise<num
   }
   await batch.commit();
 
-  const html = notificationEmailHtml({ message: payload.message, link: payload.link });
+  const html = notificationEmailHtml({ title: payload.title, message: payload.message, link: payload.link });
   await Promise.all(
     adminsSnap.docs.map((doc) => {
       const email = doc.data()?.email as string | undefined;
@@ -54,12 +54,12 @@ export async function notifyAllAdminsServer(payload: NotifyPayload): Promise<num
 }
 
 /** Server-side email for a single user, resolving their address from their user doc. */
-export async function emailUserServer(uid: string, payload: NotifyPayload): Promise<void> {
+export async function emailUserServer(uid: string, payload: NotifyPayload, details?: EmailDetail[]): Promise<void> {
   const userDoc = await adminDb.collection("users").doc(uid).get();
   const email = userDoc.exists ? (userDoc.data()?.email as string | undefined) : undefined;
   if (!email) return;
 
-  const html = notificationEmailHtml({ message: payload.message, link: payload.link });
+  const html = notificationEmailHtml({ title: payload.title, message: payload.message, link: payload.link, details });
   await sendEmail({ to: email, subject: payload.title, html }).catch((err) => {
     console.error(`[emailUserServer] email to ${email} failed:`, err);
   });

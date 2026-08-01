@@ -14,7 +14,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { formatDate, formatCurrency, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { db } from "@/lib/firebase/client";
 import { doc, updateDoc, serverTimestamp, writeBatch, collection, query, where, getDocs } from "firebase/firestore";
-import { notifyUser } from "@/lib/notifications/client";
+import { notifyUser, emailUser } from "@/lib/notifications/client";
+import { enquiryAssignmentDetails } from "@/lib/notifications/enquiryDetails";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -127,6 +128,15 @@ export function AdminEnquiryDetail({ enquiry, proposals, coordinators }: Props) 
         type: "info",
         link: `/coordinator/enquiries/${enquiry.id}`,
       });
+      emailUser(
+        coordinatorId,
+        {
+          title: "Enquiry Assigned",
+          message: `You have been assigned the enquiry for ${enquiry.event_type} in ${enquiry.city}.`,
+          link: `/coordinator/enquiries/${enquiry.id}`,
+        },
+        enquiryAssignmentDetails(enquiry)
+      );
       toast.success("Coordinator assigned!");
       if (status === "new") setStatus("assigned");
     } catch {

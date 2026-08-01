@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Sign in required" }, { status: 401 });
   }
 
-  const { uid, title, message, link } = await req.json();
+  const { uid, title, message, link, details } = await req.json();
   if (typeof uid !== "string" || !uid || typeof title !== "string" || typeof message !== "string" || !title.trim() || !message.trim()) {
     return NextResponse.json({ error: "uid, title, and message are required" }, { status: 400 });
   }
@@ -27,7 +27,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "title or message too long" }, { status: 400 });
   }
   const safeLink = typeof link === "string" && link.startsWith("/") ? link.slice(0, 200) : undefined;
+  const safeDetails = Array.isArray(details)
+    ? details
+        .filter((d): d is { label: string; value: string } =>
+          d && typeof d.label === "string" && typeof d.value === "string")
+        .slice(0, 20)
+        .map((d) => ({ label: d.label.slice(0, 100), value: d.value.slice(0, 500) }))
+    : undefined;
 
-  await emailUserServer(uid, { title, message, link: safeLink });
+  await emailUserServer(uid, { title, message, link: safeLink }, safeDetails);
   return NextResponse.json({ success: true });
 }

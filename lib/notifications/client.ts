@@ -1,6 +1,6 @@
 import { db } from "@/lib/firebase/client";
 import { collection, doc, addDoc, serverTimestamp, type WriteBatch } from "firebase/firestore";
-import type { NotifyPayload } from "./types";
+import type { NotifyPayload, EmailDetail } from "./types";
 
 /**
  * Writes a notification into another user's own notifications subcollection.
@@ -57,11 +57,14 @@ export async function notifyAllAdmins(payload: NotifyPayload): Promise<void> {
  * that should also land in the recipient's inbox, not just the bell icon
  * (e.g. an enquiry assignment, a proposal response). Best-effort — never
  * throws, so a failed send never blocks the action that triggered it.
+ * `details` adds an optional key/value table to the email (not stored on the
+ * bell notification) — use it when the recipient needs full context, e.g.
+ * an enquiry's client/event/budget details on assignment.
  */
-export async function emailUser(uid: string, payload: NotifyPayload): Promise<void> {
+export async function emailUser(uid: string, payload: NotifyPayload, details?: EmailDetail[]): Promise<void> {
   await fetch("/api/notifications/email", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ uid, ...payload }),
+    body: JSON.stringify({ uid, ...payload, details }),
   }).catch(() => {});
 }
