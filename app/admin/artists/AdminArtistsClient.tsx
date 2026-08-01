@@ -50,7 +50,9 @@ function uniqueAreas(artists: ArtistWithUser[], cityFilter: string) {
   return Array.from(s).sort();
 }
 
-export function AdminArtistsClient({ artists, categories }: { artists: ArtistWithUser[]; categories: string[] }) {
+export function ArtistVerificationClient({
+  artists, categories, canManageListing = true,
+}: { artists: ArtistWithUser[]; categories: string[]; canManageListing?: boolean }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [verifyTab, setVerifyTab] = useState("all");
@@ -216,6 +218,7 @@ export function AdminArtistsClient({ artists, categories }: { artists: ArtistWit
       </div>
 
       {/* Directory listing (clients & coordinators) */}
+      {canManageListing && (
       <div className="flex gap-2 border-b pb-1 -mt-1">
         {LIST_TABS.map((tab) => (
           <button
@@ -237,6 +240,7 @@ export function AdminArtistsClient({ artists, categories }: { artists: ArtistWit
           </button>
         ))}
       </div>
+      )}
 
       {/* Search + category filter */}
       <div className="flex gap-3 items-center flex-wrap">
@@ -359,7 +363,7 @@ export function AdminArtistsClient({ artists, categories }: { artists: ArtistWit
               >
                 <option value="">Choose action…</option>
                 <option value="verify">Verify all</option>
-                <option value="list">List all (show on browse)</option>
+                {canManageListing && <option value="list">List all (show on browse)</option>}
               </select>
               <Button size="sm" variant="secondary" disabled={!bulkAction || bulkProcessing} onClick={confirmBulkAction}>
                 {bulkProcessing ? "Processing…" : "Apply"}
@@ -468,6 +472,7 @@ export function AdminArtistsClient({ artists, categories }: { artists: ArtistWit
 
               {/* Actions */}
               <div className="space-y-2 mt-3">
+                {canManageListing && (
                 <Button
                   size="sm"
                   variant={isListedProfile(artist) ? "outline" : "default"}
@@ -486,6 +491,7 @@ export function AdminArtistsClient({ artists, categories }: { artists: ArtistWit
                     <><Eye className="w-3.5 h-3.5 mr-1.5" />List for clients & coordinators</>
                   )}
                 </Button>
+                )}
                 <Button
                   size="sm"
                   variant={artist.is_verified ? "outline" : "default"}

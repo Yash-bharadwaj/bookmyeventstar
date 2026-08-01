@@ -24,6 +24,7 @@ import {
   MessageSquare,
   ChevronLeft,
   ChevronRight,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BrandLogo } from "@/components/brand/BrandLogo";
@@ -48,6 +49,7 @@ const navConfig: Record<UserRole, { label: string; href: string; icon: React.Ele
     { label: "Bookings", href: "/coordinator/bookings", icon: Star },
     { label: "Calendar", href: "/coordinator/calendar", icon: Calendar },
     { label: "Artists", href: "/coordinator/artists", icon: Music },
+    { label: "Verify Artists", href: "/coordinator/verify-artists", icon: ShieldCheck },
     { label: "Messages", href: "/coordinator/messages", icon: MessageSquare },
   ],
   artist: [

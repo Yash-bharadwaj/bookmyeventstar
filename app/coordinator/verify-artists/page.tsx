@@ -2,12 +2,11 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { serialize } from "@/lib/firebase/firestore-utils";
-import { ArtistVerificationClient } from "./AdminArtistsClient";
+import { ArtistVerificationClient } from "@/app/admin/artists/AdminArtistsClient";
 
-export default async function AdminArtistsPage() {
+export default async function CoordinatorVerifyArtistsPage() {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
-  if (user.role !== "admin") redirect("/login");
+  if (!user || user.role !== "coordinator") redirect("/login");
 
   const [artistsSnap, categoriesSnap] = await Promise.all([
     adminDb.collection("artistProfiles").orderBy("created_at", "desc").get(),
@@ -37,6 +36,6 @@ export default async function AdminArtistsPage() {
   const categoryNames = categoriesSnap.docs.map((d) => d.data().name as string);
 
   return (
-    <ArtistVerificationClient artists={serialize(artists) as any} categories={categoryNames} />
+    <ArtistVerificationClient artists={serialize(artists) as any} categories={categoryNames} canManageListing={false} />
   );
 }
