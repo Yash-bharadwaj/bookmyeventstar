@@ -984,7 +984,7 @@ export default function EnquiryPage() {
         </div>
         <h1 className="text-2xl font-bold text-white mb-3">Launching Soon 🎭</h1>
         <p className="text-white/60 text-sm leading-relaxed mb-2">
-          Booking an artist here isn&apos;t live yet. Turns out, like most artists, it&apos;s arriving fashionably late.
+          Booking an artist here isn&apos;t live yet — it&apos;s still warming up backstage.
         </p>
         <p className="text-white/40 text-xs leading-relaxed mb-6">
           Meanwhile, if you&apos;re the talent — we&apos;re very much open for business.

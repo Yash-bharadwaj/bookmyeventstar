@@ -257,9 +257,10 @@ export default function LandingPage() {
               </Link>
             </div>
 
-            {/* Mobile: primary CTA is always reachable, everything else lives in the menu */}
-            <Link href="/enquiry" className="md:hidden">
-              <Button size="sm" className="gold-gradient text-white shadow-md shadow-gold-500/30">Book Now</Button>
+            {/* Mobile: artist onboarding is the always-reachable CTA now that
+                booking is paused — Book Now still lives in the menu below. */}
+            <Link href="/register?role=artist" className="md:hidden">
+              <Button size="sm" variant="secondary">Join as Artist</Button>
             </Link>
             <button
               type="button"
@@ -299,10 +300,8 @@ export default function LandingPage() {
                   <Link href="/login" onClick={() => setMobileMenuOpen(false)}>
                     <Button variant="outline" size="sm" className="w-full border-gray-200">Login</Button>
                   </Link>
-                  <Link href="/register?role=artist" onClick={() => setMobileMenuOpen(false)}>
-                    <Button variant="secondary" size="sm" className="w-full">
-                      Join as Artist
-                    </Button>
+                  <Link href="/enquiry" onClick={() => setMobileMenuOpen(false)}>
+                    <Button size="sm" className="w-full gold-gradient text-white shadow-md shadow-gold-500/30">Book Now</Button>
                   </Link>
                 </div>
               </div>

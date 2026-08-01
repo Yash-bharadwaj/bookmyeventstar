@@ -464,7 +464,7 @@ function ClientBookingComingSoon() {
       </div>
       <h3 className="font-display font-bold text-lg text-navy-900 mb-1.5">Launching Soon 🎭</h3>
       <p className="text-sm text-muted-foreground leading-relaxed">
-        Booking an artist here isn&apos;t live yet. Turns out, like most artists, it&apos;s arriving fashionably late.
+        Booking an artist here isn&apos;t live yet — it&apos;s still warming up backstage.
       </p>
     </div>
   );
