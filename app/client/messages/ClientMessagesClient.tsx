@@ -164,7 +164,7 @@ export function ClientMessagesClient({ enquiries, currentUserId, currentUserName
   };
 
   return (
-    <div className="h-[calc(100vh-5rem)] flex overflow-hidden rounded-2xl border m-2 md:m-4 shadow-sm">
+    <div className="h-[calc(100dvh-5rem)] flex overflow-hidden rounded-2xl border m-2 md:m-4 shadow-sm">
 
       {/* ── Sidebar ── */}
       <div
