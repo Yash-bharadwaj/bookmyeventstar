@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Star, CheckCircle2, XCircle, Phone, MapPin,
   Filter, X, Shield, ShieldOff, Eye, EyeOff, AlertCircle, Ban, FileText,
+  LayoutGrid, Table2, ChevronLeft, ChevronRight, ExternalLink,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -12,8 +13,9 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArtistProfile, ArtistDocument } from "@/types";
-import { formatCurrency, getInitials } from "@/lib/utils";
+import { formatCurrency, formatDate, getInitials } from "@/lib/utils";
 import { db } from "@/lib/firebase/client";
 import { doc, updateDoc, writeBatch } from "firebase/firestore";
 import { notifyUser, notifyUserInBatch, emailUser } from "@/lib/notifications/client";
@@ -24,6 +26,7 @@ interface ArtistWithUser extends Omit<ArtistProfile, "user"> {
   user: { name: string; email: string; phone: string; is_active: boolean; avatar_url?: string };
   profile_completion_percent?: number;
   documents?: ArtistDocument[];
+  created_at?: string;
 }
 
 const VERIFY_TABS = [
@@ -55,10 +58,13 @@ function uniqueAreas(artists: ArtistWithUser[], cityFilter: string) {
   return Array.from(s).sort();
 }
 
+const PAGE_SIZES = [10, 25, 50, 100];
+
 export function ArtistVerificationClient({
   artists, categories, canManageListing = true,
 }: { artists: ArtistWithUser[]; categories: string[]; canManageListing?: boolean }) {
   const router = useRouter();
+  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [search, setSearch] = useState("");
   const [verifyTab, setVerifyTab] = useState("all");
   const [listTab, setListTab] = useState("all");
@@ -72,6 +78,9 @@ export function ArtistVerificationClient({
   const [rejectTarget, setRejectTarget] = useState<ArtistWithUser | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [rejecting, setRejecting] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const resetPage = () => setPage(1);
 
   const allCities = uniqueCities(artists);
   const allAreas = uniqueAreas(artists, cityFilter);
@@ -140,6 +149,11 @@ export function ArtistVerificationClient({
 
     return matchesSearch && matchesVerify && matchesList && matchesCategory && matchesCity && matchesArea;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * pageSize;
+  const pageRows = filtered.slice(pageStart, pageStart + pageSize);
 
   const toggleVerify = async (artistId: string, current: boolean) => {
     setToggling(artistId);
@@ -261,7 +275,7 @@ export function ArtistVerificationClient({
         {VERIFY_TABS.map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setVerifyTab(tab.key)}
+            onClick={() => { setVerifyTab(tab.key); resetPage(); }}
             className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-all flex items-center gap-2 ${
               verifyTab === tab.key
                 ? "text-navy-700 border-b-2 border-navy-600"
@@ -290,7 +304,7 @@ export function ArtistVerificationClient({
           <button
             key={tab.key}
             type="button"
-            onClick={() => setListTab(tab.key)}
+            onClick={() => { setListTab(tab.key); resetPage(); }}
             className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-2 ${
               listTab === tab.key
                 ? "text-slate-900 bg-slate-100"
@@ -315,7 +329,7 @@ export function ArtistVerificationClient({
           <Input
             placeholder="Search by name, email or city..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); resetPage(); }}
             className="pl-9"
           />
         </div>
@@ -328,7 +342,7 @@ export function ArtistVerificationClient({
           {(categoryFilter || cityFilter || areaFilter) && <span className="ml-1.5 w-2 h-2 rounded-full bg-white inline-block" />}
         </Button>
         {(categoryFilter || cityFilter || areaFilter) && (
-          <Button variant="ghost" size="sm" onClick={() => { setCategoryFilter(""); setCityFilter(""); setAreaFilter(""); }}>
+          <Button variant="ghost" size="sm" onClick={() => { setCategoryFilter(""); setCityFilter(""); setAreaFilter(""); resetPage(); }}>
             <X className="w-3.5 h-3.5 mr-1" />Clear
           </Button>
         )}
@@ -349,7 +363,7 @@ export function ArtistVerificationClient({
                   {categories.map((cat) => (
                     <button
                       key={cat}
-                      onClick={() => setCategoryFilter((prev) => prev === cat ? "" : cat)}
+                      onClick={() => { setCategoryFilter((prev) => prev === cat ? "" : cat); resetPage(); }}
                       className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
                         categoryFilter === cat
                           ? "bg-navy-600 text-white border-navy-600"
@@ -369,7 +383,7 @@ export function ArtistVerificationClient({
                   ) : allCities.map((c) => (
                     <button
                       key={c}
-                      onClick={() => { setCityFilter((prev) => prev === c ? "" : c); setAreaFilter(""); }}
+                      onClick={() => { setCityFilter((prev) => prev === c ? "" : c); setAreaFilter(""); resetPage(); }}
                       className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
                         cityFilter === c
                           ? "bg-gold-600 text-white border-gold-600"
@@ -389,7 +403,7 @@ export function ArtistVerificationClient({
                   ) : allAreas.map((ar) => (
                     <button
                       key={ar}
-                      onClick={() => setAreaFilter((prev) => prev === ar ? "" : ar)}
+                      onClick={() => { setAreaFilter((prev) => prev === ar ? "" : ar); resetPage(); }}
                       className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
                         areaFilter === ar
                           ? "bg-emerald-600 text-white border-emerald-600"
@@ -406,11 +420,32 @@ export function ArtistVerificationClient({
         )}
       </AnimatePresence>
 
-      <p className="text-xs text-muted-foreground">
-        Showing {filtered.length} of {artists.length} artists
-      </p>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-xs text-muted-foreground">
+          Showing {filtered.length} of {artists.length} artists
+        </p>
+        <div className="flex items-center gap-1 rounded-lg border p-0.5">
+          <button
+            type="button"
+            onClick={() => setViewMode("table")}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+              viewMode === "table" ? "bg-navy-900 text-white" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Table2 className="w-3.5 h-3.5" />Table
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("grid")}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+              viewMode === "grid" ? "bg-navy-900 text-white" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <LayoutGrid className="w-3.5 h-3.5" />Grid
+          </button>
+        </div>
+      </div>
 
-      {/* Artists grid (cards instead of plain table for better readability) */}
       {filtered.length === 0 ? (
         <div className="py-16 text-center text-muted-foreground text-sm">
           <Search className="w-10 h-10 mx-auto mb-3 opacity-20" />
@@ -437,6 +472,247 @@ export function ArtistVerificationClient({
               <button onClick={() => setBulkSelected(new Set())} className="text-xs text-navy-500 underline hover:text-navy-700">Clear</button>
             </div>
           )}
+          {viewMode === "table" ? (
+          <>
+          <div className="rounded-2xl border overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted/30 text-xs font-semibold text-muted-foreground uppercase text-left">
+                    <th className="px-3 py-2.5 w-8"></th>
+                    <th className="px-3 py-2.5 min-w-[200px]">Artist</th>
+                    <th className="px-3 py-2.5 min-w-[130px]">Phone</th>
+                    <th className="px-3 py-2.5 min-w-[160px]">Categories</th>
+                    <th className="px-3 py-2.5 min-w-[160px]">Location</th>
+                    <th className="px-3 py-2.5 min-w-[90px]">Rating</th>
+                    <th className="px-3 py-2.5 min-w-[100px]">Price</th>
+                    <th className="px-3 py-2.5 min-w-[90px]">Profile</th>
+                    <th className="px-3 py-2.5 min-w-[110px]">Status</th>
+                    <th className="px-3 py-2.5 min-w-[100px]">Documents</th>
+                    <th className="px-3 py-2.5 min-w-[100px]">Registered</th>
+                    <th className="px-3 py-2.5 min-w-[120px] text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pageRows.map((artist) => {
+                    const hasAadhaar = (artist.documents ?? []).some((d) => d.type === "Aadhaar Card");
+                    return (
+                      <tr
+                        key={artist.id}
+                        className={`border-b last:border-0 hover:bg-accent/20 transition-colors ${
+                          bulkSelected.has(artist.user_id) ? "bg-navy-50/60" : ""
+                        }`}
+                      >
+                        <td className="px-3 py-2.5">
+                          <input
+                            type="checkbox"
+                            checked={bulkSelected.has(artist.user_id)}
+                            onChange={() => toggleBulkSelect(artist.user_id)}
+                            className="w-4 h-4 rounded border-gray-300 text-navy-600 cursor-pointer"
+                          />
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs flex-shrink-0 ${
+                              artist.is_verified ? "gold-gradient text-navy-900" : "bg-muted text-muted-foreground"
+                            }`}>
+                              {getInitials(artist.user.name)}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-medium truncate max-w-[160px]">{artist.user.name}</p>
+                              <p className="text-xs text-muted-foreground truncate max-w-[160px]">{artist.user.email}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{artist.user.phone}</td>
+                        <td className="px-3 py-2.5">
+                          <div className="flex flex-wrap gap-1 max-w-[180px]">
+                            {artist.categories.slice(0, 2).map((c) => (
+                              <Badge key={c} variant="secondary" className="text-[10px] py-0">{c}</Badge>
+                            ))}
+                            {artist.categories.length > 2 && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge variant="outline" className="text-[10px] py-0 cursor-default">+{artist.categories.length - 2}</Badge>
+                                </TooltipTrigger>
+                                <TooltipContent>{artist.categories.slice(2).join(", ")}</TooltipContent>
+                              </Tooltip>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5 text-xs text-muted-foreground">
+                          {(artist.cities ?? []).length > 0 ? (
+                            <div className="flex items-center gap-1 max-w-[180px]">
+                              <MapPin className="w-3 h-3 flex-shrink-0" />
+                              <span className="truncate">{artist.cities.slice(0, 2).join(", ")}</span>
+                              {artist.cities.length > 2 && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="font-medium underline decoration-dotted underline-offset-2 cursor-default flex-shrink-0">
+                                      +{artist.cities.length - 2}
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>{artist.cities.slice(2).join(", ")}</TooltipContent>
+                                </Tooltip>
+                              )}
+                            </div>
+                          ) : "—"}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-center gap-1 text-xs">
+                            <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                            <span className="font-semibold">{artist.rating.toFixed(1)}</span>
+                            <span className="text-muted-foreground">({artist.total_bookings})</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5 text-xs font-semibold text-navy-700 whitespace-nowrap">{formatCurrency(artist.base_price)}</td>
+                        <td className="px-3 py-2.5">
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold whitespace-nowrap ${
+                            (artist.profile_completion_percent ?? 0) >= 100 ? "bg-navy-100 text-navy-800" : "bg-amber-100 text-amber-800"
+                          }`}>
+                            {artist.profile_completion_percent ?? 0}%
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-center gap-1.5">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleVerify(artist.id, artist.is_verified)}
+                                  disabled={toggling === artist.id}
+                                  aria-label={artist.is_verified ? `Remove verification from ${artist.user.name}` : `Verify ${artist.user.name}`}
+                                  className="disabled:opacity-50"
+                                >
+                                  {artist.is_verified ? (
+                                    <Shield className="w-4 h-4 text-emerald-600" />
+                                  ) : (
+                                    <ShieldOff className="w-4 h-4 text-amber-600" />
+                                  )}
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top">{artist.is_verified ? "Verified — click to remove" : "Not verified — click to verify"}</TooltipContent>
+                            </Tooltip>
+                            {canManageListing && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleListed(artist.id, isListedProfile(artist))}
+                                    disabled={listingToggling === artist.id}
+                                    aria-label={isListedProfile(artist) ? `Hide ${artist.user.name}` : `List ${artist.user.name}`}
+                                    className="disabled:opacity-50"
+                                  >
+                                    {isListedProfile(artist) ? (
+                                      <Eye className="w-4 h-4 text-blue-500" />
+                                    ) : (
+                                      <EyeOff className="w-4 h-4 text-muted-foreground" />
+                                    )}
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">{isListedProfile(artist) ? "Listed — click to hide" : "Hidden — click to list"}</TooltipContent>
+                              </Tooltip>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5">
+                          {hasAadhaar ? (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-medium whitespace-nowrap">
+                              {(artist.documents ?? []).length} uploaded
+                            </span>
+                          ) : (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-50 text-red-600 font-medium whitespace-nowrap">
+                              Aadhaar missing
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
+                          {artist.created_at ? formatDate(artist.created_at) : "—"}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-center justify-end gap-1">
+                            {artist.slug && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <a href={`/artists/${artist.slug}`} target="_blank" rel="noopener noreferrer">
+                                    <Button size="sm" variant="ghost" aria-label={`View ${artist.user.name}'s full profile`}>
+                                      <ExternalLink className="w-4 h-4 text-muted-foreground" />
+                                    </Button>
+                                  </a>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">View full profile</TooltipContent>
+                              </Tooltip>
+                            )}
+                            {(!artist.is_profile_complete || !artist.is_verified) && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    aria-label={`Remind ${artist.user.name} to complete profile`}
+                                    disabled={reminding === artist.id}
+                                    onClick={() => sendProfileReminder(artist.id, artist.user.name)}
+                                  >
+                                    <AlertCircle className="w-4 h-4 text-amber-600" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">Remind to complete profile</TooltipContent>
+                              </Tooltip>
+                            )}
+                            {!artist.is_verified && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    aria-label={`Reject ${artist.user.name}`}
+                                    onClick={() => { setRejectTarget(artist); setRejectReason(""); }}
+                                  >
+                                    <Ban className="w-4 h-4 text-red-600" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">Reject with feedback</TooltipContent>
+                              </Tooltip>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Pagination */}
+          <div className="flex items-center justify-between text-sm flex-wrap gap-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>
+                {filtered.length === 0 ? 0 : pageStart + 1}–{Math.min(pageStart + pageSize, filtered.length)} of {filtered.length}
+              </span>
+              <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); resetPage(); }}>
+                <SelectTrigger className="h-8 w-[90px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAGE_SIZES.map((s) => (
+                    <SelectItem key={s} value={String(s)}>{s} / page</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" disabled={currentPage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <span className="text-xs text-muted-foreground">Page {currentPage} of {totalPages}</span>
+              <Button size="sm" variant="outline" disabled={currentPage >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+          </>
+          ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map((artist, i) => (
             <motion.div
@@ -674,7 +950,8 @@ export function ArtistVerificationClient({
               </div>
             </motion.div>
           ))}
-        </div>
+          </div>
+          )}
         </>
       )}
 

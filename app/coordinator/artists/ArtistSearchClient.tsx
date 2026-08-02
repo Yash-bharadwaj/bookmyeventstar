@@ -8,6 +8,7 @@ import {
   SlidersHorizontal, ArrowUpDown, Phone, Mail,
   Calendar, Sparkles, ArrowRight, Mic2, Send, Ban, CalendarClock,
   User, Award, BookOpen, ImageIcon, ChevronLeft, ChevronRight,
+  LayoutGrid, Table2,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -43,6 +44,8 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "price_desc", label: "Price: High to Low" },
   { value: "bookings",   label: "Most Booked" },
 ];
+
+const PAGE_SIZES = [10, 25, 50, 100];
 
 // derive all unique cities from artist data
 function uniqueCities(artists: Artist[]) {
@@ -80,6 +83,9 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
   const [shortlisted, setShortlisted]     = useState<Set<string>>(new Set());
   const [profileArtist, setProfileArtist] = useState<Artist | null>(null);
   const [photoIdx, setPhotoIdx]           = useState(0);
+  const [viewMode, setViewMode]           = useState<"table" | "grid">("table");
+  const [page, setPage]                   = useState(1);
+  const [pageSize, setPageSize]           = useState(25);
 
   const allCities = useMemo(() => uniqueCities(artists), [artists]);
   const allAreas = useMemo(() => uniqueAreas(artists, cities), [artists, cities]);
@@ -176,6 +182,16 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
 
     return list;
   }, [artists, search, categories, cities, areas, minRating, minPrice, maxPrice, verifiedOnly, sortBy, enquiry, availabilityMap]);
+
+  // filtered gets a new array reference exactly when a filter/sort actually
+  // changes (it's memoized) — reset to page 1 whenever that happens, rather
+  // than wiring a resetPage() call into every individual filter setter.
+  useEffect(() => { setPage(1); }, [filtered]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * pageSize;
+  const pageRows = filtered.slice(pageStart, pageStart + pageSize);
 
   const shortlistedArtists = artists.filter((a) => shortlisted.has(a.id));
 
@@ -463,11 +479,31 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
       </AnimatePresence>
 
       {/* ── Results summary ── */}
-      <div className="flex items-center justify-between text-sm text-muted-foreground">
+      <div className="flex items-center justify-between text-sm text-muted-foreground flex-wrap gap-3">
         <span>
           Showing <span className="font-semibold text-foreground">{filtered.length}</span> of {artists.length} verified artists
           {activeFilterCount > 0 && ` · ${activeFilterCount} filter${activeFilterCount !== 1 ? "s" : ""} active`}
         </span>
+        <div className="flex items-center gap-1 rounded-lg border p-0.5">
+          <button
+            type="button"
+            onClick={() => setViewMode("table")}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+              viewMode === "table" ? "bg-navy-900 text-white" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Table2 className="w-3.5 h-3.5" />Table
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("grid")}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+              viewMode === "grid" ? "bg-navy-900 text-white" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <LayoutGrid className="w-3.5 h-3.5" />Grid
+          </button>
+        </div>
       </div>
 
       {/* ── Shortlist sticky bar ── */}
@@ -531,13 +567,178 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
         )}
       </AnimatePresence>
 
-      {/* ── Artist grid ── */}
+      {/* ── Artist results ── */}
       {filtered.length === 0 ? (
         <div className="py-20 text-center rounded-2xl border-2 border-dashed border-muted">
           <Search className="w-10 h-10 mx-auto mb-3 opacity-20" />
           <p className="font-medium mb-1">No artists match your filters</p>
           <p className="text-sm text-muted-foreground mb-4">Try adjusting or clearing some filters</p>
           <Button variant="outline" onClick={clearAllFilters}>Clear All Filters</Button>
+        </div>
+      ) : viewMode === "table" ? (
+        <div className="pb-28 space-y-3">
+          <div className="rounded-2xl border overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted/30 text-xs font-semibold text-muted-foreground uppercase text-left">
+                    <th className="px-3 py-2.5 min-w-[200px]">Artist</th>
+                    <th className="px-3 py-2.5 min-w-[160px]">Categories</th>
+                    <th className="px-3 py-2.5 min-w-[160px]">Location</th>
+                    <th className="px-3 py-2.5 min-w-[90px]">Rating</th>
+                    <th className="px-3 py-2.5 min-w-[100px]">Price</th>
+                    <th className="px-3 py-2.5 min-w-[90px]">Verified</th>
+                    {enquiry && <th className="px-3 py-2.5 min-w-[120px]">Availability</th>}
+                    <th className="px-3 py-2.5 min-w-[140px] text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pageRows.map((artist) => {
+                    const isShortlisted = shortlisted.has(artist.id);
+                    const photo = primaryPhoto(artist);
+                    const withinBudget = enquiry ? artist.base_price <= enquiry.budget_max : null;
+                    const availability = enquiry ? availabilityMap[artist.id] : undefined;
+                    return (
+                      <tr key={artist.id} className={`border-b last:border-0 hover:bg-accent/20 transition-colors ${isShortlisted ? "bg-navy-50/60" : ""}`}>
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="relative w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center gold-gradient">
+                              {photo || artist.user?.avatar_url ? (
+                                <Image src={(photo ?? artist.user?.avatar_url) as string} alt={artist.user?.name ?? ""} fill sizes="32px" className="object-cover" />
+                              ) : (
+                                <span className="text-navy-900 font-bold text-xs">{getInitials(artist.user?.name ?? "A")}</span>
+                              )}
+                            </div>
+                            <p className="font-medium truncate max-w-[160px]">{artist.user?.name}</p>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <div className="flex flex-wrap gap-1 max-w-[180px]">
+                            {artist.categories.slice(0, 2).map((c) => (
+                              <Badge key={c} variant="secondary" className="text-[10px] py-0">{c}</Badge>
+                            ))}
+                            {artist.categories.length > 2 && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge variant="outline" className="text-[10px] py-0 cursor-default">+{artist.categories.length - 2}</Badge>
+                                </TooltipTrigger>
+                                <TooltipContent>{artist.categories.slice(2).join(", ")}</TooltipContent>
+                              </Tooltip>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-1 max-w-[180px]">
+                            <MapPin className="w-3 h-3 flex-shrink-0" />
+                            <span className="truncate">{artist.cities.slice(0, 2).join(", ")}{artist.area && ` · ${artist.area}`}</span>
+                            {artist.cities.length > 2 && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="font-medium underline decoration-dotted underline-offset-2 cursor-default flex-shrink-0">
+                                    +{artist.cities.length - 2}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>{artist.cities.slice(2).join(", ")}</TooltipContent>
+                              </Tooltip>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-center gap-1 text-xs">
+                            <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                            <span className="font-semibold">{artist.rating.toFixed(1)}</span>
+                            <span className="text-muted-foreground">({artist.total_bookings})</span>
+                          </div>
+                        </td>
+                        <td className={`px-3 py-2.5 text-xs font-semibold whitespace-nowrap ${
+                          enquiry ? (withinBudget ? "text-emerald-700" : "text-red-600") : "text-navy-700"
+                        }`}>
+                          {formatCurrency(artist.base_price)}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          {artist.is_verified ? (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        {enquiry && (
+                          <td className="px-3 py-2.5">
+                            {availability === "blocked" ? (
+                              <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-semibold whitespace-nowrap">
+                                <Ban className="w-2.5 h-2.5" />Blocked
+                              </span>
+                            ) : availability === "booked" ? (
+                              <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold whitespace-nowrap">
+                                <CalendarClock className="w-2.5 h-2.5" />Booked
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold whitespace-nowrap">
+                                <Check className="w-2.5 h-2.5" />Available
+                              </span>
+                            )}
+                          </td>
+                        )}
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-center justify-end gap-1">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button size="sm" variant="ghost" aria-label={`View ${artist.user?.name}'s profile`} onClick={() => { setProfileArtist(artist); setPhotoIdx(0); }}>
+                                  <User className="w-4 h-4 text-muted-foreground" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top">View profile</TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  aria-label={isShortlisted ? `Remove ${artist.user?.name} from shortlist` : `Shortlist ${artist.user?.name}`}
+                                  onClick={() => toggleShortlist(artist.id)}
+                                >
+                                  {isShortlisted ? <Check className="w-4 h-4 text-navy-700" /> : <Plus className="w-4 h-4 text-muted-foreground" />}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top">{isShortlisted ? "Remove from shortlist" : "Add to shortlist"}</TooltipContent>
+                            </Tooltip>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Pagination */}
+          <div className="flex items-center justify-between text-sm flex-wrap gap-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>
+                {filtered.length === 0 ? 0 : pageStart + 1}–{Math.min(pageStart + pageSize, filtered.length)} of {filtered.length}
+              </span>
+              <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
+                <SelectTrigger className="h-8 w-[90px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAGE_SIZES.map((s) => (
+                    <SelectItem key={s} value={String(s)}>{s} / page</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" disabled={currentPage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <span className="text-xs text-muted-foreground">Page {currentPage} of {totalPages}</span>
+              <Button size="sm" variant="outline" disabled={currentPage >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-28">

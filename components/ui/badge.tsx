@@ -27,10 +27,15 @@ export interface BadgeProps
   extends React.HTMLAttributes<HTMLDivElement>,
     VariantProps<typeof badgeVariants> {}
 
-function Badge({ className, variant, ...props }: BadgeProps) {
-  return (
-    <div className={cn(badgeVariants({ variant }), className)} {...props} />
-  );
-}
+// forwardRef so Badge can be used as a Radix `asChild` target (e.g. inside
+// TooltipTrigger) — Radix's Slot clones the child and attaches a ref to it
+// for positioning, which silently fails (with a console warning) against a
+// plain function component.
+const Badge = React.forwardRef<HTMLDivElement, BadgeProps>(
+  ({ className, variant, ...props }, ref) => (
+    <div ref={ref} className={cn(badgeVariants({ variant }), className)} {...props} />
+  )
+);
+Badge.displayName = "Badge";
 
 export { Badge, badgeVariants };
