@@ -134,6 +134,37 @@ export function phoneOtpSendErrorMessage(err: unknown): string {
   }
 }
 
+/** Maps a signInWithEmail failure to a specific message. Deliberately tells
+ * the user which of email/password was wrong (auth/user-not-found vs.
+ * auth/wrong-password) rather than a blended "incorrect email or password" —
+ * an explicit product choice to prioritize a friendlier error over hiding
+ * whether an identifier is registered. Note Firebase's newer projects (with
+ * Email Enumeration Protection on) collapse both of those into the ambiguous
+ * auth/invalid-credential instead, in which case we can't tell them apart and
+ * fall back to the blended message. */
+export function emailLoginErrorMessage(err: unknown, isEmail: boolean): string {
+  const code = (err as { code?: string })?.code ?? "";
+  const noun = isEmail ? "email address" : "mobile number";
+  switch (code) {
+    case "auth/user-not-found":
+      return `No account found with that ${noun}.`;
+    case "auth/wrong-password":
+      return "Incorrect password.";
+    case "auth/invalid-credential":
+      return `Incorrect ${noun} or password.`;
+    case "auth/too-many-requests":
+      return "Too many attempts — please wait a while before trying again.";
+    case "auth/user-disabled":
+      return "This account has been disabled — please contact support.";
+    case "auth/invalid-email":
+      return "That doesn't look like a valid email address.";
+    case "auth/network-request-failed":
+      return "No internet connection — please check and try again.";
+    default:
+      return "Login failed — please try again.";
+  }
+}
+
 /** Same idea as phoneOtpSendErrorMessage, for the confirm() step. */
 export function phoneOtpVerifyErrorMessage(err: unknown): string {
   const code = (err as { code?: string })?.code ?? "";

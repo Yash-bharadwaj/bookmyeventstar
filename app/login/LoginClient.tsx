@@ -8,7 +8,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Mail, Lock, Eye, EyeOff, KeyRound, CalendarCheck, Mic2, Smartphone } from "lucide-react";
 import toast from "react-hot-toast";
-import { signInWithEmail } from "@/lib/firebase/auth-client";
+import { signInWithEmail, emailLoginErrorMessage } from "@/lib/firebase/auth-client";
 import { loginSchema, LoginFormData } from "@/lib/validations/auth";
 import { useGoogleSignIn } from "@/hooks/useGoogleSignIn";
 import { useCategories } from "@/hooks/useCategories";
@@ -22,11 +22,7 @@ import { BudgetRangeSelect } from "@/components/artist/BudgetRangeSelect";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { GoogleIcon } from "@/components/ui/GoogleIcon";
 
-const CREDENTIAL_ERROR_CODES = new Set([
-  "auth/invalid-credential",
-  "auth/wrong-password",
-  "auth/user-not-found",
-]);
+const NETWORK_ERROR_CODE = "auth/network-request-failed";
 
 // Only ever redirect back to a same-origin app path — never let a
 // `redirect` param carry a protocol-relative or absolute URL off-site.
@@ -76,7 +72,16 @@ function LoginForm() {
         ? raw.toLowerCase()
         : `${raw.replace(/\D/g, "").slice(-10)}@phone.bmes.app`;
 
-      const cred = await signInWithEmail(email, data.password);
+      let cred;
+      try {
+        cred = await signInWithEmail(email, data.password);
+      } catch (err) {
+        // Flaky mobile connections intermittently drop the first request —
+        // retry once before surfacing a network error to the user.
+        if ((err as { code?: string })?.code !== NETWORK_ERROR_CODE) throw err;
+        await new Promise((r) => setTimeout(r, 1000));
+        cred = await signInWithEmail(email, data.password);
+      }
       const { claims } = await cred.user.getIdTokenResult();
       const role = (claims.role as string) ?? "client";
 
@@ -84,12 +89,7 @@ function LoginForm() {
       router.push(redirectTo ?? `/${role}`);
       router.refresh();
     } catch (err: unknown) {
-      const code = (err as { code?: string })?.code;
-      if (code && CREDENTIAL_ERROR_CODES.has(code)) {
-        toast.error(data.identifier.includes("@") ? "Incorrect email or password" : "Incorrect phone number or password");
-      } else {
-        toast.error(err instanceof Error ? err.message : "Login failed");
-      }
+      toast.error(emailLoginErrorMessage(err, data.identifier.includes("@")));
     } finally {
       setLoading(false);
     }
