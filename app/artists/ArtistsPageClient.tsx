@@ -8,6 +8,7 @@ import {
   X, Calendar,
   Mic2, Shield, TrendingUp, ChevronRight, Send,
   ArrowRight, Play, ChevronLeft, Images, Video,
+  SlidersHorizontal, IndianRupee,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -452,17 +453,46 @@ export function ArtistsPageClient({ artists, initialCategory, initialCity, categ
   const [search, setSearch]     = useState(initialSearch);
   const [category, setCategory] = useState(initialCategory ?? "all");
   const [city, setCity]         = useState(initialCity ?? "all");
+  const [area, setArea]         = useState("all");
+  const [minPrice, setMinPrice] = useState<number | "">("");
+  const [maxPrice, setMaxPrice] = useState<number | "">("");
+  const [minRating, setMinRating] = useState(0);
+  const [showFilters, setShowFilters] = useState(false);
   const [sortBy, setSortBy]     = useState("rating");
   const [selected, setSelected] = useState<Artist | null>(null);
+
+  const allAreas = Array.from(
+    new Set(
+      artists
+        .filter((a) => city === "all" || a.cities.includes(city))
+        .map((a) => a.area)
+        .filter((a): a is string => !!a)
+    )
+  ).sort();
+
+  const activeExtraFilterCount = [
+    area !== "all", minPrice !== "" && minPrice > 0, maxPrice !== "", minRating > 0,
+  ].filter(Boolean).length;
+
+  const clearAllFilters = () => {
+    setSearch(""); setCategory("all"); setCity("all"); setArea("all");
+    setMinPrice(""); setMaxPrice(""); setMinRating(0);
+  };
 
   const filtered = artists
     .filter((a) => {
       const q = search.toLowerCase();
       const matchSearch = a.user.name.toLowerCase().includes(q) ||
-        a.categories.some((c) => c.toLowerCase().includes(q));
+        a.categories.some((c) => c.toLowerCase().includes(q)) ||
+        a.cities.some((c) => c.toLowerCase().includes(q)) ||
+        (a.area ?? "").toLowerCase().includes(q);
       const matchCategory = category === "all" || a.categories.includes(category);
       const matchCity = city === "all" || a.cities.includes(city);
-      return matchSearch && matchCategory && matchCity;
+      const matchArea = area === "all" || a.area === area;
+      const matchMinPrice = minPrice === "" || a.base_price >= Number(minPrice);
+      const matchMaxPrice = maxPrice === "" || a.base_price <= Number(maxPrice);
+      const matchRating = a.rating >= minRating;
+      return matchSearch && matchCategory && matchCity && matchArea && matchMinPrice && matchMaxPrice && matchRating;
     })
     .sort((a, b) => {
       if (sortBy === "rating")      return b.rating - a.rating;
@@ -493,7 +523,7 @@ export function ArtistsPageClient({ artists, initialCategory, initialCity, categ
             <div className="relative flex-1">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
-                placeholder="Search by name or category..."
+                placeholder="Search by name, category or location..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gold-500 focus:border-gold-500"
@@ -502,7 +532,7 @@ export function ArtistsPageClient({ artists, initialCategory, initialCity, categ
             <Combobox
               options={[{ value: "all", label: "All Cities" }, ...cities.map((c) => ({ value: c.name, label: c.name }))]}
               value={city}
-              onValueChange={setCity}
+              onValueChange={(v) => { setCity(v); setArea("all"); }}
               placeholder="All Cities"
               searchPlaceholder="Search cities..."
               className="w-full sm:w-44"
@@ -518,6 +548,19 @@ export function ArtistsPageClient({ artists, initialCategory, initialCity, categ
                 <SelectItem value="price_desc">Price: High → Low</SelectItem>
               </SelectContent>
             </Select>
+            <Button
+              variant={showFilters ? "default" : "outline"}
+              onClick={() => setShowFilters((v) => !v)}
+              className="w-full sm:w-auto flex-shrink-0"
+            >
+              <SlidersHorizontal className="w-4 h-4 mr-2" />
+              Filters
+              {activeExtraFilterCount > 0 && (
+                <span className="ml-2 px-1.5 py-0.5 rounded-full bg-white text-navy-700 text-[10px] font-bold">
+                  {activeExtraFilterCount}
+                </span>
+              )}
+            </Button>
           </div>
 
           {/* Row 2: Category chips — scrollable, all categories */}
@@ -537,14 +580,86 @@ export function ArtistsPageClient({ artists, initialCategory, initialCity, categ
             ))}
           </div>
 
+          {/* Row 3: More filters — budget, area, rating */}
+          <AnimatePresence>
+            {showFilters && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="rounded-2xl border border-gray-200 bg-white p-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Budget (₹)</p>
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                        <input
+                          type="number"
+                          placeholder="Min"
+                          value={minPrice}
+                          onChange={(e) => setMinPrice(e.target.value === "" ? "" : Number(e.target.value))}
+                          className="w-full pl-8 pr-2 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-gold-500 focus:border-gold-500"
+                        />
+                      </div>
+                      <span className="text-muted-foreground text-xs">to</span>
+                      <div className="relative flex-1">
+                        <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                        <input
+                          type="number"
+                          placeholder="Max"
+                          value={maxPrice}
+                          onChange={(e) => setMaxPrice(e.target.value === "" ? "" : Number(e.target.value))}
+                          className="w-full pl-8 pr-2 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-gold-500 focus:border-gold-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Area / Locality</p>
+                    <Combobox
+                      options={[{ value: "all", label: "All Areas" }, ...allAreas.map((a) => ({ value: a, label: a }))]}
+                      value={area}
+                      onValueChange={setArea}
+                      placeholder="All Areas"
+                      searchPlaceholder="Search areas..."
+                      className="w-full"
+                    />
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Min Rating</p>
+                    <div className="flex gap-1.5">
+                      {[0, 3, 3.5, 4, 4.5].map((r) => (
+                        <button
+                          key={r}
+                          onClick={() => setMinRating(r)}
+                          className={`flex-1 py-2 rounded-lg text-xs font-medium border transition-all ${
+                            minRating === r
+                              ? "bg-amber-500 text-white border-amber-500"
+                              : "bg-white border-gray-200 text-muted-foreground hover:border-amber-400"
+                          }`}
+                        >
+                          {r === 0 ? "Any" : `${r}+`}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Result count + clear */}
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">
               Showing <span className="font-semibold text-foreground">{filtered.length}</span> verified artist{filtered.length !== 1 ? "s" : ""}
             </p>
-            {(category !== "all" || city !== "all" || search) && (
+            {(category !== "all" || city !== "all" || search || activeExtraFilterCount > 0) && (
               <button
-                onClick={() => { setSearch(""); setCategory("all"); setCity("all"); }}
+                onClick={clearAllFilters}
                 className="text-xs text-navy-600 hover:text-navy-700 font-medium underline"
               >
                 Clear all filters
@@ -561,7 +676,7 @@ export function ArtistsPageClient({ artists, initialCategory, initialCity, categ
             </div>
             <p className="text-lg font-semibold text-navy-900">No artists found</p>
             <p className="text-muted-foreground text-sm mt-1">Try a different search or clear your filters</p>
-            <Button variant="outline" className="mt-5" onClick={() => { setSearch(""); setCategory("all"); setCity("all"); }}>
+            <Button variant="outline" className="mt-5" onClick={clearAllFilters}>
               Clear Filters
             </Button>
           </div>
