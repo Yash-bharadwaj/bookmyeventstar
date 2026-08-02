@@ -18,6 +18,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Combobox } from "@/components/ui/combobox";
+import { FramedPhoto } from "@/components/ui/framed-photo";
 import { ArtistProfile } from "@/types";
 import { formatCurrency, getInitials, EVENT_TYPES } from "@/lib/utils";
 import { useQuickEnquiry } from "@/hooks/useQuickEnquiry";
@@ -110,13 +111,12 @@ function ArtistDrawer({ artist, onClose, cities }: { artist: Artist; onClose: ()
               playsInline
             />
           ) : (
-            <Image
+            <FramedPhoto
               key={activeMedia?.url}
               src={activeMedia?.url ?? ""}
               alt={artist.user.name}
-              fill
               sizes="(max-width: 768px) 100vw, 640px"
-              className="object-cover object-top"
+              imgClassName="object-top"
               priority
             />
           )}
@@ -270,7 +270,7 @@ function ArtistDrawer({ artist, onClose, cities }: { artist: Artist; onClose: ()
                       <span className="text-[9px] text-white/70 font-medium uppercase tracking-wide">Video</span>
                     </div>
                   ) : (
-                    <Image src={m.url} alt="Portfolio" fill sizes="(max-width: 640px) 33vw, 200px" className="object-cover object-top" />
+                    <FramedPhoto src={m.url} alt="Portfolio" sizes="(max-width: 640px) 33vw, 200px" imgClassName="object-top" />
                   )}
                   {m.type === "video" && (
                     <div className="absolute top-1.5 left-1.5">

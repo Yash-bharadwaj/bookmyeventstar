@@ -29,8 +29,6 @@ export function evaluateArtistProfile(input: ArtistProfileCompletionInput): {
   items: ArtistProfileCompletionItem[];
 } {
   const ig = (input.instagram ?? "").trim();
-  const yt = (input.youtube ?? "").trim();
-  const rider = (input.rider_notes ?? "").trim();
 
   const items: ArtistProfileCompletionItem[] = [
     {
@@ -83,11 +81,11 @@ export function evaluateArtistProfile(input: ArtistProfileCompletionInput): {
       done: input.photoCount >= 1,
     },
     {
-      id: "extra",
-      label: "Extras",
-      hint: "Add rider notes or an Instagram / YouTube link.",
+      id: "instagram",
+      label: "Instagram",
+      hint: "Add your Instagram profile URL.",
       weight: 10,
-      done: rider.length >= 10 || /^https?:\/\//i.test(ig) || /^https?:\/\//i.test(yt),
+      done: /^https?:\/\//i.test(ig),
     },
   ];
 

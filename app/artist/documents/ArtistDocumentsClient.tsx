@@ -28,9 +28,14 @@ const COMPLETION_AFFECTING_TYPES = new Set(["Aadhaar Card"]);
 export function ArtistDocumentsClient({
   artistProfileId,
   documents: initialDocuments,
+  embedded = false,
 }: {
   artistProfileId: string;
   documents: ArtistDocument[];
+  /** Set when rendered inside another page's own padded container (the
+   * artist profile page, after Photos & Videos) — skips this component's
+   * own page-level padding/max-width so it doesn't double up. */
+  embedded?: boolean;
 }) {
   const router = useRouter();
   const [documents, setDocuments] = useState(initialDocuments);
@@ -111,7 +116,7 @@ export function ArtistDocumentsClient({
   };
 
   return (
-    <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-6">
+    <div className={embedded ? "space-y-6" : "p-4 md:p-6 max-w-3xl mx-auto space-y-6"}>
       <input ref={fileInputRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleFileSelected} />
 
       <Card>
@@ -154,7 +159,7 @@ export function ArtistDocumentsClient({
                       Pending Review
                     </div>
                   ) : (
-                    <Button size="sm" variant="outline" disabled={uploading} onClick={() => triggerUpload(docType.type)}>
+                    <Button type="button" size="sm" variant="outline" disabled={uploading} onClick={() => triggerUpload(docType.type)}>
                       {uploading ? (
                         <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
                       ) : (

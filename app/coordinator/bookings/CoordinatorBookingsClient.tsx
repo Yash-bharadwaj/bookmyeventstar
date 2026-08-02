@@ -150,7 +150,7 @@ export function CoordinatorBookingsClient({ bookings }: { bookings: BookingWithE
             <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Artist</p>
             {booking.artist ? (
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full gold-gradient flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                <div className="w-10 h-10 rounded-full gold-gradient flex items-center justify-center text-navy-900 font-bold text-sm flex-shrink-0">
                   {getInitials(booking.artist.user.name)}
                 </div>
                 <div>

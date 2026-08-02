@@ -24,7 +24,8 @@ export default async function ArtistProfilePage() {
     artistProfile = { ...artistProfile, slug };
   }
   const media = mediaSnap.docs.map((d) => ({ id: d.id, artist_id: user.id, ...d.data() }));
-  const hasAadhaarDocument = documentsSnap.docs.some((d) => d.data().type === "Aadhaar Card");
+  const documents = documentsSnap.docs.map((d) => ({ id: d.id, artist_id: user.id, ...d.data() }) as AnyDoc);
+  const hasAadhaarDocument = documents.some((d) => d.type === "Aadhaar Card");
   const categoryNames = categoriesSnap.docs.map((d) => d.data().name as string);
   const cityNames = citiesSnap.docs.map((d) => d.data().name as string);
 
@@ -33,6 +34,7 @@ export default async function ArtistProfilePage() {
       user={serialize(user)}
       artistProfile={serialize(artistProfile) as any}
       media={serialize(media) as any}
+      documents={serialize(documents) as any}
       hasAadhaarDocument={hasAadhaarDocument}
       categories={categoryNames}
       cities={cityNames}

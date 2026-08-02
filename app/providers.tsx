@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { useUser } from "@/hooks/useUser";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 function AuthSync() {
   useUser(); // keeps the session cookie in sync with Firebase's token refresh
@@ -21,8 +22,10 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthSync />
-      {children}
+      <TooltipProvider delayDuration={200}>
+        <AuthSync />
+        {children}
+      </TooltipProvider>
     </QueryClientProvider>
   );
 }

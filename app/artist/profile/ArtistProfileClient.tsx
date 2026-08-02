@@ -19,10 +19,12 @@ import { doc, updateDoc, collection, setDoc, deleteDoc, writeBatch, serverTimest
 import { uploadAvatar as uploadAvatarToStorage, uploadMedia as uploadMediaToStorage, deleteStorageFile } from "@/lib/firebase/storage-client";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
-import { ArtistProfile, ArtistMedia, User } from "@/types";
+import { ArtistProfile, ArtistMedia, ArtistDocument, User } from "@/types";
 import { formatCurrency, getInitials } from "@/lib/utils";
 import { evaluateArtistProfile, type ArtistProfileCompletionInput } from "@/lib/artist-profile-completion";
 import { ProfileCompletionGauge } from "@/components/artist/ProfileCompletionGauge";
+import { ArtistDocumentsClient } from "@/app/artist/documents/ArtistDocumentsClient";
+import { FramedPhoto } from "@/components/ui/framed-photo";
 
 const profileSchema = z.object({
   bio: z.string().min(20, "Bio must be at least 20 characters"),
@@ -46,12 +48,13 @@ interface Props {
   user: User;
   artistProfile: ArtistProfile | null;
   media?: ArtistMedia[];
+  documents?: ArtistDocument[];
   hasAadhaarDocument?: boolean;
   categories: string[];
   cities: string[];
 }
 
-export function ArtistProfileClient({ user, artistProfile, media: initialMedia = [], hasAadhaarDocument = false, categories, cities }: Props) {
+export function ArtistProfileClient({ user, artistProfile, media: initialMedia = [], documents = [], hasAadhaarDocument = false, categories, cities }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -303,7 +306,7 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-4xl mx-auto">
-      {artistProfile && (
+      {artistProfile && !liveCompletion.isComplete && (
         <ProfileCompletionGauge
           percent={liveCompletion.percent}
           isComplete={liveCompletion.isComplete}
@@ -564,9 +567,12 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
           <CardHeader><CardTitle>Social Media Links</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-1.5">
-              <Label>Instagram Profile URL</Label>
+              <Label>Instagram Profile URL *</Label>
               <Input placeholder="https://instagram.com/yourprofile" {...register("instagram")} />
               {errors.instagram && <p className="text-xs text-destructive">{errors.instagram.message}</p>}
+              {!errors.instagram && !wInstagram && (
+                <p className="text-xs text-destructive">Required to complete your profile</p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>YouTube Channel URL</Label>
@@ -627,7 +633,7 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
                     <div className="grid grid-cols-3 gap-3">
                       {photos.map((photo) => (
                         <div key={photo.id} className="relative aspect-square rounded-xl overflow-hidden group border">
-                          <Image src={photo.url} alt={photo.title ?? ""} fill sizes="(max-width: 640px) 33vw, 200px" className="object-cover" />
+                          <FramedPhoto src={photo.url} alt={photo.title ?? ""} sizes="(max-width: 640px) 33vw, 200px" />
                           <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                             {!photo.is_primary && (
                               <button
@@ -690,6 +696,13 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
             )}
           </CardContent>
         </Card>
+
+        {/* Documents — embedded here (not just linked) since it's not in the
+            mobile bottom nav, so this profile tab is the only reliable way
+            mobile artists can reach it. */}
+        {artistProfile?.id && (
+          <ArtistDocumentsClient artistProfileId={artistProfile.id} documents={documents} embedded />
+        )}
 
         <div className="flex justify-end">
           <Button type="submit" loading={saving} size="lg">

@@ -16,6 +16,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { formatCurrency, getInitials, formatDate } from "@/lib/utils";
 import { checkArtistsAvailability, AvailabilityStatus } from "@/lib/availability";
 import { useRouter } from "next/navigation";
+import { FramedPhoto } from "@/components/ui/framed-photo";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 interface Artist {
   id: string; categories: string[]; cities: string[]; base_price: number;
@@ -565,11 +567,11 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                   {/* Photo / avatar */}
                   <div className="relative h-44 bg-gradient-to-br from-navy-900 to-navy-700 flex items-center justify-center">
                     {photo ? (
-                      <Image src={photo} alt={artist.user?.name ?? ""} fill sizes="(max-width: 640px) 50vw, 280px" className="object-cover" />
+                      <FramedPhoto src={photo} alt={artist.user?.name ?? ""} sizes="(max-width: 640px) 50vw, 280px" />
                     ) : artist.user?.avatar_url ? (
                       <Image src={artist.user.avatar_url} alt={artist.user?.name ?? ""} fill sizes="(max-width: 640px) 50vw, 280px" className="object-cover" />
                     ) : (
-                      <div className="w-20 h-20 rounded-full gold-gradient flex items-center justify-center text-white font-bold text-2xl">
+                      <div className="w-20 h-20 rounded-full gold-gradient flex items-center justify-center text-navy-900 font-bold text-2xl">
                         {getInitials(artist.user?.name ?? "A")}
                       </div>
                     )}
@@ -638,17 +640,32 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                         <Badge key={c} variant="secondary" className={`text-[10px] ${categories.includes(c) ? "bg-navy-100 text-navy-700" : ""}`}>{c}</Badge>
                       ))}
                       {artist.categories.length > 2 && (
-                        <Badge variant="outline" className="text-[10px]">+{artist.categories.length - 2}</Badge>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Badge variant="outline" className="text-[10px] cursor-default">+{artist.categories.length - 2}</Badge>
+                          </TooltipTrigger>
+                          <TooltipContent>{artist.categories.slice(2).join(", ")}</TooltipContent>
+                        </Tooltip>
                       )}
                     </div>
 
                     {/* Cities */}
-                    <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground min-w-0">
                       <MapPin className="w-3 h-3 flex-shrink-0" />
                       <span className="truncate">
-                        {artist.cities.slice(0, 3).join(", ")}{artist.cities.length > 3 ? ` +${artist.cities.length - 3}` : ""}
+                        {artist.cities.slice(0, 3).join(", ")}
                         {artist.area && ` · ${artist.area}`}
                       </span>
+                      {artist.cities.length > 3 && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="font-medium underline decoration-dotted underline-offset-2 cursor-default flex-shrink-0">
+                              +{artist.cities.length - 3}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>{artist.cities.slice(3).join(", ")}</TooltipContent>
+                        </Tooltip>
+                      )}
                     </div>
 
                     {/* Price */}
@@ -765,12 +782,10 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                   <div className="relative h-64 bg-gradient-to-br from-navy-900 to-navy-700 flex-shrink-0">
                     {photos.length > 0 ? (
                       <>
-                        <Image
+                        <FramedPhoto
                           src={photos[photoIdx]?.url}
                           alt={a.user?.name ?? ""}
-                          fill
                           sizes="(max-width: 768px) 100vw, 600px"
-                          className="object-cover"
                         />
                         {photos.length > 1 && (
                           <>
@@ -805,7 +820,7 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                       <Image src={a.user.avatar_url} alt={a.user?.name ?? ""} fill sizes="(max-width: 768px) 100vw, 600px" className="object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
-                        <div className="w-24 h-24 rounded-full gold-gradient flex items-center justify-center text-white font-bold text-3xl">
+                        <div className="w-24 h-24 rounded-full gold-gradient flex items-center justify-center text-navy-900 font-bold text-3xl">
                           {getInitials(a.user?.name ?? "A")}
                         </div>
                       </div>

@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Combobox } from "@/components/ui/combobox";
+import { FramedPhoto } from "@/components/ui/framed-photo";
 import { ArtistProfile } from "@/types";
 import { formatCurrency, getInitials, EVENT_TYPES } from "@/lib/utils";
 import { useQuickEnquiry } from "@/hooks/useQuickEnquiry";
@@ -65,7 +66,7 @@ export function ArtistProfilePageClient({ artist, cities }: { artist: Artist; ci
         ) : activeMedia?.type === "video" ? (
           <video key={activeMedia.url} src={activeMedia.url} className="absolute inset-0 w-full h-full object-cover bg-black" controls playsInline />
         ) : (
-          <Image key={activeMedia?.url} src={activeMedia?.url ?? ""} alt={artist.user.name} fill sizes="(max-width: 768px) 100vw, 768px" className="object-cover object-top" priority />
+          <FramedPhoto key={activeMedia?.url} src={activeMedia?.url ?? ""} alt={artist.user.name} sizes="(max-width: 768px) 100vw, 768px" imgClassName="object-top" priority />
         )}
 
         <div className="absolute bottom-0 inset-x-0 h-32 bg-gradient-to-t from-black/80 via-black/40 to-transparent pointer-events-none" />
@@ -195,7 +196,7 @@ export function ArtistProfilePageClient({ artist, cities }: { artist: Artist; ci
                     </div>
                   </div>
                 ) : (
-                  <Image src={m.url} alt="Portfolio" fill sizes="(max-width: 640px) 25vw, 180px" className="object-cover object-top" />
+                  <FramedPhoto src={m.url} alt="Portfolio" sizes="(max-width: 640px) 25vw, 180px" imgClassName="object-top" />
                 )}
                 {m.type === "video" && (
                   <div className="absolute top-1.5 left-1.5">

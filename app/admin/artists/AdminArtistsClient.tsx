@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { ArtistProfile, ArtistDocument } from "@/types";
 import { formatCurrency, getInitials } from "@/lib/utils";
 import { db } from "@/lib/firebase/client";
@@ -455,7 +456,7 @@ export function ArtistVerificationClient({
               <div className="flex items-start justify-between gap-3 mb-3 pl-6">
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-sm flex-shrink-0 ${
-                    artist.is_verified ? "gold-gradient text-white" : "bg-muted text-muted-foreground"
+                    artist.is_verified ? "gold-gradient text-navy-900" : "bg-muted text-muted-foreground"
                   }`}>
                     {getInitials(artist.user.name)}
                   </div>
@@ -533,9 +534,19 @@ export function ArtistVerificationClient({
                 </div>
                 {(artist.cities ?? []).length > 0 && (
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <MapPin className="w-3 h-3" />{artist.cities.slice(0, 3).join(", ")}
-                    {artist.cities.length > 3 && ` +${artist.cities.length - 3}`}
-                    {artist.area && ` · ${artist.area}`}
+                    <MapPin className="w-3 h-3" />
+                    <span>{artist.cities.slice(0, 3).join(", ")}</span>
+                    {artist.cities.length > 3 && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="font-medium underline decoration-dotted underline-offset-2 cursor-default">
+                            &nbsp;+{artist.cities.length - 3}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>{artist.cities.slice(3).join(", ")}</TooltipContent>
+                      </Tooltip>
+                    )}
+                    {artist.area && <span>&nbsp;· {artist.area}</span>}
                   </div>
                 )}
               </div>
@@ -546,7 +557,12 @@ export function ArtistVerificationClient({
                   <Badge key={c} variant="secondary" className="text-[10px] py-0">{c}</Badge>
                 ))}
                 {artist.categories.length > 3 && (
-                  <Badge variant="outline" className="text-[10px] py-0">+{artist.categories.length - 3}</Badge>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge variant="outline" className="text-[10px] py-0 cursor-default">+{artist.categories.length - 3}</Badge>
+                    </TooltipTrigger>
+                    <TooltipContent>{artist.categories.slice(3).join(", ")}</TooltipContent>
+                  </Tooltip>
                 )}
               </div>
 

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import {
   Search, Download, UserPlus, Pencil, Trash2, Loader2,
-  ChevronLeft, ChevronRight, ShieldCheck, Eye, EyeOff as EyeOffIcon,
+  ChevronLeft, ChevronRight, ShieldCheck, ShieldOff, Eye, EyeOff as EyeOffIcon,
   KeyRound, Copy, Shuffle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,9 @@ import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/comp
 import { Combobox } from "@/components/ui/combobox";
 import { ArtistCategorySelect } from "@/components/artist/ArtistCategorySelect";
 import { formatDateTime, getInitials } from "@/lib/utils";
+import { db } from "@/lib/firebase/client";
+import { doc, updateDoc } from "firebase/firestore";
+import { notifyUser, emailUser } from "@/lib/notifications/client";
 
 type UserRole = "client" | "artist" | "coordinator" | "admin";
 
@@ -115,6 +118,7 @@ export function AdminUsersClient({ users, currentAdminId, categoryOptions }: { u
   const [deleteTarget, setDeleteTarget] = useState<RegisteredUser | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [toggling, setToggling] = useState<string | null>(null);
+  const [verifying, setVerifying] = useState<string | null>(null);
 
   const clientCount = users.filter((u) => u.role === "client").length;
   const artistCount = users.filter((u) => u.role === "artist").length;
@@ -175,6 +179,42 @@ export function AdminUsersClient({ users, currentAdminId, categoryOptions }: { u
       toast.error(err instanceof Error ? err.message : "Failed to update status");
     } finally {
       setToggling(null);
+    }
+  };
+
+  /** Verification lives on artistProfiles, not users — same direct client
+   * write + notify pattern as toggleVerify in AdminArtistsClient.tsx (that
+   * page's dedicated verification queue), just reachable from here too so
+   * an admin doesn't have to leave Admin > Users to flip it. */
+  const toggleVerify = async (u: RegisteredUser) => {
+    const current = !!u.is_verified;
+    setVerifying(u.id);
+    try {
+      await updateDoc(doc(db, "artistProfiles", u.id), {
+        is_verified: !current,
+        ...(!current && { rejection_reason: null }),
+      });
+      const payload = current
+        ? {
+            title: "Verification Removed",
+            message: "Your artist verification has been removed, so your profile won't appear in client or coordinator searches until it's restored.",
+            type: "warning" as const,
+            link: "/artist/profile",
+          }
+        : {
+            title: "You're Verified! 🎉",
+            message: "Great news — your artist profile has been verified by our team and can now appear in client and coordinator searches.",
+            type: "success" as const,
+            link: "/artist/profile",
+          };
+      await notifyUser(u.id, payload).catch(() => {});
+      if (!current) emailUser(u.id, payload).catch(() => {});
+      toast.success(current ? `${u.name} unverified` : `${u.name} verified!`);
+      router.refresh();
+    } catch {
+      toast.error("Failed to update verification");
+    } finally {
+      setVerifying(null);
     }
   };
 
@@ -488,12 +528,30 @@ export function AdminUsersClient({ users, currentAdminId, categoryOptions }: { u
                               : "Deactivated — can't sign in. Toggle on to restore access."}
                           </TooltipContent>
                         </Tooltip>
-                        {u.role === "artist" && u.is_verified && (
+                        {u.role === "artist" && (
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                              <button
+                                type="button"
+                                onClick={() => toggleVerify(u)}
+                                disabled={verifying === u.id}
+                                aria-label={u.is_verified ? `Remove verification from ${u.name}` : `Verify ${u.name}`}
+                                className="disabled:opacity-50"
+                              >
+                                {verifying === u.id ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+                                ) : u.is_verified ? (
+                                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                                ) : (
+                                  <ShieldOff className="w-3.5 h-3.5 text-muted-foreground" />
+                                )}
+                              </button>
                             </TooltipTrigger>
-                            <TooltipContent side="top">Verified by admin — shows a trust badge on their public profile</TooltipContent>
+                            <TooltipContent side="top">
+                              {u.is_verified
+                                ? "Verified by admin — shows a trust badge on their public profile. Click to remove verification."
+                                : "Not verified yet — click to verify"}
+                            </TooltipContent>
                           </Tooltip>
                         )}
                         {u.role === "artist" && (
