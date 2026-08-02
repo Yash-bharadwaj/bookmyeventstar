@@ -69,12 +69,26 @@ export function getInvisibleRecaptcha(containerId = "recaptcha-container"): Reca
 }
 
 export function resetRecaptcha() {
-  recaptchaVerifier?.clear();
+  try {
+    recaptchaVerifier?.clear();
+  } catch {
+    // The verifier's container may already be gone (e.g. the page that
+    // created it was navigated away from) or the widget already used up —
+    // either way the goal here is just to drop the stale reference below,
+    // so a throw from clear() itself must never propagate.
+  }
   recaptchaVerifier = null;
 }
 
-/** e164Phone must be like "+919876543210". */
+/** e164Phone must be like "+919876543210". Always starts from a fresh
+ * verifier — Firebase's invisible reCAPTCHA is single-use, and the module-
+ * level verifier can otherwise go stale across a client-side route change
+ * (it stays bound to the #recaptcha-container div of whichever page created
+ * it, which may no longer be mounted). Reusing a stale/spent verifier is
+ * what produces the opaque "could not send code" failure on a second
+ * attempt. */
 export async function sendPhoneOtp(e164Phone: string): Promise<ConfirmationResult> {
+  resetRecaptcha();
   const verifier = getInvisibleRecaptcha();
   return signInWithPhoneNumber(auth, e164Phone, verifier);
 }
@@ -87,6 +101,7 @@ export async function sendPhoneOtp(e164Phone: string): Promise<ConfirmationResul
  * account, which is what gives phone-number uniqueness across accounts. */
 export async function linkPhoneToCurrentUser(e164Phone: string): Promise<ConfirmationResult> {
   if (!auth.currentUser) throw new Error("No signed-in user to link a phone number to.");
+  resetRecaptcha();
   const verifier = getInvisibleRecaptcha();
   return linkWithPhoneNumber(auth.currentUser, e164Phone, verifier);
 }
