@@ -140,7 +140,8 @@ export function AdminUsersClient({ users, currentAdminId, categoryOptions }: { u
       return (
         u.name.toLowerCase().includes(q) ||
         u.email.toLowerCase().includes(q) ||
-        u.phone.toLowerCase().includes(q)
+        u.phone.toLowerCase().includes(q) ||
+        (u.categories ?? []).some((c) => c.toLowerCase().includes(q))
       );
     });
   }, [users, search, roleFilter, cityFilter, areaFilter]);
@@ -285,7 +286,7 @@ export function AdminUsersClient({ users, currentAdminId, categoryOptions }: { u
   };
 
   const downloadCsv = () => {
-    const header = ["Name", "Email", "Phone", "City", "Area", "Role", "Status", "Registered", "Verified", "Listed", "Rating", "Bookings"];
+    const header = ["Name", "Email", "Phone", "City", "Area", "Role", "Category", "Status", "Registered", "Verified", "Listed", "Rating", "Bookings"];
     const rows = filtered.map((u) => [
       u.name,
       u.email,
@@ -293,6 +294,7 @@ export function AdminUsersClient({ users, currentAdminId, categoryOptions }: { u
       u.city ?? "",
       u.area ?? "",
       u.role,
+      u.role === "artist" ? (u.categories ?? []).join("; ") : "",
       u.is_active ? "Active" : "Inactive",
       formatDateTime(u.created_at),
       u.role === "artist" ? (u.is_verified ? "Yes" : "No") : "",
@@ -352,7 +354,7 @@ export function AdminUsersClient({ users, currentAdminId, categoryOptions }: { u
         <div className="relative flex-1 min-w-[220px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search by name, email, or phone..."
+            placeholder="Search by name, email, phone, or category..."
             className="pl-9"
             value={search}
             onChange={(e) => { setSearch(e.target.value); resetPage(); }}
