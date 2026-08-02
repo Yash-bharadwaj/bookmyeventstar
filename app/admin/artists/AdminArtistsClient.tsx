@@ -238,12 +238,16 @@ export function ArtistVerificationClient({
   const sendProfileReminder = async (artistId: string, name: string) => {
     setReminding(artistId);
     try {
-      await emailUser(artistId, {
+      const ok = await emailUser(artistId, {
         title: "Complete your profile to get verified",
         message: `Hi ${name}, your profile still needs a bit more before we can review and verify it. Once it's complete, our team is notified automatically — no need to wait on us.`,
         link: "/artist/profile",
       });
-      toast.success("Reminder sent");
+      if (ok) {
+        toast.success("Reminder sent");
+      } else {
+        toast.error("Failed to send reminder");
+      }
     } catch {
       toast.error("Failed to send reminder");
     }
@@ -587,7 +591,7 @@ export function ArtistVerificationClient({
                     </Button>
                   </a>
                 )}
-                {!artist.is_profile_complete && (
+                {(!artist.is_profile_complete || !artist.is_verified) && (
                   <Button
                     size="sm"
                     variant="outline"
@@ -608,8 +612,8 @@ export function ArtistVerificationClient({
                 {canManageListing && (
                 <Button
                   size="sm"
-                  variant={isListedProfile(artist) ? "outline" : "default"}
-                  className={`w-full ${isListedProfile(artist) ? "border-slate-300" : "bg-slate-700 hover:bg-slate-800 text-white"}`}
+                  variant={isListedProfile(artist) ? "outline" : "secondary"}
+                  className={`w-full ${isListedProfile(artist) ? "border-slate-300" : ""}`}
                   disabled={listingToggling === artist.id}
                   onClick={() => toggleListed(artist.id, isListedProfile(artist))}
                 >
@@ -646,7 +650,8 @@ export function ArtistVerificationClient({
                   <div className="flex gap-2">
                     <Button
                       size="sm"
-                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                      variant="success"
+                      className="flex-1"
                       disabled={toggling === artist.id}
                       onClick={() => toggleVerify(artist.id, artist.is_verified)}
                     >

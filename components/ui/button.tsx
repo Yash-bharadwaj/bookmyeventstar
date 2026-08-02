@@ -27,6 +27,16 @@ const buttonVariants = cva(
           "bg-amber-500 text-white hover:bg-amber-600 shadow-lg shadow-amber-500/25",
         success:
           "bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/25",
+        // Contributes no background/color of its own — for call sites that
+        // need a fully custom or dynamic background (e.g. a per-category
+        // gradient computed at runtime). Any other variant's background
+        // comes from a plain CSS class (gold-gradient, bg-navy-900, etc.)
+        // that a passed-in className can't reliably override: this
+        // project's compiled CSS emits @layer components rules (like
+        // .gold-gradient) after utilities, so a bg-* utility override never
+        // wins against the default variant's gradient — confirmed via
+        // computed-style checks, not just Tailwind's usual layer docs.
+        bare: "",
       },
       size: {
         default: "h-11 px-6 py-2",

@@ -55,16 +55,25 @@ export async function notifyAllAdmins(payload: NotifyPayload): Promise<void> {
 /**
  * Email counterpart to notifyUser, for the handful of "major event" cases
  * that should also land in the recipient's inbox, not just the bell icon
- * (e.g. an enquiry assignment, a proposal response). Best-effort — never
- * throws, so a failed send never blocks the action that triggered it.
+ * (e.g. an enquiry assignment, a proposal response). Never throws — a
+ * failed send never blocks the action that triggered it — but returns
+ * whether it actually succeeded, for the callers that do want to know (e.g.
+ * a standalone "send a reminder" action, where silently no-op'ing on
+ * failure would leave the admin thinking it worked when it didn't). Callers
+ * that only want fire-and-forget behavior can just ignore the return value.
  * `details` adds an optional key/value table to the email (not stored on the
  * bell notification) — use it when the recipient needs full context, e.g.
  * an enquiry's client/event/budget details on assignment.
  */
-export async function emailUser(uid: string, payload: NotifyPayload, details?: EmailDetail[]): Promise<void> {
-  await fetch("/api/notifications/email", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ uid, ...payload, details }),
-  }).catch(() => {});
+export async function emailUser(uid: string, payload: NotifyPayload, details?: EmailDetail[]): Promise<boolean> {
+  try {
+    const res = await fetch("/api/notifications/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uid, ...payload, details }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }

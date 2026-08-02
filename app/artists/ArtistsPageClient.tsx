@@ -341,6 +341,7 @@ function ArtistDrawer({ artist, onClose, cities }: { artist: Artist; onClose: ()
                   <a href={`/enquiry?artist=${encodeURIComponent(artist.user.name)}`}>
                     <Button
                       size="lg"
+                      variant="bare"
                       className={`w-full bg-gradient-to-r ${color} text-white border-0 shadow-lg hover:opacity-90 font-bold text-base`}
                     >
                       <Send className="w-4 h-4 mr-2" />
@@ -422,6 +423,7 @@ function ArtistDrawer({ artist, onClose, cities }: { artist: Artist; onClose: ()
                   type="submit"
                   loading={loading}
                   size="lg"
+                  variant="bare"
                   className={`w-full bg-gradient-to-r ${color} text-white border-0 shadow-lg hover:opacity-90 font-bold text-base`}
                 >
                   <Send className="w-4 h-4 mr-2" />

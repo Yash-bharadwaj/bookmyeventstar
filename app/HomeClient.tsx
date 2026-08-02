@@ -251,7 +251,7 @@ export default function LandingPage() {
                 </Button>
               </Link>
               <Link href="/enquiry">
-                <Button size="sm" className="gold-gradient text-white hover:opacity-90 shadow-md shadow-gold-500/30">
+                <Button size="sm" className="hover:opacity-90 shadow-md shadow-gold-500/30">
                   Book Now <ArrowRight className="w-3.5 h-3.5 ml-1" />
                 </Button>
               </Link>
@@ -301,7 +301,7 @@ export default function LandingPage() {
                     <Button variant="outline" size="sm" className="w-full border-gray-200">Login</Button>
                   </Link>
                   <Link href="/enquiry" onClick={() => setMobileMenuOpen(false)}>
-                    <Button size="sm" className="w-full gold-gradient text-white shadow-md shadow-gold-500/30">Book Now</Button>
+                    <Button size="sm" className="w-full shadow-md shadow-gold-500/30">Book Now</Button>
                   </Link>
                 </div>
               </div>
@@ -368,7 +368,7 @@ export default function LandingPage() {
                   />
                 </div>
                 <Link href={`/artists${searchQuery ? `?search=${encodeURIComponent(searchQuery)}` : ""}`} className="shrink-0">
-                  <button className="w-full sm:w-auto gold-gradient text-white text-sm font-semibold px-6 py-2.5 rounded-xl hover:opacity-90 transition-all shadow-md whitespace-nowrap">
+                  <button className="w-full sm:w-auto gold-gradient text-navy-900 text-sm font-semibold px-6 py-2.5 rounded-xl hover:opacity-90 transition-all shadow-md whitespace-nowrap">
                     Search Artists
                   </button>
                 </Link>
@@ -398,7 +398,7 @@ export default function LandingPage() {
                 </Button>
               </Link>
               <Link href="/enquiry">
-                <Button size="lg" className="w-full sm:w-auto px-8 text-base gold-gradient text-white font-bold hover:opacity-90 shadow-xl shadow-gold-500/30 border-0">
+                <Button size="lg" className="w-full sm:w-auto px-8 text-base font-bold hover:opacity-90 shadow-xl shadow-gold-500/30 border-0">
                   <Sparkles className="w-5 h-5 mr-2" />
                   Raise Free Enquiry
                 </Button>
@@ -562,7 +562,7 @@ export default function LandingPage() {
 
           <div className="text-center mt-12">
             <Link href="/enquiry">
-              <Button size="lg" className="px-12 gold-gradient text-white shadow-xl shadow-gold-500/30 hover:opacity-90 text-base font-bold">
+              <Button size="lg" className="px-12 shadow-xl shadow-gold-500/30 hover:opacity-90 text-base font-bold">
                 <Sparkles className="w-5 h-5 mr-2" />
                 Start Your Enquiry — It&apos;s Free
               </Button>
@@ -680,7 +680,7 @@ export default function LandingPage() {
                 Singers, DJs, comedians, dancers, anchors, bands — list your profile and let our coordinators bring the bookings to you.
               </p>
               <Link href="/register?role=artist">
-                <Button size="lg" className="mt-6 gold-gradient text-white font-bold shadow-xl shadow-gold-500/30 hover:opacity-90">
+                <Button size="lg" className="mt-6 font-bold shadow-xl shadow-gold-500/30 hover:opacity-90">
                   <Mic2 className="w-5 h-5 mr-2" />
                   Create Your Artist Profile
                 </Button>
@@ -731,13 +731,13 @@ export default function LandingPage() {
                 </Button>
               </Link>
               <Link href="/enquiry" className="w-full sm:w-auto">
-                <Button size="lg" className="w-full sm:w-auto px-10 gold-gradient text-white font-bold border-0 hover:opacity-90 shadow-xl shadow-gold-500/30 text-base">
+                <Button size="lg" className="w-full sm:w-auto px-10 font-bold border-0 hover:opacity-90 shadow-xl shadow-gold-500/30 text-base">
                   <Sparkles className="w-5 h-5 mr-2" />
                   Get Free Quote
                 </Button>
               </Link>
               <a href="tel:+919999999999" className="w-full sm:w-auto">
-                <Button size="lg" className="w-full sm:w-auto px-8 bg-white/10 border border-white/20 text-white hover:bg-white/20 backdrop-blur-sm text-base">
+                <Button size="lg" variant="glass" className="w-full sm:w-auto px-8 text-base">
                   <Phone className="w-5 h-5 mr-2" />
                   Call Us
                 </Button>

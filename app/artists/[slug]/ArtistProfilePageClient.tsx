@@ -252,7 +252,7 @@ export function ArtistProfilePageClient({ artist, cities }: { artist: Artist; ci
                   <p className="text-xs text-muted-foreground mt-1">It takes under a minute — we just need to verify your email first.</p>
                 </div>
                 <a href={`/enquiry?artist=${encodeURIComponent(artist.user.name)}`}>
-                  <Button size="lg" className={`w-full bg-gradient-to-r ${color} text-white border-0 shadow-lg hover:opacity-90 font-bold text-base`}>
+                  <Button size="lg" variant="bare" className={`w-full bg-gradient-to-r ${color} text-white border-0 shadow-lg hover:opacity-90 font-bold text-base`}>
                     <Send className="w-4 h-4 mr-2" />
                     Start My Enquiry
                   </Button>
@@ -329,6 +329,7 @@ export function ArtistProfilePageClient({ artist, cities }: { artist: Artist; ci
                   type="submit"
                   loading={loading}
                   size="lg"
+                  variant="bare"
                   className={`w-full bg-gradient-to-r ${color} text-white border-0 shadow-lg hover:opacity-90 font-bold text-base`}
                 >
                   <Send className="w-4 h-4 mr-2" />
