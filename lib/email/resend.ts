@@ -134,11 +134,14 @@ export function artistWelcomeEmailHtml({ name, category }: { name: string; categ
     </p>
     <p style="font-size:14px;color:#111827;line-height:1.6;margin:0 0 10px;font-weight:600;">Here's what happens next:</p>
     <ul style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 8px;padding-left:20px;">
-      <li>Complete your profile — bio, price, cities, and a few great photos</li>
-      <li>Our team reviews and verifies your profile</li>
+      <li><strong>Complete your profile</strong> — bio, price, cities, and a few great photos. Our team isn't notified to review you until this is done, so this is the one step that actually matters right now.</li>
+      <li>The moment your profile is complete, our team is automatically notified and reviews it</li>
       <li>Once verified, coordinators and clients can find and book you</li>
     </ul>
     ${ctaButton("Complete My Profile →", `${SITE_URL}/artist/profile`)}
-    <p style="font-size:13px;color:#6b7280;margin:26px 0 0;">Welcome aboard — let's get you booked!<br/>— Team BookMy EventStar</p>
+    <p style="font-size:13px;color:#92400e;line-height:1.6;margin:22px 0 0;padding:12px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;">
+      <strong>Note:</strong> You are verified only when your profile is <strong>100% complete</strong>. Uploading your Aadhaar card is compulsory — without it, your profile cannot reach 100%.
+    </p>
+    <p style="font-size:13px;color:#6b7280;margin:16px 0 0;">Welcome aboard — let's get you booked!<br/>— Team BookMy EventStar</p>
   `);
 }

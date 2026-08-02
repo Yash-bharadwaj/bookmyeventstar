@@ -74,6 +74,8 @@ export interface ArtistProfile {
   is_listed: boolean;
   /** Checklist satisfied (bio, price, geography, portfolio, extras) — synced from app logic */
   is_profile_complete?: boolean;
+  /** Set when an admin/coordinator rejects the profile (with a reason) instead of verifying it — cleared automatically the next time the artist saves their profile. */
+  rejection_reason?: string | null;
   social_links: Record<string, string>;
   rider_notes?: string;
   /** Human-readable id for the artist's public shareable profile link (/artists/{slug}). */
@@ -96,6 +98,7 @@ export interface ArtistDocument {
   artist_id: string;
   type: string;
   url: string;
+  storage_path?: string;
   is_verified: boolean;
   created_at: string;
 }

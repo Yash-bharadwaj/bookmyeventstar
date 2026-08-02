@@ -45,11 +45,12 @@ interface Props {
   user: User;
   artistProfile: ArtistProfile | null;
   media?: ArtistMedia[];
+  hasAadhaarDocument?: boolean;
   categories: string[];
   cities: string[];
 }
 
-export function ArtistProfileClient({ user, artistProfile, media: initialMedia = [], categories, cities }: Props) {
+export function ArtistProfileClient({ user, artistProfile, media: initialMedia = [], hasAadhaarDocument = false, categories, cities }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -88,6 +89,24 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
   const photos = mediaList.filter((m) => m.type === "photo");
   const videos = mediaList.filter((m) => m.type === "video");
 
+  // Tracks completeness/rejection as of the last known state, so the
+  // "profile ready for review" notification (admins + coordinators) fires
+  // exactly when it should: the moment completeness first flips false ->
+  // true, or when a previously-rejected artist saves again (a resubmission,
+  // even if completeness itself never changed) — not on every routine edit.
+  const wasCompleteRef = useRef<boolean>(artistProfile?.is_profile_complete ?? false);
+  const wasRejectedRef = useRef<boolean>(!!artistProfile?.rejection_reason);
+
+  const notifyReviewersIfNeeded = (isComplete: boolean) => {
+    const justCompleted = isComplete && !wasCompleteRef.current;
+    const resubmittedAfterRejection = isComplete && wasRejectedRef.current;
+    if (justCompleted || resubmittedAfterRejection) {
+      fetch("/api/notifications/profile-complete", { method: "POST" }).catch(() => {});
+    }
+    wasCompleteRef.current = isComplete;
+    wasRejectedRef.current = false; // rejection_reason is cleared in the same write below
+  };
+
   const flushProfileCompleteToDb = async (explicitPhotoCount?: number, explicitHasAvatar?: boolean) => {
     if (!artistProfile?.id) return;
     const snap: ArtistProfileCompletionInput = {
@@ -97,13 +116,15 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
       cities: selectedCities,
       photoCount: explicitPhotoCount ?? photos.length,
       hasAvatar: explicitHasAvatar ?? !!avatarUrl,
+      hasAadhaar: hasAadhaarDocument,
       instagram: getValues("instagram"),
       youtube: getValues("youtube"),
       rider_notes: getValues("rider_notes"),
     };
     const { isComplete } = evaluateArtistProfile(snap);
     // artistProfiles doc id IS the artist's uid — no user_id lookup needed.
-    await updateDoc(doc(db, "artistProfiles", artistProfile.id), { is_profile_complete: isComplete });
+    await updateDoc(doc(db, "artistProfiles", artistProfile.id), { is_profile_complete: isComplete, rejection_reason: null });
+    notifyReviewersIfNeeded(isComplete);
   };
 
   const liveCompletion = useMemo(() => {
@@ -114,12 +135,13 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
       cities: selectedCities,
       photoCount: photos.length,
       hasAvatar: !!avatarUrl,
+      hasAadhaar: hasAadhaarDocument,
       instagram: wInstagram,
       youtube: wYoutube,
       rider_notes: wRiderNotes,
     };
     return evaluateArtistProfile(snap);
-  }, [wBio, wBasePrice, wInstagram, wYoutube, wRiderNotes, selectedCategories, selectedCities, photos.length, avatarUrl]);
+  }, [wBio, wBasePrice, wInstagram, wYoutube, wRiderNotes, selectedCategories, selectedCities, photos.length, avatarUrl, hasAadhaarDocument]);
 
   const uploadAvatar = async (file: File) => {
     if (!file) return;
@@ -169,6 +191,7 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
         cities: selectedCities,
         photoCount: photos.length,
         hasAvatar: !!avatarUrl,
+        hasAadhaar: hasAadhaarDocument,
         instagram: data.instagram,
         youtube: data.youtube,
         rider_notes: data.rider_notes,
@@ -185,8 +208,10 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
           youtube: data.youtube,
         },
         is_profile_complete: isComplete,
+        rejection_reason: null,
         updated_at: serverTimestamp(),
       });
+      notifyReviewersIfNeeded(isComplete);
 
       toast.success("Profile updated successfully!");
       router.refresh();
@@ -290,6 +315,16 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
             artistProfile.is_listed !== false
           }
         />
+      )}
+      {artistProfile && artistProfile.rejection_reason && !artistProfile.is_verified && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-950 flex items-start gap-2">
+          <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-red-700" />
+          <p>
+            <span className="font-semibold">Changes needed:</span> {artistProfile.rejection_reason}
+            <br />
+            Update your profile and save — we&apos;re notified automatically to take another look.
+          </p>
+        </div>
       )}
       {artistProfile && artistProfile.is_listed === false && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 flex items-start gap-2">

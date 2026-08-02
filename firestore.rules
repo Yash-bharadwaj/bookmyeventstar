@@ -46,13 +46,13 @@ service cloud.firestore {
     match /artistProfiles/{artistUid} {
       allow read: if true; // public artist directory
       allow create: if signedIn() && (request.auth.uid == artistUid || isAdmin());
-      // A coordinator may verify/unverify an artist (Coordinator > Verify
+      // A coordinator may verify/reject an artist (Coordinator > Verify
       // Artists, mirrors Admin > Artists) but nothing else on this doc —
       // narrower than isAdmin()'s unrestricted write.
       allow update: if signedIn() && (
         request.auth.uid == artistUid ||
         isAdmin() ||
-        (role() == 'coordinator' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['is_verified', 'updated_at']))
+        (role() == 'coordinator' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['is_verified', 'rejection_reason', 'updated_at']))
       );
 
       match /media/{mediaId} {

@@ -17,6 +17,7 @@ export type ArtistProfileCompletionInput = {
   cities: string[];
   photoCount: number;
   hasAvatar?: boolean;
+  hasAadhaar?: boolean;
   instagram?: string;
   youtube?: string;
   rider_notes?: string;
@@ -36,42 +37,49 @@ export function evaluateArtistProfile(input: ArtistProfileCompletionInput): {
       id: "profile_photo",
       label: "Profile photo",
       hint: "Upload a clear profile photo — clients need to see who they're booking.",
-      weight: 20,
+      weight: 15,
       done: !!input.hasAvatar,
     },
     {
       id: "bio",
       label: "Bio",
       hint: "Write at least 20 characters.",
-      weight: 17,
+      weight: 14,
       done: input.bio.trim().length >= 20,
+    },
+    {
+      id: "aadhaar",
+      label: "Aadhaar Card",
+      hint: "Upload your Aadhaar card under Documents — required for verification.",
+      weight: 15,
+      done: !!input.hasAadhaar,
     },
     {
       id: "price",
       label: "Starting price",
       hint: "Set base price ₹1,000 or more.",
-      weight: 14,
+      weight: 12,
       done: Number(input.base_price) >= 1000,
     },
     {
       id: "categories",
       label: "Categories",
       hint: "Pick at least one performance type.",
-      weight: 13,
+      weight: 11,
       done: input.categories.length >= 1,
     },
     {
       id: "cities",
       label: "Cities",
       hint: "Pick at least one city you work in.",
-      weight: 13,
+      weight: 11,
       done: input.cities.length >= 1,
     },
     {
       id: "photos",
       label: "Portfolio photo",
       hint: "Upload at least one portfolio photo.",
-      weight: 13,
+      weight: 12,
       done: input.photoCount >= 1,
     },
     {
@@ -84,10 +92,10 @@ export function evaluateArtistProfile(input: ArtistProfileCompletionInput): {
   ];
 
   const percent = items.reduce((sum, i) => sum + (i.done ? i.weight : 0), 0);
-  /** Core checklist only — extras bump % but do not hide artists from browse. */
-  const isComplete = items
-    .filter((i) => i.id !== "extra")
-    .every((i) => i.done);
+  // Every item is required for 100% / verification eligibility — nothing is
+  // "bonus only" anymore (previously "extra" didn't count; that changed
+  // alongside making Aadhaar mandatory).
+  const isComplete = items.every((i) => i.done);
   return { percent, isComplete, items };
 }
 
@@ -97,7 +105,8 @@ export function aggregateCompletionFromStoredProfile(
     "bio" | "base_price" | "categories" | "cities" | "social_links" | "rider_notes"
   > | null,
   photoCount: number,
-  hasAvatar?: boolean
+  hasAvatar?: boolean,
+  hasAadhaar?: boolean
 ) {
   if (!p) {
     return evaluateArtistProfile({
@@ -107,6 +116,7 @@ export function aggregateCompletionFromStoredProfile(
       cities: [],
       photoCount,
       hasAvatar,
+      hasAadhaar,
     });
   }
   const sl = p.social_links ?? {};
@@ -117,6 +127,7 @@ export function aggregateCompletionFromStoredProfile(
     cities: p.cities ?? [],
     photoCount,
     hasAvatar,
+    hasAadhaar,
     instagram: typeof sl.instagram === "string" ? sl.instagram : undefined,
     youtube: typeof sl.youtube === "string" ? sl.youtube : undefined,
     rider_notes: p.rider_notes ?? "",

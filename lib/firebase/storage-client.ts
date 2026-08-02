@@ -22,6 +22,16 @@ export async function uploadMedia(uid: string, mediaId: string, file: File): Pro
   return { url, path };
 }
 
+/** Verification documents (Aadhaar, PAN, etc.) — separate path from public
+ * media, since storage.rules keeps these private to the owner + admin/coordinator. */
+export async function uploadDocument(uid: string, docId: string, file: File): Promise<{ url: string; path: string }> {
+  const path = `artist-documents/${uid}/${docId}`;
+  const storageRef = ref(storage, path);
+  await uploadBytes(storageRef, file);
+  const url = await getDownloadURL(storageRef);
+  return { url, path };
+}
+
 export async function deleteStorageFile(path: string) {
   await deleteObject(ref(storage, path));
 }

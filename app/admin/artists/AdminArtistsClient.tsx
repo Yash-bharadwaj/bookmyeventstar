@@ -4,12 +4,14 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Star, CheckCircle2, XCircle, Phone, MapPin,
-  Filter, X, Shield, ShieldOff, Eye, EyeOff,
+  Filter, X, Shield, ShieldOff, Eye, EyeOff, AlertCircle, Ban, FileText,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArtistProfile } from "@/types";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ArtistProfile, ArtistDocument } from "@/types";
 import { formatCurrency, getInitials } from "@/lib/utils";
 import { db } from "@/lib/firebase/client";
 import { doc, updateDoc, writeBatch } from "firebase/firestore";
@@ -19,6 +21,8 @@ import { useRouter } from "next/navigation";
 
 interface ArtistWithUser extends Omit<ArtistProfile, "user"> {
   user: { name: string; email: string; phone: string; is_active: boolean; avatar_url?: string };
+  profile_completion_percent?: number;
+  documents?: ArtistDocument[];
 }
 
 const VERIFY_TABS = [
@@ -63,6 +67,10 @@ export function ArtistVerificationClient({
   const [showCategoryFilter, setShowCategoryFilter] = useState(false);
   const [toggling, setToggling] = useState<string | null>(null);
   const [listingToggling, setListingToggling] = useState<string | null>(null);
+  const [reminding, setReminding] = useState<string | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<ArtistWithUser | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejecting, setRejecting] = useState(false);
 
   const allCities = uniqueCities(artists);
   const allAreas = uniqueAreas(artists, cityFilter);
@@ -86,7 +94,13 @@ export function ArtistVerificationClient({
       ? { title: "You're Verified! 🎉", message: "Great news — your artist profile has been verified by our team and can now appear in client and coordinator searches.", type: "success" as const, link: "/artist/profile" }
       : { title: "Profile Listed", message: "Your profile is now listed and can appear in client and coordinator searches once verified.", type: "success" as const, link: "/artist/profile" };
     for (const id of ids) {
-      batch.update(doc(db, "artistProfiles", id), { [field]: true });
+      // Bulk-verifying also clears any earlier rejection, same as the
+      // single verify button — otherwise a stale rejection_reason could
+      // resurface if this artist is ever unverified again later.
+      batch.update(doc(db, "artistProfiles", id), {
+        [field]: true,
+        ...(bulkAction === "verify" && { rejection_reason: null }),
+      });
       notifyUserInBatch(batch, id, payload);
     }
     await batch.commit();
@@ -129,7 +143,12 @@ export function ArtistVerificationClient({
   const toggleVerify = async (artistId: string, current: boolean) => {
     setToggling(artistId);
     try {
-      await updateDoc(doc(db, "artistProfiles", artistId), { is_verified: !current });
+      // Verifying also clears any earlier rejection — a fresh approval
+      // shouldn't leave a stale "Rejected: ..." note on the card.
+      await updateDoc(doc(db, "artistProfiles", artistId), {
+        is_verified: !current,
+        ...(!current && { rejection_reason: null }),
+      });
       const payload = current
         ? {
             title: "Verification Removed",
@@ -186,6 +205,48 @@ export function ArtistVerificationClient({
     }
     setListingToggling(null);
     router.refresh();
+  };
+
+  const confirmReject = async () => {
+    if (!rejectTarget || !rejectReason.trim()) { toast.error("Enter a reason"); return; }
+    setRejecting(true);
+    try {
+      const reason = rejectReason.trim();
+      await updateDoc(doc(db, "artistProfiles", rejectTarget.id), {
+        is_verified: false,
+        rejection_reason: reason,
+      });
+      const payload = {
+        title: "Your artist profile needs a few changes",
+        message: `We reviewed your profile but couldn't verify it yet. Here's what needs attention: "${reason}". Update your profile and we'll take another look — you don't need to wait for us, we're notified automatically as soon as you save.`,
+        type: "warning" as const,
+        link: "/artist/profile",
+      };
+      await notifyUser(rejectTarget.id, payload).catch(() => {});
+      emailUser(rejectTarget.id, payload).catch(() => {});
+      toast.success("Artist notified with feedback");
+      setRejectTarget(null);
+      setRejectReason("");
+    } catch {
+      toast.error("Failed to reject");
+    }
+    setRejecting(false);
+    router.refresh();
+  };
+
+  const sendProfileReminder = async (artistId: string, name: string) => {
+    setReminding(artistId);
+    try {
+      await emailUser(artistId, {
+        title: "Complete your profile to get verified",
+        message: `Hi ${name}, your profile still needs a bit more before we can review and verify it. Once it's complete, our team is notified automatically — no need to wait on us.`,
+        link: "/artist/profile",
+      });
+      toast.success("Reminder sent");
+    } catch {
+      toast.error("Failed to send reminder");
+    }
+    setReminding(null);
   };
 
   return (
@@ -413,15 +474,13 @@ export function ArtistVerificationClient({
                       <XCircle className="w-3 h-3" />Pending
                     </span>
                   )}
-                  {artist.is_profile_complete === true ? (
-                    <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-navy-100 text-navy-800 font-semibold">
-                      Profile complete
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold">
-                      Profile incomplete
-                    </span>
-                  )}
+                  <span className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                    (artist.profile_completion_percent ?? 0) >= 100
+                      ? "bg-navy-100 text-navy-800"
+                      : "bg-amber-100 text-amber-800"
+                  }`}>
+                    {artist.profile_completion_percent ?? 0}% filled
+                  </span>
                   {isListedProfile(artist) ? (
                     <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-medium">
                       <Eye className="w-3 h-3" />Listed
@@ -430,6 +489,39 @@ export function ArtistVerificationClient({
                     <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 font-medium">
                       <EyeOff className="w-3 h-3" />Hidden
                     </span>
+                  )}
+                </div>
+              </div>
+
+              {artist.rejection_reason && !artist.is_verified && (
+                <div className="mb-3 p-2 rounded-lg bg-red-50 border border-red-200 text-[11px] text-red-800">
+                  <span className="font-semibold">Rejected: </span>{artist.rejection_reason}
+                </div>
+              )}
+
+              {/* Documents — private, only admin/coordinator/owner can view (storage.rules + firestore.rules) */}
+              <div className="mb-3">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">Documents</p>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {(artist.documents ?? []).length === 0 ? (
+                    <span className="text-[10px] text-red-600 font-medium">No documents uploaded</span>
+                  ) : (
+                    <>
+                      {(artist.documents ?? []).map((docItem) => (
+                        <a
+                          key={docItem.id}
+                          href={docItem.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-medium border border-blue-100 hover:bg-blue-100"
+                        >
+                          <FileText className="w-3 h-3" />{docItem.type}
+                        </a>
+                      ))}
+                      {!(artist.documents ?? []).some((d) => d.type === "Aadhaar Card") && (
+                        <span className="text-[10px] text-red-600 font-medium">Aadhaar missing</span>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -472,6 +564,31 @@ export function ArtistVerificationClient({
 
               {/* Actions */}
               <div className="space-y-2 mt-3">
+                {artist.slug && (
+                  <a href={`/artists/${artist.slug}`} target="_blank" rel="noopener noreferrer">
+                    <Button size="sm" variant="outline" className="w-full">
+                      <Eye className="w-3.5 h-3.5 mr-1.5" />View Full Profile
+                    </Button>
+                  </a>
+                )}
+                {!artist.is_profile_complete && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full border-amber-300 text-amber-700 hover:bg-amber-50"
+                    disabled={reminding === artist.id}
+                    onClick={() => sendProfileReminder(artist.id, artist.user.name)}
+                  >
+                    {reminding === artist.id ? (
+                      <span className="flex items-center gap-2 justify-center">
+                        <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                        Sending…
+                      </span>
+                    ) : (
+                      <><AlertCircle className="w-3.5 h-3.5 mr-1.5" />Remind to Complete Profile</>
+                    )}
+                  </Button>
+                )}
                 {canManageListing && (
                 <Button
                   size="sm"
@@ -492,30 +609,88 @@ export function ArtistVerificationClient({
                   )}
                 </Button>
                 )}
-                <Button
-                  size="sm"
-                  variant={artist.is_verified ? "outline" : "default"}
-                  className={`w-full ${artist.is_verified ? "border-red-200 text-red-600 hover:bg-red-50" : "bg-emerald-600 hover:bg-emerald-700 text-white"}`}
-                  disabled={toggling === artist.id}
-                  onClick={() => toggleVerify(artist.id, artist.is_verified)}
-                >
-                {toggling === artist.id ? (
-                  <span className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
-                    Updating...
-                  </span>
-                ) : artist.is_verified ? (
-                  <><ShieldOff className="w-3.5 h-3.5 mr-1.5" />Remove Verification</>
+                {artist.is_verified ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full border-red-200 text-red-600 hover:bg-red-50"
+                    disabled={toggling === artist.id}
+                    onClick={() => toggleVerify(artist.id, artist.is_verified)}
+                  >
+                    {toggling === artist.id ? (
+                      <span className="flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                        Updating...
+                      </span>
+                    ) : (
+                      <><ShieldOff className="w-3.5 h-3.5 mr-1.5" />Remove Verification</>
+                    )}
+                  </Button>
                 ) : (
-                  <><Shield className="w-3.5 h-3.5 mr-1.5" />Verify Artist</>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                      disabled={toggling === artist.id}
+                      onClick={() => toggleVerify(artist.id, artist.is_verified)}
+                    >
+                      {toggling === artist.id ? (
+                        <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                      ) : (
+                        <><Shield className="w-3.5 h-3.5 mr-1.5" />Verify</>
+                      )}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1 border-red-300 text-red-600 hover:bg-red-50"
+                      onClick={() => { setRejectTarget(artist); setRejectReason(""); }}
+                    >
+                      <Ban className="w-3.5 h-3.5 mr-1.5" />Reject
+                    </Button>
+                  </div>
                 )}
-              </Button>
               </div>
             </motion.div>
           ))}
         </div>
         </>
       )}
+
+      {/* Reject dialog */}
+      <Dialog open={!!rejectTarget} onOpenChange={(open) => !open && setRejectTarget(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reject {rejectTarget?.user.name}&apos;s profile</DialogTitle>
+          </DialogHeader>
+          {rejectTarget && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Explain what needs to change — this is emailed to the artist directly, and their profile is
+                automatically resubmitted for review the next time they save it.
+              </p>
+              <Textarea
+                placeholder="e.g. Profile photo is too blurry, please upload a clearer one."
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                rows={4}
+                autoFocus
+              />
+              <div className="flex gap-3 justify-end">
+                <Button variant="outline" onClick={() => setRejectTarget(null)}>Cancel</Button>
+                <Button
+                  variant="destructive"
+                  onClick={confirmReject}
+                  loading={rejecting}
+                  disabled={!rejectReason.trim()}
+                >
+                  <Ban className="w-4 h-4 mr-2" />Reject & Notify
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
