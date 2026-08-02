@@ -3,20 +3,28 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { adminDb } from "@/lib/firebase/admin";
 import { serialize, type AnyDoc } from "@/lib/firebase/firestore-utils";
+import { getCurrentUser } from "@/lib/firebase/server";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { ArtistProfilePageClient } from "./ArtistProfilePageClient";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://bookmyeventstar.com";
 
-async function getArtistBySlug(slug: string): Promise<AnyDoc | null> {
+async function getArtistBySlug(slug: string, viewerRole?: string): Promise<AnyDoc | null> {
   const snap = await adminDb.collection("artistProfiles").where("slug", "==", slug).limit(1).get();
   if (snap.empty) return null;
 
   const doc = snap.docs[0];
   const data = doc.data() as AnyDoc;
-  // Same visibility gate the /artists directory itself applies — a link to
-  // an unlisted/unverified profile should 404, not leak a draft.
-  if (!data.is_verified || !data.is_listed) return null;
+  // Deliberately only checks is_verified, not is_listed — is_listed controls
+  // whether an artist shows up in /artists' browse/search results, but an
+  // artist's own direct profile link (shared with a client, put in a bio,
+  // etc.) should keep working regardless of that. is_verified is the actual
+  // "is this a real, reviewed account" gate; an unverified profile still
+  // 404s — except for admin/coordinator, who need to see the full profile
+  // (bio, photos, everything a client would) to actually review it before
+  // verifying, not just the summary card on Admin/Coordinator > Artists.
+  const canPreviewUnverified = viewerRole === "admin" || viewerRole === "coordinator";
+  if (!data.is_verified && !canPreviewUnverified) return null;
 
   const [userSnap, mediaSnap] = await Promise.all([
     adminDb.collection("users").doc(doc.id).get(),
@@ -70,8 +78,9 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 }
 
 export default async function ArtistProfilePage({ params }: { params: { slug: string } }) {
+  const viewer = await getCurrentUser();
   const [artist, citiesSnap] = await Promise.all([
-    getArtistBySlug(params.slug),
+    getArtistBySlug(params.slug, viewer?.role),
     adminDb.collection("cities").orderBy("name").get(),
   ]);
   if (!artist) notFound();
@@ -120,7 +129,16 @@ export default async function ArtistProfilePage({ params }: { params: { slug: st
         </div>
       </nav>
 
-      <div className="pt-20">
+      {!artist.is_verified && (
+        // Only reachable at all for admin/coordinator (see getArtistBySlug) —
+        // an unverified profile isn't public yet, so make that unambiguous
+        // to whoever's previewing it before they verify.
+        <div className="fixed top-20 left-0 right-0 z-40 bg-amber-500 text-amber-950 text-sm font-medium text-center py-2">
+          Preview only — this profile isn&apos;t verified yet, so it isn&apos;t publicly visible.
+        </div>
+      )}
+
+      <div className={artist.is_verified ? "pt-20" : "pt-28"}>
         <ArtistProfilePageClient artist={serialize(artist) as any} cities={cities} />
       </div>
     </div>
