@@ -5,6 +5,7 @@ import {
   signOut as firebaseSignOut,
   RecaptchaVerifier,
   signInWithPhoneNumber,
+  linkWithPhoneNumber,
   linkWithCredential,
   EmailAuthProvider,
   type ConfirmationResult,
@@ -76,6 +77,18 @@ export function resetRecaptcha() {
 export async function sendPhoneOtp(e164Phone: string): Promise<ConfirmationResult> {
   const verifier = getInvisibleRecaptcha();
   return signInWithPhoneNumber(auth, e164Phone, verifier);
+}
+
+/** Same as sendPhoneOtp, but for a user who's already signed in (Google
+ * sign-up finishing their profile) — verifies + links the phone number onto
+ * the CURRENT account instead of signing into/creating a different one.
+ * Firebase itself rejects the link with `auth/credential-already-in-use` (at
+ * confirm() time) if that phone number is already linked to a different
+ * account, which is what gives phone-number uniqueness across accounts. */
+export async function linkPhoneToCurrentUser(e164Phone: string): Promise<ConfirmationResult> {
+  if (!auth.currentUser) throw new Error("No signed-in user to link a phone number to.");
+  const verifier = getInvisibleRecaptcha();
+  return linkWithPhoneNumber(auth.currentUser, e164Phone, verifier);
 }
 
 /** Attaches password-login capability to a phone-verified account (so future

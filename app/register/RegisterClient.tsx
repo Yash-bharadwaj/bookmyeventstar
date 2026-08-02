@@ -181,6 +181,9 @@ function ArtistRegisterForm() {
     area: googleArea, setArea: setGoogleArea,
     budgetRange: googleBudgetRange, setBudgetRange: setGoogleBudgetRange,
     finishing: googleFinishing, startGoogleSignIn, finishGoogleSignup, cancelGoogleSignup,
+    otpSent: googleOtpSent, otpCode: googleOtpCode, setOtpCode: setGoogleOtpCode,
+    otpBusy: googleOtpBusy, otpError: googleOtpError, resendIn: googleResendIn,
+    phoneVerified: googlePhoneVerified, handleSendPhoneOtp: handleSendGoogleOtp, handleVerifyPhoneOtp: handleVerifyGoogleOtp, editPhoneNumber: editGooglePhoneNumber,
   } = useGoogleSignIn("artist");
   // The hook only tracks city/area/budget (what the API needs) — "state" is
   // purely a local filter for the cascading dropdown, never submitted.
@@ -309,8 +312,17 @@ function ArtistRegisterForm() {
           <p className="font-medium text-emerald-800">Signed in with Google</p>
           <p className="text-emerald-700 text-xs mt-0.5">{googleUser.name || googleUser.email}</p>
         </div>
-        <div className="space-y-1">
-          <Label>Mobile Number</Label>
+        <div className={cn(
+          "rounded-2xl border p-3.5 space-y-2.5 transition-colors",
+          googlePhoneVerified ? "border-emerald-200 bg-emerald-50/40" : "border-gold-200 bg-gold-50/50"
+        )}>
+          <p className={cn(
+            "text-xs font-medium flex items-center gap-1.5",
+            googlePhoneVerified ? "text-emerald-700" : "text-gold-700"
+          )}>
+            <ShieldCheck className="w-3.5 h-3.5" />
+            {googlePhoneVerified ? "Mobile number verified" : "Verify your mobile number"}
+          </p>
           <div className="flex gap-2">
             <div className="flex items-center px-3 rounded-xl border bg-muted text-sm text-muted-foreground font-medium shrink-0">
               +91
@@ -320,29 +332,72 @@ function ArtistRegisterForm() {
               inputMode="numeric"
               placeholder="9876543210"
               icon={<Phone className="w-4 h-4" />}
+              rightIcon={googlePhoneVerified ? (
+                <motion.span
+                  initial={{ scale: 0, rotate: -45 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 15 }}
+                >
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                </motion.span>
+              ) : undefined}
+              success={googlePhoneVerified}
               value={googlePhone}
+              disabled={googleOtpSent || googlePhoneVerified}
               onChange={(e) => setGooglePhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
               className="min-w-0"
             />
           </div>
+          {!googlePhoneVerified && !googleOtpSent && (
+            <Button type="button" onClick={handleSendGoogleOtp} loading={googleOtpBusy} className="w-full">
+              Send code
+            </Button>
+          )}
+          {!googlePhoneVerified && googleOtpSent && (
+            <>
+              <div className="space-y-2">
+                <OtpInput
+                  value={googleOtpCode}
+                  onChange={setGoogleOtpCode}
+                  onComplete={(code) => handleVerifyGoogleOtp(code)}
+                  disabled={googleOtpBusy}
+                  error={googleOtpError}
+                  autoFocus
+                />
+                <Button type="button" onClick={() => handleVerifyGoogleOtp()} loading={googleOtpBusy} className="w-full">
+                  Verify
+                </Button>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <ResendTimer seconds={googleResendIn} totalSeconds={45} onResend={handleSendGoogleOtp} disabled={googleOtpBusy} />
+                <button type="button" className="text-muted-foreground hover:text-navy-900" onClick={editGooglePhoneNumber}>
+                  Edit number
+                </button>
+              </div>
+            </>
+          )}
         </div>
-        <div className="space-y-1">
-          <Label>What kind of artist are you?</Label>
-          <ArtistCategorySelect categories={categories} value={googleCategory} onChange={setGoogleCategory} />
-        </div>
-        <div className="space-y-1">
-          <Label>Where do you perform?</Label>
-          <ArtistLocationSelect
-            cities={cities}
-            value={{ state: googleLocationState, city: googleCity, area: googleArea }}
-            onChange={(v) => { setGoogleLocationState(v.state); setGoogleCity(v.city); setGoogleArea(v.area); }}
-          />
-        </div>
-        <div className="space-y-1">
-          <Label>Starting price range</Label>
-          <BudgetRangeSelect value={googleBudgetRange} onChange={setGoogleBudgetRange} />
-        </div>
-        <Button type="button" onClick={finishGoogleSignup} loading={googleFinishing} className="w-full" size="lg">
+        {googlePhoneVerified && (
+          <>
+            <div className="space-y-1">
+              <Label>What kind of artist are you?</Label>
+              <ArtistCategorySelect categories={categories} value={googleCategory} onChange={setGoogleCategory} />
+            </div>
+            <div className="space-y-1">
+              <Label>Where do you perform?</Label>
+              <ArtistLocationSelect
+                cities={cities}
+                value={{ state: googleLocationState, city: googleCity, area: googleArea }}
+                onChange={(v) => { setGoogleLocationState(v.state); setGoogleCity(v.city); setGoogleArea(v.area); }}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Starting price range</Label>
+              <BudgetRangeSelect value={googleBudgetRange} onChange={setGoogleBudgetRange} />
+            </div>
+          </>
+        )}
+        <Button type="button" onClick={finishGoogleSignup} loading={googleFinishing} disabled={!googlePhoneVerified} className="w-full" size="lg">
           Finish Sign Up
         </Button>
         <button type="button" onClick={cancelGoogleSignup} className="w-full text-center text-xs text-muted-foreground hover:text-foreground">
@@ -546,6 +601,9 @@ function ClientRegisterForm() {
   const {
     googleBusy, googleUser, phoneDigits: googlePhone, setPhoneDigits: setGooglePhone,
     finishing: googleFinishing, startGoogleSignIn, finishGoogleSignup, cancelGoogleSignup,
+    otpSent: googleOtpSent, otpCode: googleOtpCode, setOtpCode: setGoogleOtpCode,
+    otpBusy: googleOtpBusy, otpError: googleOtpError, resendIn: googleResendIn,
+    phoneVerified: googlePhoneVerified, handleSendPhoneOtp: handleSendGoogleOtp, handleVerifyPhoneOtp: handleVerifyGoogleOtp, editPhoneNumber: editGooglePhoneNumber,
   } = useGoogleSignIn("client");
 
   const [otpSent, setOtpSent] = useState(false);
@@ -659,8 +717,17 @@ function ClientRegisterForm() {
           <p className="font-medium text-emerald-800">Signed in with Google</p>
           <p className="text-emerald-700 text-xs mt-0.5">{googleUser.name || googleUser.email}</p>
         </div>
-        <div className="space-y-1">
-          <Label>Mobile Number</Label>
+        <div className={cn(
+          "rounded-2xl border p-3.5 space-y-2.5 transition-colors",
+          googlePhoneVerified ? "border-emerald-200 bg-emerald-50/40" : "border-gold-200 bg-gold-50/50"
+        )}>
+          <p className={cn(
+            "text-xs font-medium flex items-center gap-1.5",
+            googlePhoneVerified ? "text-emerald-700" : "text-gold-700"
+          )}>
+            <ShieldCheck className="w-3.5 h-3.5" />
+            {googlePhoneVerified ? "Mobile number verified" : "Verify your mobile number"}
+          </p>
           <div className="flex gap-2">
             <div className="flex items-center px-3 rounded-xl border bg-muted text-sm font-medium text-muted-foreground whitespace-nowrap shrink-0">+91</div>
             <Input
@@ -668,13 +735,52 @@ function ClientRegisterForm() {
               inputMode="numeric"
               placeholder="9876543210"
               icon={<Smartphone className="w-4 h-4" />}
+              rightIcon={googlePhoneVerified ? (
+                <motion.span
+                  initial={{ scale: 0, rotate: -45 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 15 }}
+                >
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                </motion.span>
+              ) : undefined}
+              success={googlePhoneVerified}
               value={googlePhone}
+              disabled={googleOtpSent || googlePhoneVerified}
               onChange={(e) => setGooglePhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
               className="min-w-0"
             />
           </div>
+          {!googlePhoneVerified && !googleOtpSent && (
+            <Button type="button" onClick={handleSendGoogleOtp} loading={googleOtpBusy} className="w-full">
+              Send code
+            </Button>
+          )}
+          {!googlePhoneVerified && googleOtpSent && (
+            <>
+              <div className="space-y-2">
+                <OtpInput
+                  value={googleOtpCode}
+                  onChange={setGoogleOtpCode}
+                  onComplete={(code) => handleVerifyGoogleOtp(code)}
+                  disabled={googleOtpBusy}
+                  error={googleOtpError}
+                  autoFocus
+                />
+                <Button type="button" onClick={() => handleVerifyGoogleOtp()} loading={googleOtpBusy} className="w-full">
+                  Verify
+                </Button>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <ResendTimer seconds={googleResendIn} totalSeconds={45} onResend={handleSendGoogleOtp} disabled={googleOtpBusy} />
+                <button type="button" className="text-muted-foreground hover:text-navy-900" onClick={editGooglePhoneNumber}>
+                  Edit number
+                </button>
+              </div>
+            </>
+          )}
         </div>
-        <Button type="button" onClick={finishGoogleSignup} loading={googleFinishing} className="w-full" size="lg">
+        <Button type="button" onClick={finishGoogleSignup} loading={googleFinishing} disabled={!googlePhoneVerified} className="w-full" size="lg">
           Finish Sign Up
         </Button>
         <button type="button" onClick={cancelGoogleSignup} className="w-full text-center text-xs text-muted-foreground hover:text-foreground">

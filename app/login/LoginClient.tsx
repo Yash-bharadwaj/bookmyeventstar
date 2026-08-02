@@ -6,8 +6,9 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Mail, Lock, Eye, EyeOff, KeyRound, CalendarCheck, Mic2, Smartphone } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, KeyRound, CalendarCheck, Mic2, Smartphone, ShieldCheck, CheckCircle2 } from "lucide-react";
 import toast from "react-hot-toast";
+import { cn } from "@/lib/utils";
 import { signInWithEmail } from "@/lib/firebase/auth-client";
 import { loginSchema, LoginFormData } from "@/lib/validations/auth";
 import { useGoogleSignIn } from "@/hooks/useGoogleSignIn";
@@ -16,6 +17,8 @@ import { useCities } from "@/hooks/useCities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { OtpInput } from "@/components/ui/otp-input";
+import { ResendTimer } from "@/components/ui/resend-timer";
 import { ArtistCategorySelect } from "@/components/artist/ArtistCategorySelect";
 import { ArtistLocationSelect } from "@/components/artist/ArtistLocationSelect";
 import { BudgetRangeSelect } from "@/components/artist/BudgetRangeSelect";
@@ -52,6 +55,9 @@ function LoginForm() {
     area: googleArea, setArea: setGoogleArea,
     budgetRange: googleBudgetRange, setBudgetRange: setGoogleBudgetRange,
     finishing: googleFinishing, startGoogleSignIn, finishGoogleSignup, cancelGoogleSignup,
+    otpSent: googleOtpSent, otpCode: googleOtpCode, setOtpCode: setGoogleOtpCode,
+    otpBusy: googleOtpBusy, otpError: googleOtpError, resendIn: googleResendIn,
+    phoneVerified: googlePhoneVerified, handleSendPhoneOtp: handleSendGoogleOtp, handleVerifyPhoneOtp: handleVerifyGoogleOtp, editPhoneNumber: editGooglePhoneNumber,
   } = useGoogleSignIn(undefined, redirectTo);
   const [googleLocationState, setGoogleLocationState] = useState("");
   const { categories } = useCategories();
@@ -97,6 +103,7 @@ function LoginForm() {
 
   return (
     <div className="min-h-screen flex">
+      <div id="recaptcha-container" />
       {/* Left panel */}
       <div className="hidden lg:flex lg:w-1/2 navy-gradient relative overflow-hidden flex-col items-center justify-center p-12">
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full bg-gold-500/10 blur-3xl" />
@@ -199,7 +206,71 @@ function LoginForm() {
                 </div>
               ) : (
                 <>
-                  {pendingRole === "artist" && (
+                  <div className={cn(
+                    "rounded-2xl border p-3.5 space-y-2.5 transition-colors",
+                    googlePhoneVerified ? "border-emerald-200 bg-emerald-50/40" : "border-gold-200 bg-gold-50/50"
+                  )}>
+                    <p className={cn(
+                      "text-xs font-medium flex items-center gap-1.5",
+                      googlePhoneVerified ? "text-emerald-700" : "text-gold-700"
+                    )}>
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      {googlePhoneVerified ? "Mobile number verified" : "Verify your mobile number"}
+                    </p>
+                    <div className="flex gap-2">
+                      <div className="flex items-center px-3 rounded-xl border bg-muted text-sm font-medium text-muted-foreground whitespace-nowrap shrink-0">+91</div>
+                      <Input
+                        type="tel"
+                        inputMode="numeric"
+                        placeholder="9876543210"
+                        icon={<Smartphone className="w-4 h-4" />}
+                        rightIcon={googlePhoneVerified ? (
+                          <motion.span
+                            initial={{ scale: 0, rotate: -45 }}
+                            animate={{ scale: 1, rotate: 0 }}
+                            transition={{ type: "spring", stiffness: 500, damping: 15 }}
+                          >
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                          </motion.span>
+                        ) : undefined}
+                        success={googlePhoneVerified}
+                        value={googlePhone}
+                        disabled={googleOtpSent || googlePhoneVerified}
+                        onChange={(e) => setGooglePhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                        className="min-w-0"
+                      />
+                    </div>
+                    {!googlePhoneVerified && !googleOtpSent && (
+                      <Button type="button" onClick={handleSendGoogleOtp} loading={googleOtpBusy} className="w-full">
+                        Send code
+                      </Button>
+                    )}
+                    {!googlePhoneVerified && googleOtpSent && (
+                      <>
+                        <div className="space-y-2">
+                          <OtpInput
+                            value={googleOtpCode}
+                            onChange={setGoogleOtpCode}
+                            onComplete={(code) => handleVerifyGoogleOtp(code)}
+                            disabled={googleOtpBusy}
+                            error={googleOtpError}
+                            autoFocus
+                          />
+                          <Button type="button" onClick={() => handleVerifyGoogleOtp()} loading={googleOtpBusy} className="w-full">
+                            Verify
+                          </Button>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <ResendTimer seconds={googleResendIn} totalSeconds={45} onResend={handleSendGoogleOtp} disabled={googleOtpBusy} />
+                          <button type="button" className="text-muted-foreground hover:text-navy-900" onClick={editGooglePhoneNumber}>
+                            Edit number
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {googlePhoneVerified && pendingRole === "artist" && (
                     <>
                       <div className="space-y-2">
                         <Label>What kind of artist are you?</Label>
@@ -220,23 +291,7 @@ function LoginForm() {
                     </>
                   )}
 
-                  <div className="space-y-2">
-                    <Label>Mobile Number</Label>
-                    <div className="flex gap-2">
-                      <div className="flex items-center px-3 rounded-xl border bg-muted text-sm font-medium text-muted-foreground whitespace-nowrap shrink-0">+91</div>
-                      <Input
-                        type="tel"
-                        inputMode="numeric"
-                        placeholder="9876543210"
-                        icon={<Smartphone className="w-4 h-4" />}
-                        value={googlePhone}
-                        onChange={(e) => setGooglePhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                        className="min-w-0"
-                      />
-                    </div>
-                  </div>
-
-                  <Button type="button" onClick={finishGoogleSignup} loading={googleFinishing} className="w-full" size="lg">
+                  <Button type="button" onClick={finishGoogleSignup} loading={googleFinishing} disabled={!googlePhoneVerified} className="w-full" size="lg">
                     Finish Sign Up
                   </Button>
                 </>

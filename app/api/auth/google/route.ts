@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
       if (budgetMinNum < 2000) return NextResponse.json({ error: "Select your starting price range." }, { status: 400 });
     }
 
-    let decoded: { uid: string; email?: string; email_verified?: boolean; name?: string };
+    let decoded: { uid: string; email?: string; email_verified?: boolean; name?: string; phone_number?: string };
     try {
       decoded = await adminAuth.verifyIdToken(idToken);
     } catch {
@@ -50,6 +50,16 @@ export async function POST(req: NextRequest) {
     }
     if (!decoded.email || !decoded.email_verified) {
       return NextResponse.json({ error: "Please use a Google account with a verified email." }, { status: 403 });
+    }
+
+    const phone_e164 = "+91" + digits;
+
+    // The client links + verifies this phone number via SMS OTP onto this
+    // same Google-authenticated account (linkPhoneToCurrentUser) before ever
+    // calling this route — the phone_number claim on a freshly-refreshed
+    // token is the proof, not the submitted `phone` field alone.
+    if (decoded.phone_number !== phone_e164) {
+      return NextResponse.json({ error: "Please verify your mobile number before finishing sign up." }, { status: 403 });
     }
 
     const userRef = adminDb.collection("users").doc(decoded.uid);
@@ -60,8 +70,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
+    // Belt-and-suspenders on top of Firebase Auth's own phone-credential
+    // uniqueness (which linkPhoneToCurrentUser already relies on): also
+    // check Firestore directly, since an older account created before phone
+    // verification existed could have this same number stored as
+    // never-actually-linked text, which Firebase Auth's own check can't see.
+    const phoneClash = await adminDb.collection("users").where("phone", "==", phone_e164).limit(1).get();
+    if (!phoneClash.empty && phoneClash.docs[0].id !== decoded.uid) {
+      return NextResponse.json({ error: "This mobile number is already registered — please log in instead." }, { status: 409 });
+    }
+
     const name = decoded.name?.trim() || "New User";
-    const phone_e164 = "+91" + digits;
 
     await adminAuth.setCustomUserClaims(decoded.uid, { role });
 

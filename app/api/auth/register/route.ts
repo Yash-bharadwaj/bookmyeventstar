@@ -93,6 +93,17 @@ export async function POST(req: NextRequest) {
       if (existing.exists) {
         return NextResponse.json({ error: "This mobile number is already registered — please log in instead." }, { status: 409 });
       }
+      // Belt-and-suspenders on top of Firebase Auth's own phone-credential
+      // uniqueness (which the client-side signInWithPhoneNumber call already
+      // relies on): also check Firestore directly, since an older account
+      // created before phone verification existed could have this same
+      // number stored as never-actually-linked text, which Firebase Auth's
+      // own uniqueness check can't see (a fresh phone-verified uid wouldn't
+      // collide with it there).
+      const phoneClash = await adminDb.collection("users").where("phone", "==", phone_e164).limit(1).get();
+      if (!phoneClash.empty && phoneClash.docs[0].id !== caller.uid) {
+        return NextResponse.json({ error: "This mobile number is already registered — please log in instead." }, { status: 409 });
+      }
       userId = caller.uid;
     } else {
       if (!password) {
