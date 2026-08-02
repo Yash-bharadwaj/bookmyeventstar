@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
       if (budgetMinNum < 2000) return NextResponse.json({ error: "Select your starting price range." }, { status: 400 });
     }
 
-    let decoded: { uid: string; email?: string; email_verified?: boolean; name?: string; phone_number?: string };
+    let decoded: { uid: string; email?: string; email_verified?: boolean; name?: string };
     try {
       decoded = await adminAuth.verifyIdToken(idToken);
     } catch {
@@ -54,14 +54,6 @@ export async function POST(req: NextRequest) {
 
     const phone_e164 = "+91" + digits;
 
-    // The client links + verifies this phone number via SMS OTP onto this
-    // same Google-authenticated account (linkPhoneToCurrentUser) before ever
-    // calling this route — the phone_number claim on a freshly-refreshed
-    // token is the proof, not the submitted `phone` field alone.
-    if (decoded.phone_number !== phone_e164) {
-      return NextResponse.json({ error: "Please verify your mobile number before finishing sign up." }, { status: 403 });
-    }
-
     const userRef = adminDb.collection("users").doc(decoded.uid);
     const existing = await userRef.get();
     if (existing.exists) {
@@ -70,13 +62,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
-    // Belt-and-suspenders on top of Firebase Auth's own phone-credential
-    // uniqueness (which linkPhoneToCurrentUser already relies on): also
-    // check Firestore directly, since an older account created before phone
-    // verification existed could have this same number stored as
-    // never-actually-linked text, which Firebase Auth's own check can't see.
+    // Phone isn't verified — Google's own email is the proven identity here
+    // (Firebase Phone Auth SMS delivery to Indian numbers is unreliable, so
+    // it's deliberately not used) — so uniqueness across accounts has to be
+    // enforced explicitly via Firestore rather than relying on Firebase
+    // Auth's own phone-credential dedup.
     const phoneClash = await adminDb.collection("users").where("phone", "==", phone_e164).limit(1).get();
-    if (!phoneClash.empty && phoneClash.docs[0].id !== decoded.uid) {
+    if (!phoneClash.empty) {
       return NextResponse.json({ error: "This mobile number is already registered — please log in instead." }, { status: 409 });
     }
 

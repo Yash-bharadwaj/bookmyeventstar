@@ -11,13 +11,8 @@ import {
   Smartphone, ShieldCheck, Sparkles,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import type { ConfirmationResult } from "firebase/auth";
 import { cn } from "@/lib/utils";
-import { auth } from "@/lib/firebase/client";
-import {
-  sendPhoneOtp, resetRecaptcha, linkPasswordCredential, syncSessionCookie, signOutEverywhere,
-  phoneOtpSendErrorMessage, phoneOtpVerifyErrorMessage,
-} from "@/lib/firebase/auth-client";
+import { signInWithEmail } from "@/lib/firebase/auth-client";
 import { registerSchema, RegisterFormData } from "@/lib/validations/auth";
 import { useGoogleSignIn } from "@/hooks/useGoogleSignIn";
 import { useCategories } from "@/hooks/useCategories";
@@ -55,7 +50,6 @@ function RegisterForm() {
 
   return (
     <div className="h-dvh flex overflow-hidden">
-      <div id="recaptcha-container" />
       {/* Left panel — role-aware branding, desktop only */}
       <div className="hidden lg:flex lg:w-1/2 h-full navy-gradient relative overflow-hidden flex-col items-center justify-center p-10">
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full bg-gold-500/10 blur-3xl" />
@@ -197,9 +191,6 @@ function ArtistRegisterForm() {
     area: googleArea, setArea: setGoogleArea,
     budgetRange: googleBudgetRange, setBudgetRange: setGoogleBudgetRange,
     finishing: googleFinishing, startGoogleSignIn, finishGoogleSignup, cancelGoogleSignup,
-    otpSent: googleOtpSent, otpCode: googleOtpCode, setOtpCode: setGoogleOtpCode,
-    otpBusy: googleOtpBusy, otpError: googleOtpError, resendIn: googleResendIn,
-    phoneVerified: googlePhoneVerified, handleSendPhoneOtp: handleSendGoogleOtp, handleVerifyPhoneOtp: handleVerifyGoogleOtp, editPhoneNumber: editGooglePhoneNumber,
   } = useGoogleSignIn("artist");
   // The hook only tracks city/area/budget (what the API needs) — "state" is
   // purely a local filter for the cascading dropdown, never submitted.
@@ -210,15 +201,15 @@ function ArtistRegisterForm() {
   const [otpBusy, setOtpBusy] = useState(false);
   const [otpError, setOtpError] = useState(false);
   const [resendIn, setResendIn] = useState(0);
-  const [phoneVerified, setPhoneVerified] = useState(false);
-  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [verificationToken, setVerificationToken] = useState("");
+  const [verificationExpires, setVerificationExpires] = useState(0);
 
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
     defaultValues: { role: "artist" },
   });
   const email = watch("email");
-  const phone = watch("phone");
   const category = watch("category");
   const locationState = watch("state");
   const locationCity = watch("city");
@@ -234,19 +225,22 @@ function ArtistRegisterForm() {
   }, [resendIn]);
 
   const handleSendOtp = async () => {
-    const digits = String(phone ?? "").replace(/\D/g, "").slice(-10);
-    if (!/^[6-9]\d{9}$/.test(digits)) { toast.error("Enter a valid 10-digit mobile number"); return; }
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast.error("Enter a valid email address first"); return; }
     setOtpBusy(true);
     try {
-      const result = await sendPhoneOtp(`+91${digits}`);
-      setConfirmationResult(result);
+      const res = await fetch("/api/auth/email-otp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const json = await res.json();
+      if (!res.ok) { toast.error(json.error ?? "Could not send the code — please try again."); return; }
       setOtpSent(true);
       setResendIn(45);
-      toast.success("Code sent to your mobile");
+      toast.success("Code sent to your email");
     } catch (err) {
-      console.error("[register-artist] phone-otp send failed:", err);
-      resetRecaptcha();
-      toast.error(phoneOtpSendErrorMessage(err));
+      console.error("[register-artist] email-otp send failed:", err);
+      toast.error("Could not send the code — please try again.");
     } finally {
       setOtpBusy(false);
     }
@@ -254,36 +248,38 @@ function ArtistRegisterForm() {
 
   const handleVerifyOtp = async (codeOverride?: string) => {
     const code = (codeOverride ?? otpCode).trim();
-    if (!confirmationResult || code.length !== 6) { toast.error("Enter the 6-digit code"); return; }
+    if (code.length !== 6) { toast.error("Enter the 6-digit code"); return; }
     setOtpBusy(true);
     try {
-      await confirmationResult.confirm(code);
-      setPhoneVerified(true);
-      toast.success("Mobile number verified");
+      const res = await fetch("/api/auth/email-otp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.verified) {
+        toast.error(json.error ?? "Incorrect code — please try again.");
+        setOtpError(true);
+        setOtpCode("");
+        setTimeout(() => setOtpError(false), 500);
+        return;
+      }
+      setVerificationToken(json.token);
+      setVerificationExpires(json.expires);
+      setEmailVerified(true);
+      toast.success("Email verified");
     } catch (err) {
-      console.error("[register-artist] phone-otp verify failed:", err);
-      toast.error(phoneOtpVerifyErrorMessage(err));
-      setOtpError(true);
-      setOtpCode("");
-      setTimeout(() => setOtpError(false), 500);
+      console.error("[register-artist] email-otp verify failed:", err);
+      toast.error("Something went wrong — please try again.");
     } finally {
       setOtpBusy(false);
     }
   };
 
   const onSubmit = async (data: RegisterFormData) => {
-    if (!phoneVerified) { toast.error("Please verify your mobile number first"); return; }
+    if (!emailVerified) { toast.error("Please verify your email first"); return; }
     setLoading(true);
     try {
-      // Ignore link failures here (e.g. "already linked") rather than
-      // guessing what they mean — could be a genuine duplicate account, or
-      // just resuming after a network failure earlier in this same signup
-      // (the credential linked fine last time, syncSessionCookie/register
-      // didn't). Either way, /api/auth/register's phone+email+Firestore
-      // checks below are the actual source of truth.
-      await linkPasswordCredential(data.email, data.password).catch(() => {});
-      await syncSessionCookie(await auth.currentUser!.getIdToken());
-
       const band = getBudgetBand(data.budgetRange ?? "");
       const res = await fetch("/api/auth/register", {
         method: "POST",
@@ -292,18 +288,20 @@ function ArtistRegisterForm() {
           name: data.name,
           email: data.email,
           phone: data.phone,
+          password: data.password,
           role: "artist",
           category: data.category,
           city: data.city,
           area: data.area,
           budgetMin: band?.min,
           budgetMax: band?.max,
+          emailVerificationToken: verificationToken,
+          emailVerificationExpires: verificationExpires,
         }),
       });
       const result = await res.json();
       if (!res.ok) {
         if (res.status === 409) {
-          await signOutEverywhere();
           toast("You already have an account. Redirecting to login…", { icon: "ℹ️" });
           router.push("/login");
           return;
@@ -311,6 +309,7 @@ function ArtistRegisterForm() {
         throw new Error(result.error ?? "Registration failed");
       }
 
+      await signInWithEmail(data.email, data.password);
       toast.success("Account created! Complete your profile to get listed.");
       router.push("/artist");
       router.refresh();
@@ -328,17 +327,8 @@ function ArtistRegisterForm() {
           <p className="font-medium text-emerald-800">Signed in with Google</p>
           <p className="text-emerald-700 text-xs mt-0.5">{googleUser.name || googleUser.email}</p>
         </div>
-        <div className={cn(
-          "rounded-2xl border p-3.5 space-y-2.5 transition-colors",
-          googlePhoneVerified ? "border-emerald-200 bg-emerald-50/40" : "border-gold-200 bg-gold-50/50"
-        )}>
-          <p className={cn(
-            "text-xs font-medium flex items-center gap-1.5",
-            googlePhoneVerified ? "text-emerald-700" : "text-gold-700"
-          )}>
-            <ShieldCheck className="w-3.5 h-3.5" />
-            {googlePhoneVerified ? "Mobile number verified" : "Verify your mobile number"}
-          </p>
+        <div className="space-y-1">
+          <Label>Mobile Number</Label>
           <div className="flex gap-2">
             <div className="flex items-center px-3 rounded-xl border bg-muted text-sm text-muted-foreground font-medium shrink-0">
               +91
@@ -348,72 +338,29 @@ function ArtistRegisterForm() {
               inputMode="numeric"
               placeholder="9876543210"
               icon={<Phone className="w-4 h-4" />}
-              rightIcon={googlePhoneVerified ? (
-                <motion.span
-                  initial={{ scale: 0, rotate: -45 }}
-                  animate={{ scale: 1, rotate: 0 }}
-                  transition={{ type: "spring", stiffness: 500, damping: 15 }}
-                >
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                </motion.span>
-              ) : undefined}
-              success={googlePhoneVerified}
               value={googlePhone}
-              disabled={googleOtpSent || googlePhoneVerified}
               onChange={(e) => setGooglePhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
               className="min-w-0"
             />
           </div>
-          {!googlePhoneVerified && !googleOtpSent && (
-            <Button type="button" onClick={handleSendGoogleOtp} loading={googleOtpBusy} className="w-full">
-              Send code
-            </Button>
-          )}
-          {!googlePhoneVerified && googleOtpSent && (
-            <>
-              <div className="space-y-2">
-                <OtpInput
-                  value={googleOtpCode}
-                  onChange={setGoogleOtpCode}
-                  onComplete={(code) => handleVerifyGoogleOtp(code)}
-                  disabled={googleOtpBusy}
-                  error={googleOtpError}
-                  autoFocus
-                />
-                <Button type="button" onClick={() => handleVerifyGoogleOtp()} loading={googleOtpBusy} className="w-full">
-                  Verify
-                </Button>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <ResendTimer seconds={googleResendIn} totalSeconds={45} onResend={handleSendGoogleOtp} disabled={googleOtpBusy} />
-                <button type="button" className="text-muted-foreground hover:text-navy-900" onClick={editGooglePhoneNumber}>
-                  Edit number
-                </button>
-              </div>
-            </>
-          )}
         </div>
-        {googlePhoneVerified && (
-          <>
-            <div className="space-y-1">
-              <Label>What kind of artist are you?</Label>
-              <ArtistCategorySelect categories={categories} value={googleCategory} onChange={setGoogleCategory} />
-            </div>
-            <div className="space-y-1">
-              <Label>Where do you perform?</Label>
-              <ArtistLocationSelect
-                cities={cities}
-                value={{ state: googleLocationState, city: googleCity, area: googleArea }}
-                onChange={(v) => { setGoogleLocationState(v.state); setGoogleCity(v.city); setGoogleArea(v.area); }}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Starting price range</Label>
-              <BudgetRangeSelect value={googleBudgetRange} onChange={setGoogleBudgetRange} />
-            </div>
-          </>
-        )}
-        <Button type="button" onClick={finishGoogleSignup} loading={googleFinishing} disabled={!googlePhoneVerified} className="w-full" size="lg">
+        <div className="space-y-1">
+          <Label>What kind of artist are you?</Label>
+          <ArtistCategorySelect categories={categories} value={googleCategory} onChange={setGoogleCategory} />
+        </div>
+        <div className="space-y-1">
+          <Label>Where do you perform?</Label>
+          <ArtistLocationSelect
+            cities={cities}
+            value={{ state: googleLocationState, city: googleCity, area: googleArea }}
+            onChange={(v) => { setGoogleLocationState(v.state); setGoogleCity(v.city); setGoogleArea(v.area); }}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label>Starting price range</Label>
+          <BudgetRangeSelect value={googleBudgetRange} onChange={setGoogleBudgetRange} />
+        </div>
+        <Button type="button" onClick={finishGoogleSignup} loading={googleFinishing} className="w-full" size="lg">
           Finish Sign Up
         </Button>
         <button type="button" onClick={cancelGoogleSignup} className="w-full text-center text-xs text-muted-foreground hover:text-foreground">
@@ -441,8 +388,13 @@ function ArtistRegisterForm() {
           <Input placeholder="John Doe" icon={<User className="w-4 h-4" />} error={errors.name?.message} {...register("name")} />
         </div>
         <div className="space-y-1">
-          <Label>Email</Label>
-          <Input type="email" placeholder="you@example.com" icon={<Mail className="w-4 h-4" />} error={errors.email?.message} {...register("email")} />
+          <Label>Mobile Number</Label>
+          <div className="flex gap-2">
+            <div className="flex items-center px-3 rounded-xl border bg-muted text-sm text-muted-foreground font-medium shrink-0">
+              +91
+            </div>
+            <Input type="tel" placeholder="9876543210" maxLength={10} icon={<Phone className="w-4 h-4" />} error={errors.phone?.message} className="min-w-0" {...register("phone")} />
+          </div>
         </div>
       </div>
 
@@ -481,46 +433,39 @@ function ArtistRegisterForm() {
 
       <div className={cn(
         "rounded-2xl border p-3.5 space-y-2.5 transition-colors",
-        phoneVerified ? "border-emerald-200 bg-emerald-50/40" : "border-gold-200 bg-gold-50/50"
+        emailVerified ? "border-emerald-200 bg-emerald-50/40" : "border-gold-200 bg-gold-50/50"
       )}>
         <p className={cn(
           "text-xs font-medium flex items-center gap-1.5",
-          phoneVerified ? "text-emerald-700" : "text-gold-700"
+          emailVerified ? "text-emerald-700" : "text-gold-700"
         )}>
           <ShieldCheck className="w-3.5 h-3.5" />
-          {phoneVerified ? "Mobile number verified" : "Verify your mobile number"}
+          {emailVerified ? "Email verified" : "Verify your email"}
         </p>
-        <div className="flex gap-2">
-          <div className="flex items-center px-3 rounded-xl border bg-muted text-sm text-muted-foreground font-medium shrink-0">
-            +91
-          </div>
-          <Input
-            type="tel"
-            placeholder="9876543210"
-            maxLength={10}
-            icon={<Phone className="w-4 h-4" />}
-            rightIcon={phoneVerified ? (
-              <motion.span
-                initial={{ scale: 0, rotate: -45 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{ type: "spring", stiffness: 500, damping: 15 }}
-              >
-                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-              </motion.span>
-            ) : undefined}
-            error={errors.phone?.message}
-            success={phoneVerified}
-            disabled={otpSent || phoneVerified}
-            className="min-w-0"
-            {...register("phone")}
-          />
-        </div>
-        {!phoneVerified && !otpSent && (
+        <Input
+          type="email"
+          placeholder="you@example.com"
+          icon={<Mail className="w-4 h-4" />}
+          rightIcon={emailVerified ? (
+            <motion.span
+              initial={{ scale: 0, rotate: -45 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ type: "spring", stiffness: 500, damping: 15 }}
+            >
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+            </motion.span>
+          ) : undefined}
+          error={errors.email?.message}
+          success={emailVerified}
+          disabled={otpSent || emailVerified}
+          {...register("email")}
+        />
+        {!emailVerified && !otpSent && (
           <Button type="button" onClick={handleSendOtp} loading={otpBusy} className="w-full">
             Send code
           </Button>
         )}
-        {!phoneVerified && otpSent && (
+        {!emailVerified && otpSent && (
           <>
             <div className="space-y-2">
               <OtpInput
@@ -538,7 +483,7 @@ function ArtistRegisterForm() {
             <div className="flex items-center justify-between text-xs">
               <ResendTimer seconds={resendIn} totalSeconds={45} onResend={handleSendOtp} disabled={otpBusy} />
               <button type="button" className="text-muted-foreground hover:text-navy-900" onClick={() => { setOtpSent(false); setOtpCode(""); }}>
-                Edit number
+                Edit email
               </button>
             </div>
           </>
@@ -546,7 +491,7 @@ function ArtistRegisterForm() {
       </div>
 
       <AnimatePresence>
-        {phoneVerified && (
+        {emailVerified && (
           <motion.div
             key="password-fields"
             initial={{ opacity: 0, height: 0 }}
@@ -579,7 +524,7 @@ function ArtistRegisterForm() {
         )}
       </AnimatePresence>
 
-      <Button type="submit" loading={loading} disabled={!phoneVerified} className="w-full mt-1" size="lg">
+      <Button type="submit" loading={loading} disabled={!emailVerified} className="w-full mt-1" size="lg">
         Create Account
       </Button>
     </form>
@@ -617,9 +562,6 @@ function ClientRegisterForm() {
   const {
     googleBusy, googleUser, phoneDigits: googlePhone, setPhoneDigits: setGooglePhone,
     finishing: googleFinishing, startGoogleSignIn, finishGoogleSignup, cancelGoogleSignup,
-    otpSent: googleOtpSent, otpCode: googleOtpCode, setOtpCode: setGoogleOtpCode,
-    otpBusy: googleOtpBusy, otpError: googleOtpError, resendIn: googleResendIn,
-    phoneVerified: googlePhoneVerified, handleSendPhoneOtp: handleSendGoogleOtp, handleVerifyPhoneOtp: handleVerifyGoogleOtp, editPhoneNumber: editGooglePhoneNumber,
   } = useGoogleSignIn("client");
 
   const [otpSent, setOtpSent] = useState(false);
@@ -627,8 +569,9 @@ function ClientRegisterForm() {
   const [otpBusy, setOtpBusy] = useState(false);
   const [otpError, setOtpError] = useState(false);
   const [resendIn, setResendIn] = useState(0);
-  const [phoneVerified, setPhoneVerified] = useState(false);
-  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [verificationToken, setVerificationToken] = useState("");
+  const [verificationExpires, setVerificationExpires] = useState(0);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -638,19 +581,22 @@ function ClientRegisterForm() {
   }, [resendIn]);
 
   const handleSendOtp = async () => {
-    const digits = phoneDigits.replace(/\D/g, "").slice(-10);
-    if (!/^[6-9]\d{9}$/.test(digits)) { toast.error("Enter a valid 10-digit mobile number"); return; }
+    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast.error("Enter a valid email address first"); return; }
     setOtpBusy(true);
     try {
-      const result = await sendPhoneOtp(`+91${digits}`);
-      setConfirmationResult(result);
+      const res = await fetch("/api/auth/email-otp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const json = await res.json();
+      if (!res.ok) { toast.error(json.error ?? "Could not send the code — please try again."); return; }
       setOtpSent(true);
       setResendIn(45);
-      toast.success("Code sent to your mobile");
+      toast.success("Code sent to your email");
     } catch (err) {
-      console.error("[register] phone-otp send failed:", err);
-      resetRecaptcha();
-      toast.error(phoneOtpSendErrorMessage(err));
+      console.error("[register] email-otp send failed:", err);
+      toast.error("Could not send the code — please try again.");
     } finally {
       setOtpBusy(false);
     }
@@ -658,18 +604,29 @@ function ClientRegisterForm() {
 
   const handleVerifyOtp = async (codeOverride?: string) => {
     const code = (codeOverride ?? otpCode).trim();
-    if (!confirmationResult || code.length !== 6) { toast.error("Enter the 6-digit code"); return; }
+    if (code.length !== 6) { toast.error("Enter the 6-digit code"); return; }
     setOtpBusy(true);
     try {
-      await confirmationResult.confirm(code);
-      setPhoneVerified(true);
-      toast.success("Mobile number verified");
+      const res = await fetch("/api/auth/email-otp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), code }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.verified) {
+        toast.error(json.error ?? "Incorrect code — please try again.");
+        setOtpError(true);
+        setOtpCode("");
+        setTimeout(() => setOtpError(false), 500);
+        return;
+      }
+      setVerificationToken(json.token);
+      setVerificationExpires(json.expires);
+      setEmailVerified(true);
+      toast.success("Email verified");
     } catch (err) {
-      console.error("[register] phone-otp verify failed:", err);
-      toast.error(phoneOtpVerifyErrorMessage(err));
-      setOtpError(true);
-      setOtpCode("");
-      setTimeout(() => setOtpError(false), 500);
+      console.error("[register] email-otp verify failed:", err);
+      toast.error("Something went wrong — please try again.");
     } finally {
       setOtpBusy(false);
     }
@@ -677,21 +634,13 @@ function ClientRegisterForm() {
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!phoneVerified) { toast.error("Please verify your mobile number first"); return; }
+    if (!emailVerified) { toast.error("Please verify your email first"); return; }
     if (!name.trim() || name.trim().length < 2) { toast.error("Enter your name"); return; }
     if (password.length < 8) { toast.error("Password must be at least 8 characters"); return; }
     if (password !== confirmPassword) { toast.error("Passwords do not match"); return; }
 
     setLoading(true);
     try {
-      // Ignore link failures here (e.g. "already linked") rather than
-      // guessing what they mean — could be a genuine duplicate account, or
-      // just resuming after a network failure earlier in this same signup.
-      // Either way, /api/auth/register's checks below are the actual source
-      // of truth.
-      await linkPasswordCredential(email.trim(), password).catch(() => {});
-      await syncSessionCookie(await auth.currentUser!.getIdToken());
-
       const digits = phoneDigits.replace(/\D/g, "");
       const res = await fetch("/api/auth/register", {
         method: "POST",
@@ -700,13 +649,15 @@ function ClientRegisterForm() {
           name: name.trim(),
           email: email.trim(),
           phone: digits,
+          password,
           role: "client",
+          emailVerificationToken: verificationToken,
+          emailVerificationExpires: verificationExpires,
         }),
       });
       const json = await res.json();
       if (!res.ok) {
         if (res.status === 409) {
-          await signOutEverywhere();
           toast("You already have an account. Redirecting to login…", { icon: "ℹ️" });
           window.location.href = `/login?email=${encodeURIComponent(email.trim())}`;
           return;
@@ -715,6 +666,7 @@ function ClientRegisterForm() {
         return;
       }
 
+      await signInWithEmail(email.trim(), password);
       toast.success("Account created! Welcome to BookMyEventStar.");
       router.push("/client");
       router.refresh();
@@ -733,17 +685,8 @@ function ClientRegisterForm() {
           <p className="font-medium text-emerald-800">Signed in with Google</p>
           <p className="text-emerald-700 text-xs mt-0.5">{googleUser.name || googleUser.email}</p>
         </div>
-        <div className={cn(
-          "rounded-2xl border p-3.5 space-y-2.5 transition-colors",
-          googlePhoneVerified ? "border-emerald-200 bg-emerald-50/40" : "border-gold-200 bg-gold-50/50"
-        )}>
-          <p className={cn(
-            "text-xs font-medium flex items-center gap-1.5",
-            googlePhoneVerified ? "text-emerald-700" : "text-gold-700"
-          )}>
-            <ShieldCheck className="w-3.5 h-3.5" />
-            {googlePhoneVerified ? "Mobile number verified" : "Verify your mobile number"}
-          </p>
+        <div className="space-y-1">
+          <Label>Mobile Number</Label>
           <div className="flex gap-2">
             <div className="flex items-center px-3 rounded-xl border bg-muted text-sm font-medium text-muted-foreground whitespace-nowrap shrink-0">+91</div>
             <Input
@@ -751,52 +694,13 @@ function ClientRegisterForm() {
               inputMode="numeric"
               placeholder="9876543210"
               icon={<Smartphone className="w-4 h-4" />}
-              rightIcon={googlePhoneVerified ? (
-                <motion.span
-                  initial={{ scale: 0, rotate: -45 }}
-                  animate={{ scale: 1, rotate: 0 }}
-                  transition={{ type: "spring", stiffness: 500, damping: 15 }}
-                >
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                </motion.span>
-              ) : undefined}
-              success={googlePhoneVerified}
               value={googlePhone}
-              disabled={googleOtpSent || googlePhoneVerified}
               onChange={(e) => setGooglePhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
               className="min-w-0"
             />
           </div>
-          {!googlePhoneVerified && !googleOtpSent && (
-            <Button type="button" onClick={handleSendGoogleOtp} loading={googleOtpBusy} className="w-full">
-              Send code
-            </Button>
-          )}
-          {!googlePhoneVerified && googleOtpSent && (
-            <>
-              <div className="space-y-2">
-                <OtpInput
-                  value={googleOtpCode}
-                  onChange={setGoogleOtpCode}
-                  onComplete={(code) => handleVerifyGoogleOtp(code)}
-                  disabled={googleOtpBusy}
-                  error={googleOtpError}
-                  autoFocus
-                />
-                <Button type="button" onClick={() => handleVerifyGoogleOtp()} loading={googleOtpBusy} className="w-full">
-                  Verify
-                </Button>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <ResendTimer seconds={googleResendIn} totalSeconds={45} onResend={handleSendGoogleOtp} disabled={googleOtpBusy} />
-                <button type="button" className="text-muted-foreground hover:text-navy-900" onClick={editGooglePhoneNumber}>
-                  Edit number
-                </button>
-              </div>
-            </>
-          )}
         </div>
-        <Button type="button" onClick={finishGoogleSignup} loading={googleFinishing} disabled={!googlePhoneVerified} className="w-full" size="lg">
+        <Button type="button" onClick={finishGoogleSignup} loading={googleFinishing} className="w-full" size="lg">
           Finish Sign Up
         </Button>
         <button type="button" onClick={cancelGoogleSignup} className="w-full text-center text-xs text-muted-foreground hover:text-foreground">
@@ -824,57 +728,57 @@ function ClientRegisterForm() {
           <Input placeholder="Jane Doe" icon={<User className="w-4 h-4" />} value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div className="space-y-1">
-          <Label>Email</Label>
-          <Input
-            type="email"
-            placeholder="you@example.com"
-            icon={<Mail className="w-4 h-4" />}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
+          <Label>Mobile Number</Label>
+          <div className="flex gap-2">
+            <div className="flex items-center px-3 rounded-xl border bg-muted text-sm font-medium text-muted-foreground whitespace-nowrap shrink-0">+91</div>
+            <Input
+              type="tel"
+              inputMode="numeric"
+              placeholder="9876543210"
+              icon={<Smartphone className="w-4 h-4" />}
+              value={phoneDigits}
+              onChange={(e) => setPhoneDigits(e.target.value.replace(/\D/g, "").slice(0, 10))}
+              className="min-w-0"
+            />
+          </div>
         </div>
       </div>
 
       <div className={cn(
         "rounded-2xl border p-3.5 space-y-2.5 transition-colors",
-        phoneVerified ? "border-emerald-200 bg-emerald-50/40" : "border-gold-200 bg-gold-50/50"
+        emailVerified ? "border-emerald-200 bg-emerald-50/40" : "border-gold-200 bg-gold-50/50"
       )}>
         <p className={cn(
           "text-xs font-medium flex items-center gap-1.5",
-          phoneVerified ? "text-emerald-700" : "text-gold-700"
+          emailVerified ? "text-emerald-700" : "text-gold-700"
         )}>
           <ShieldCheck className="w-3.5 h-3.5" />
-          {phoneVerified ? "Mobile number verified" : "Verify your mobile number"}
+          {emailVerified ? "Email verified" : "Verify your email"}
         </p>
-        <div className="flex gap-2">
-          <div className="flex items-center px-3 rounded-xl border bg-muted text-sm font-medium text-muted-foreground whitespace-nowrap shrink-0">+91</div>
-          <Input
-            type="tel"
-            inputMode="numeric"
-            placeholder="9876543210"
-            icon={<Smartphone className="w-4 h-4" />}
-            rightIcon={phoneVerified ? (
-              <motion.span
-                initial={{ scale: 0, rotate: -45 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{ type: "spring", stiffness: 500, damping: 15 }}
-              >
-                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-              </motion.span>
-            ) : undefined}
-            success={phoneVerified}
-            value={phoneDigits}
-            disabled={otpSent || phoneVerified}
-            onChange={(e) => setPhoneDigits(e.target.value.replace(/\D/g, "").slice(0, 10))}
-            className="min-w-0"
-          />
-        </div>
-        {!phoneVerified && !otpSent && (
+        <Input
+          type="email"
+          placeholder="you@example.com"
+          icon={<Mail className="w-4 h-4" />}
+          rightIcon={emailVerified ? (
+            <motion.span
+              initial={{ scale: 0, rotate: -45 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ type: "spring", stiffness: 500, damping: 15 }}
+            >
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+            </motion.span>
+          ) : undefined}
+          success={emailVerified}
+          value={email}
+          disabled={otpSent || emailVerified}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        {!emailVerified && !otpSent && (
           <Button type="button" onClick={handleSendOtp} loading={otpBusy} className="w-full">
             Send code
           </Button>
         )}
-        {!phoneVerified && otpSent && (
+        {!emailVerified && otpSent && (
           <>
             <div className="space-y-2">
               <OtpInput
@@ -892,7 +796,7 @@ function ClientRegisterForm() {
             <div className="flex items-center justify-between text-xs">
               <ResendTimer seconds={resendIn} totalSeconds={45} onResend={handleSendOtp} disabled={otpBusy} />
               <button type="button" className="text-muted-foreground hover:text-navy-900" onClick={() => { setOtpSent(false); setOtpCode(""); }}>
-                Edit number
+                Edit email
               </button>
             </div>
           </>
@@ -900,7 +804,7 @@ function ClientRegisterForm() {
       </div>
 
       <AnimatePresence>
-        {phoneVerified && (
+        {emailVerified && (
           <motion.div
             key="password-fields"
             initial={{ opacity: 0, height: 0 }}
@@ -933,7 +837,7 @@ function ClientRegisterForm() {
         )}
       </AnimatePresence>
 
-      <Button type="submit" loading={loading} disabled={!phoneVerified} className="w-full mt-1" size="lg">
+      <Button type="submit" loading={loading} disabled={!emailVerified} className="w-full mt-1" size="lg">
         Create Account
       </Button>
     </form>

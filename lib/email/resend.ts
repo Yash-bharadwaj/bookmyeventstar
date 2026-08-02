@@ -89,6 +89,14 @@ function escapeHtml(value: string) {
     .replace(/'/g, "&#39;");
 }
 
+export function otpEmailHtml(code: string) {
+  return emailShell(`
+    <p style="font-size:15px;color:#374151;margin:0 0 16px;">Your BookMy EventStar verification code is:</p>
+    <p style="font-size:32px;font-weight:700;letter-spacing:0.3em;margin:0 0 16px;text-align:center;background:#f1f5f9;border-radius:12px;padding:16px;color:#111827;">${code}</p>
+    <p style="font-size:13px;color:#6b7280;margin:0;">This code expires in 10 minutes. If you didn't request this, you can ignore this email.</p>
+  `);
+}
+
 /**
  * One generic shell reused for every "you have a notification" email —
  * new registration, new enquiry, enquiry assigned, proposal response, new
