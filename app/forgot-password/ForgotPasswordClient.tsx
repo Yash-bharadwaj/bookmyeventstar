@@ -181,7 +181,7 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="h-screen flex overflow-hidden">
+    <div className="h-dvh flex overflow-hidden">
       <div id="recaptcha-container" />
 
       {/* Left panel — branding, desktop only */}

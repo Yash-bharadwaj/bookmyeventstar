@@ -54,7 +54,7 @@ function RegisterForm() {
   const isArtist = selectedRole === "artist";
 
   return (
-    <div className="h-screen flex overflow-hidden">
+    <div className="h-dvh flex overflow-hidden">
       <div id="recaptcha-container" />
       {/* Left panel — role-aware branding, desktop only */}
       <div className="hidden lg:flex lg:w-1/2 h-full navy-gradient relative overflow-hidden flex-col items-center justify-center p-10">
