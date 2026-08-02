@@ -12,10 +12,13 @@ import { signInWithEmail } from "@/lib/firebase/auth-client";
 import { loginSchema, LoginFormData } from "@/lib/validations/auth";
 import { useGoogleSignIn } from "@/hooks/useGoogleSignIn";
 import { useCategories } from "@/hooks/useCategories";
+import { useCities } from "@/hooks/useCities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ArtistCategorySelect } from "@/components/artist/ArtistCategorySelect";
+import { ArtistLocationSelect } from "@/components/artist/ArtistLocationSelect";
+import { BudgetRangeSelect } from "@/components/artist/BudgetRangeSelect";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { GoogleIcon } from "@/components/ui/GoogleIcon";
 
@@ -45,9 +48,14 @@ function LoginForm() {
     googleBusy, googleUser, pendingRole, setPendingRole,
     phoneDigits: googlePhone, setPhoneDigits: setGooglePhone,
     category: googleCategory, setCategory: setGoogleCategory,
+    city: googleCity, setCity: setGoogleCity,
+    area: googleArea, setArea: setGoogleArea,
+    budgetRange: googleBudgetRange, setBudgetRange: setGoogleBudgetRange,
     finishing: googleFinishing, startGoogleSignIn, finishGoogleSignup, cancelGoogleSignup,
   } = useGoogleSignIn(undefined, redirectTo);
+  const [googleLocationState, setGoogleLocationState] = useState("");
   const { categories } = useCategories();
+  const { cities } = useCities();
 
   const {
     register,
@@ -174,32 +182,65 @@ function LoginForm() {
                 </div>
               </div>
 
-              {pendingRole === "artist" && (
-                <div className="space-y-2">
-                  <Label>What kind of artist are you?</Label>
-                  <ArtistCategorySelect categories={categories} value={googleCategory} onChange={setGoogleCategory} />
+              {pendingRole === "client" ? (
+                // Client bookings are paused for now, same as the /register
+                // page's ClientRegisterForm — this is the Google-sign-in
+                // equivalent of that pause, closing the gap where a new
+                // Google user could otherwise finish a client signup here
+                // even though /register's client tab shows "Launching Soon".
+                <div className="text-center rounded-2xl border border-gold-200 bg-gold-50/50 p-6">
+                  <div className="w-14 h-14 rounded-2xl gold-gradient flex items-center justify-center mx-auto mb-4">
+                    <CalendarCheck className="w-7 h-7 text-white" />
+                  </div>
+                  <h3 className="font-display font-bold text-lg text-navy-900 mb-1.5">Launching Soon 🎭</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    Booking an artist here isn&apos;t live yet — it&apos;s still warming up backstage.
+                  </p>
                 </div>
+              ) : (
+                <>
+                  {pendingRole === "artist" && (
+                    <>
+                      <div className="space-y-2">
+                        <Label>What kind of artist are you?</Label>
+                        <ArtistCategorySelect categories={categories} value={googleCategory} onChange={setGoogleCategory} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Where do you perform?</Label>
+                        <ArtistLocationSelect
+                          cities={cities}
+                          value={{ state: googleLocationState, city: googleCity, area: googleArea }}
+                          onChange={(v) => { setGoogleLocationState(v.state); setGoogleCity(v.city); setGoogleArea(v.area); }}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Starting price range</Label>
+                        <BudgetRangeSelect value={googleBudgetRange} onChange={setGoogleBudgetRange} />
+                      </div>
+                    </>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label>Mobile Number</Label>
+                    <div className="flex gap-2">
+                      <div className="flex items-center px-3 rounded-xl border bg-muted text-sm font-medium text-muted-foreground whitespace-nowrap shrink-0">+91</div>
+                      <Input
+                        type="tel"
+                        inputMode="numeric"
+                        placeholder="9876543210"
+                        icon={<Smartphone className="w-4 h-4" />}
+                        value={googlePhone}
+                        onChange={(e) => setGooglePhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                        className="min-w-0"
+                      />
+                    </div>
+                  </div>
+
+                  <Button type="button" onClick={finishGoogleSignup} loading={googleFinishing} className="w-full" size="lg">
+                    Finish Sign Up
+                  </Button>
+                </>
               )}
-
-              <div className="space-y-2">
-                <Label>Mobile Number</Label>
-                <div className="flex gap-2">
-                  <div className="flex items-center px-3 rounded-xl border bg-muted text-sm font-medium text-muted-foreground whitespace-nowrap shrink-0">+91</div>
-                  <Input
-                    type="tel"
-                    inputMode="numeric"
-                    placeholder="9876543210"
-                    icon={<Smartphone className="w-4 h-4" />}
-                    value={googlePhone}
-                    onChange={(e) => setGooglePhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                    className="min-w-0"
-                  />
-                </div>
-              </div>
-
-              <Button type="button" onClick={finishGoogleSignup} loading={googleFinishing} className="w-full" size="lg">
-                Finish Sign Up
-              </Button>
               <button type="button" onClick={cancelGoogleSignup} className="w-full text-center text-sm text-muted-foreground hover:text-foreground">
                 Use a different sign-in method
               </button>
