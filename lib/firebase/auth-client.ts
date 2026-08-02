@@ -106,6 +106,47 @@ export async function linkPhoneToCurrentUser(e164Phone: string): Promise<Confirm
   return linkWithPhoneNumber(auth.currentUser, e164Phone, verifier);
 }
 
+/** Maps a phone-OTP send failure to a message that actually tells the user
+ * (or whoever's debugging with them) what to do next — the generic "please
+ * try again" that used to cover every case looks identical whether it's a
+ * typo, a Firebase abuse-rate-limit, or a real outage, which makes a
+ * persistently-stuck signup impossible to diagnose from the outside. */
+export function phoneOtpSendErrorMessage(err: unknown): string {
+  const code = (err as { code?: string })?.code ?? "";
+  switch (code) {
+    case "auth/too-many-requests":
+      return "Too many attempts from this device — please wait a while before requesting another code.";
+    case "auth/invalid-phone-number":
+      return "That doesn't look like a valid mobile number.";
+    case "auth/quota-exceeded":
+      return "SMS limit reached for now — please try again in a few minutes.";
+    case "auth/credential-already-in-use":
+    case "auth/account-exists-with-different-credential":
+      return "That mobile number is already registered to a different account.";
+    case "auth/captcha-check-failed":
+    case "auth/invalid-app-credential":
+    case "auth/argument-error":
+      return "Verification check failed — please refresh the page and try again.";
+    case "auth/network-request-failed":
+      return "No internet connection — please check and try again.";
+    default:
+      return "Could not send the code — please try again.";
+  }
+}
+
+/** Same idea as phoneOtpSendErrorMessage, for the confirm() step. */
+export function phoneOtpVerifyErrorMessage(err: unknown): string {
+  const code = (err as { code?: string })?.code ?? "";
+  switch (code) {
+    case "auth/code-expired":
+      return "That code expired — request a new one.";
+    case "auth/too-many-requests":
+      return "Too many attempts — please wait a while and request a new code.";
+    default:
+      return "Incorrect code — please try again.";
+  }
+}
+
 /** Attaches password-login capability to a phone-verified account (so future
  * logins don't need SMS again), using the account's real email. Call right
  * after a fresh signup's OTP confirms. Throws (e.g. `auth/provider-already-

@@ -7,7 +7,9 @@ import { KeyRound, Lock, Eye, EyeOff, CheckCircle2, ArrowLeft, Smartphone, Mail,
 import toast from "react-hot-toast";
 import { sendPasswordResetEmail, getAdditionalUserInfo, type ConfirmationResult } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
-import { sendPhoneOtp, resetRecaptcha, signOutEverywhere } from "@/lib/firebase/auth-client";
+import {
+  sendPhoneOtp, resetRecaptcha, signOutEverywhere, phoneOtpSendErrorMessage, phoneOtpVerifyErrorMessage,
+} from "@/lib/firebase/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -95,9 +97,10 @@ export default function ForgotPasswordPage() {
       setConfirmationResult(result);
       setResendIn(60);
       toast.success("OTP resent");
-    } catch {
+    } catch (err) {
+      console.error("[forgot-password] OTP resend failed:", err);
       resetRecaptcha();
-      toast.error("Could not resend OTP — please try again.");
+      toast.error(phoneOtpSendErrorMessage(err));
     } finally {
       setOtpBusy(false);
     }
@@ -134,7 +137,7 @@ export default function ForgotPasswordPage() {
       setStep("newPassword");
     } catch (err) {
       console.error("[forgot-password] OTP confirm failed:", err);
-      toast.error("Incorrect OTP — please try again.");
+      toast.error(phoneOtpVerifyErrorMessage(err));
       setOtpError(true);
       setOtpCode("");
       setTimeout(() => setOtpError(false), 500);
@@ -216,7 +219,11 @@ export default function ForgotPasswordPage() {
       </div>
 
       {/* Right panel — form */}
-      <div className="flex-1 h-full overflow-y-auto flex items-center justify-center p-6 bg-white">
+      <div className="flex-1 h-full overflow-y-auto bg-white">
+        {/* Centering lives on this inner min-h-full wrapper, not on the
+            overflow-y-auto element itself — flex-centering a scroll
+            container clips whichever end overflows past the viewport. */}
+        <div className="min-h-full flex items-center justify-center p-6">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -392,6 +399,7 @@ export default function ForgotPasswordPage() {
             Back to login
           </Link>
       </motion.div>
+        </div>
       </div>
     </div>
   );

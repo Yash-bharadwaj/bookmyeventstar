@@ -35,6 +35,7 @@ import { onAuthStateChanged, type ConfirmationResult } from "firebase/auth";
 import { auth, db } from "@/lib/firebase/client";
 import {
   sendPhoneOtp, resetRecaptcha, linkPasswordCredential, syncSessionCookie, signOutEverywhere,
+  phoneOtpSendErrorMessage, phoneOtpVerifyErrorMessage,
 } from "@/lib/firebase/auth-client";
 import { enquiryFormSchema, EnquiryFormValues } from "@/lib/validations/enquiry";
 import { Button } from "@/components/ui/button";
@@ -206,7 +207,7 @@ function EnquiryFormLegacy() {
     } catch (err) {
       console.error("[enquiry] phone-otp send failed:", err);
       resetRecaptcha();
-      toast.error("Could not send the code — please try again.");
+      toast.error(phoneOtpSendErrorMessage(err));
     } finally {
       setOtpBusy(false);
     }
@@ -222,7 +223,7 @@ function EnquiryFormLegacy() {
       toast.success("Mobile number verified");
     } catch (err) {
       console.error("[enquiry] phone-otp verify failed:", err);
-      toast.error("Incorrect code — please try again.");
+      toast.error(phoneOtpVerifyErrorMessage(err));
       setOtpError(true);
       setOtpCode("");
       setTimeout(() => setOtpError(false), 500);

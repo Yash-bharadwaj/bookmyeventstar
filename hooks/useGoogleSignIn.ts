@@ -8,7 +8,7 @@ import type { ConfirmationResult } from "firebase/auth";
 import { auth, db } from "@/lib/firebase/client";
 import {
   signInWithGoogle, syncSessionCookie, signOutEverywhere,
-  linkPhoneToCurrentUser, resetRecaptcha,
+  linkPhoneToCurrentUser, resetRecaptcha, phoneOtpSendErrorMessage, phoneOtpVerifyErrorMessage,
 } from "@/lib/firebase/auth-client";
 import { getBudgetBand } from "@/components/artist/BudgetRangeSelect";
 
@@ -141,7 +141,7 @@ export function useGoogleSignIn(fixedRole?: Role, redirectTo?: string | null) {
     } catch (err) {
       console.error("[google-signin] phone-otp send failed:", err);
       resetRecaptcha();
-      toast.error("Could not send the code — please try again.");
+      toast.error(phoneOtpSendErrorMessage(err));
     } finally {
       setOtpBusy(false);
     }
@@ -170,7 +170,7 @@ export function useGoogleSignIn(fixedRole?: Role, redirectTo?: string | null) {
         return;
       }
       console.error("[google-signin] phone-otp verify failed:", err);
-      toast.error("Incorrect code — please try again.");
+      toast.error(phoneOtpVerifyErrorMessage(err));
       setOtpError(true);
       setOtpCode("");
       setTimeout(() => setOtpError(false), 500);

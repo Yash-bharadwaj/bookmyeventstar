@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { auth } from "@/lib/firebase/client";
 import {
   sendPhoneOtp, resetRecaptcha, linkPasswordCredential, syncSessionCookie, signOutEverywhere,
+  phoneOtpSendErrorMessage, phoneOtpVerifyErrorMessage,
 } from "@/lib/firebase/auth-client";
 import { registerSchema, RegisterFormData } from "@/lib/validations/auth";
 import { useGoogleSignIn } from "@/hooks/useGoogleSignIn";
@@ -102,7 +103,13 @@ function RegisterForm() {
       </div>
 
       {/* Right panel — form */}
-      <div className="flex-1 h-full overflow-y-auto flex items-center justify-center p-6 bg-white">
+      <div className="flex-1 h-full overflow-y-auto bg-white">
+        {/* Centering lives on this inner min-h-full wrapper, not on the
+            overflow-y-auto element itself — flex-centering a scroll
+            container clips whichever end overflows past the viewport (the
+            classic bug where the top of a tall, centered, scrollable form
+            becomes unreachable). This wrapper just grows with content. */}
+        <div className="min-h-full flex items-center justify-center p-6">
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -148,7 +155,15 @@ function RegisterForm() {
           {/* Client bookings are paused for now — ClientRegisterForm below is
               untouched and fully wired, just swapped out for a placeholder.
               Flip this back to `<ClientRegisterForm />` to re-enable. */}
-          {selectedRole === "client" ? <ClientBookingComingSoon /> : <ArtistRegisterForm />}
+          {selectedRole === "client" && <ClientBookingComingSoon />}
+          {/* ArtistRegisterForm stays mounted (just hidden) instead of being
+              swapped out by the ternary above — unmounting it would blow
+              away its useGoogleSignIn state (in-progress Google sign-in,
+              verified phone, entered category/location/budget) the moment
+              someone taps the other tab and comes back. */}
+          <div className={selectedRole === "artist" ? undefined : "hidden"}>
+            <ArtistRegisterForm />
+          </div>
 
           <p className="mt-4 text-center text-sm text-muted-foreground">
             Already have an account?{" "}
@@ -157,6 +172,7 @@ function RegisterForm() {
             </Link>
           </p>
         </motion.div>
+        </div>
       </div>
     </div>
   );
@@ -230,7 +246,7 @@ function ArtistRegisterForm() {
     } catch (err) {
       console.error("[register-artist] phone-otp send failed:", err);
       resetRecaptcha();
-      toast.error("Could not send the code — please try again.");
+      toast.error(phoneOtpSendErrorMessage(err));
     } finally {
       setOtpBusy(false);
     }
@@ -246,7 +262,7 @@ function ArtistRegisterForm() {
       toast.success("Mobile number verified");
     } catch (err) {
       console.error("[register-artist] phone-otp verify failed:", err);
-      toast.error("Incorrect code — please try again.");
+      toast.error(phoneOtpVerifyErrorMessage(err));
       setOtpError(true);
       setOtpCode("");
       setTimeout(() => setOtpError(false), 500);
@@ -634,7 +650,7 @@ function ClientRegisterForm() {
     } catch (err) {
       console.error("[register] phone-otp send failed:", err);
       resetRecaptcha();
-      toast.error("Could not send the code — please try again.");
+      toast.error(phoneOtpSendErrorMessage(err));
     } finally {
       setOtpBusy(false);
     }
@@ -650,7 +666,7 @@ function ClientRegisterForm() {
       toast.success("Mobile number verified");
     } catch (err) {
       console.error("[register] phone-otp verify failed:", err);
-      toast.error("Incorrect code — please try again.");
+      toast.error(phoneOtpVerifyErrorMessage(err));
       setOtpError(true);
       setOtpCode("");
       setTimeout(() => setOtpError(false), 500);
