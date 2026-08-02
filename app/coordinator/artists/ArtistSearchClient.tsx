@@ -803,7 +803,7 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                     {photo ? (
                       <FramedPhoto src={photo} alt={artist.user?.name ?? ""} sizes="(max-width: 640px) 50vw, 280px" />
                     ) : artist.user?.avatar_url ? (
-                      <Image src={artist.user.avatar_url} alt={artist.user?.name ?? ""} fill sizes="(max-width: 640px) 50vw, 280px" className="object-cover" />
+                      <FramedPhoto src={artist.user.avatar_url} alt={artist.user?.name ?? ""} sizes="(max-width: 640px) 50vw, 280px" />
                     ) : (
                       <div className="w-20 h-20 rounded-full gold-gradient flex items-center justify-center text-navy-900 font-bold text-2xl">
                         {getInitials(artist.user?.name ?? "A")}
@@ -1051,7 +1051,7 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                         </div>
                       </>
                     ) : a.user?.avatar_url ? (
-                      <Image src={a.user.avatar_url} alt={a.user?.name ?? ""} fill sizes="(max-width: 768px) 100vw, 600px" className="object-cover" />
+                      <FramedPhoto src={a.user.avatar_url} alt={a.user?.name ?? ""} sizes="(max-width: 768px) 100vw, 600px" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
                         <div className="w-24 h-24 rounded-full gold-gradient flex items-center justify-center text-navy-900 font-bold text-3xl">

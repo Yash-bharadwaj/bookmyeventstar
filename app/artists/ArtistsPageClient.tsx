@@ -583,7 +583,7 @@ export function ArtistsPageClient({ artists, initialCategory, initialCity, categ
                     {/* Card top banner */}
                     <div className={`relative h-44 ${artist.user.avatar_url ? "bg-gray-900" : `bg-gradient-to-br ${color}`}`}>
                       {artist.user.avatar_url ? (
-                        <Image src={artist.user.avatar_url} alt={artist.user.name} fill sizes="(max-width: 640px) 50vw, 280px" className="object-cover" />
+                        <FramedPhoto src={artist.user.avatar_url} alt={artist.user.name} sizes="(max-width: 640px) 50vw, 280px" />
                       ) : (
                         <>
                           <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "18px 18px" }} />
