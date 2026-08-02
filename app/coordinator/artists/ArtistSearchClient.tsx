@@ -83,6 +83,12 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
   const [shortlisted, setShortlisted]     = useState<Set<string>>(new Set());
   const [profileArtist, setProfileArtist] = useState<Artist | null>(null);
   const [photoIdx, setPhotoIdx]           = useState(0);
+  // Chip-search text, purely to narrow which chips render in the filter
+  // panel below — separate from the main search box above, which filters
+  // the artist results themselves.
+  const [catChipQuery, setCatChipQuery]   = useState("");
+  const [cityChipQuery, setCityChipQuery] = useState("");
+  const [areaChipQuery, setAreaChipQuery] = useState("");
   const [viewMode, setViewMode]           = useState<"table" | "grid">("table");
   const [page, setPage]                   = useState(1);
   const [pageSize, setPageSize]           = useState(25);
@@ -146,10 +152,13 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
   const filtered = useMemo(() => {
     let list = artists.filter((a) => {
       const name = a.user?.name ?? "";
+      const q = search.toLowerCase();
       const matchSearch = !search ||
-        name.toLowerCase().includes(search.toLowerCase()) ||
-        a.categories.some((c) => c.toLowerCase().includes(search.toLowerCase())) ||
-        a.bio?.toLowerCase().includes(search.toLowerCase());
+        name.toLowerCase().includes(q) ||
+        a.categories.some((c) => c.toLowerCase().includes(q)) ||
+        a.cities.some((c) => c.toLowerCase().includes(q)) ||
+        (a.area ?? "").toLowerCase().includes(q) ||
+        a.bio?.toLowerCase().includes(q);
 
       const matchCat = categories.length === 0 || categories.some((c) => a.categories.includes(c));
       const matchCity = cities.length === 0 || cities.some((c) => a.cities.includes(c));
@@ -253,7 +262,7 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search by name, category, bio…"
+            placeholder="Search by name, category, location, bio…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -307,8 +316,16 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
               {/* Categories — multi-select chips */}
               <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2.5">Category</p>
+                {allCategories.length > 6 && (
+                  <Input
+                    placeholder="Search categories…"
+                    value={catChipQuery}
+                    onChange={(e) => setCatChipQuery(e.target.value)}
+                    className="h-8 text-sm mb-2"
+                  />
+                )}
                 <div className="flex flex-wrap gap-2">
-                  {allCategories.map((c) => (
+                  {allCategories.filter((c) => c.toLowerCase().includes(catChipQuery.toLowerCase())).map((c) => (
                     <button
                       key={c}
                       onClick={() => toggleCategory(c)}
@@ -328,8 +345,16 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
               {/* Cities — multi-select chips */}
               <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2.5">City / Location</p>
+                {allCities.length > 6 && (
+                  <Input
+                    placeholder="Search cities…"
+                    value={cityChipQuery}
+                    onChange={(e) => setCityChipQuery(e.target.value)}
+                    className="h-8 text-sm mb-2"
+                  />
+                )}
                 <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto pr-1">
-                  {allCities.map((c) => (
+                  {allCities.filter((c) => c.toLowerCase().includes(cityChipQuery.toLowerCase())).map((c) => (
                     <button
                       key={c}
                       onClick={() => toggleCity(c)}
@@ -350,8 +375,16 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
               {allAreas.length > 0 && (
                 <div>
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2.5">Area / Locality</p>
+                  {allAreas.length > 6 && (
+                    <Input
+                      placeholder="Search areas…"
+                      value={areaChipQuery}
+                      onChange={(e) => setAreaChipQuery(e.target.value)}
+                      className="h-8 text-sm mb-2"
+                    />
+                  )}
                   <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto pr-1">
-                    {allAreas.map((a) => (
+                    {allAreas.filter((a) => a.toLowerCase().includes(areaChipQuery.toLowerCase())).map((a) => (
                       <button
                         key={a}
                         onClick={() => toggleArea(a)}

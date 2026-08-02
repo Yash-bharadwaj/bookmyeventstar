@@ -20,6 +20,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { Combobox } from "@/components/ui/combobox";
+import { CopyIconButton } from "@/components/ui/copy-icon-button";
 import { ArtistCategorySelect } from "@/components/artist/ArtistCategorySelect";
 import { formatDateTime, getInitials } from "@/lib/utils";
 import { db } from "@/lib/firebase/client";
@@ -71,29 +72,6 @@ const ROLE_AVATAR_COLOR: Record<UserRole, string> = {
 function csvEscape(value: string): string {
   if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
   return value;
-}
-
-function CopyIconButton({ value, label }: { value: string; label: string }) {
-  const copy = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!value) return;
-    try {
-      await navigator.clipboard.writeText(value);
-      toast.success(`${label} copied`);
-    } catch {
-      toast.error("Could not copy — please select and copy it manually.");
-    }
-  };
-  return (
-    <button
-      type="button"
-      onClick={copy}
-      title={`Copy ${label.toLowerCase()}`}
-      className="flex-shrink-0 text-muted-foreground/40 hover:text-navy-600 transition-colors"
-    >
-      <Copy className="w-3 h-3" />
-    </button>
-  );
 }
 
 export function AdminUsersClient({ users, currentAdminId, categoryOptions }: { users: RegisteredUser[]; currentAdminId: string; categoryOptions: string[] }) {

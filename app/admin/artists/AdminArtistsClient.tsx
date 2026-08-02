@@ -15,7 +15,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArtistProfile, ArtistDocument } from "@/types";
-import { formatCurrency, formatDate, getInitials } from "@/lib/utils";
+import { formatCurrency, formatDateTime, getInitials } from "@/lib/utils";
+import { CopyIconButton } from "@/components/ui/copy-icon-button";
 import { db } from "@/lib/firebase/client";
 import { doc, updateDoc, writeBatch } from "firebase/firestore";
 import { notifyUser, notifyUserInBatch, emailUser } from "@/lib/notifications/client";
@@ -72,6 +73,12 @@ export function ArtistVerificationClient({
   const [cityFilter, setCityFilter] = useState("");
   const [areaFilter, setAreaFilter] = useState("");
   const [showCategoryFilter, setShowCategoryFilter] = useState(false);
+  // Chip-search text, purely to narrow which chips render below (the filter
+  // panel's own category/city/area lists can get long) — separate from the
+  // main search box, which filters the artist list itself.
+  const [catChipQuery, setCatChipQuery] = useState("");
+  const [cityChipQuery, setCityChipQuery] = useState("");
+  const [areaChipQuery, setAreaChipQuery] = useState("");
   const [toggling, setToggling] = useState<string | null>(null);
   const [listingToggling, setListingToggling] = useState<string | null>(null);
   const [reminding, setReminding] = useState<string | null>(null);
@@ -127,11 +134,13 @@ export function ArtistVerificationClient({
   };
 
   const filtered = artists.filter((a) => {
+    const q = search.toLowerCase();
     const matchesSearch =
-      a.user.name.toLowerCase().includes(search.toLowerCase()) ||
-      a.user.email.toLowerCase().includes(search.toLowerCase()) ||
-      (a.cities ?? []).some((c) => c.toLowerCase().includes(search.toLowerCase())) ||
-      (a.area ?? "").toLowerCase().includes(search.toLowerCase());
+      a.user.name.toLowerCase().includes(q) ||
+      a.user.email.toLowerCase().includes(q) ||
+      (a.cities ?? []).some((c) => c.toLowerCase().includes(q)) ||
+      (a.area ?? "").toLowerCase().includes(q) ||
+      (a.categories ?? []).some((c) => c.toLowerCase().includes(q));
 
     const matchesVerify =
       verifyTab === "all" ? true :
@@ -327,7 +336,7 @@ export function ArtistVerificationClient({
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search by name, email or city..."
+            placeholder="Search by name, email, category or location..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); resetPage(); }}
             className="pl-9"
@@ -359,8 +368,16 @@ export function ArtistVerificationClient({
             <div className="p-3 rounded-xl bg-muted/20 border space-y-3">
               <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Category</p>
+                {categories.length > 6 && (
+                  <Input
+                    placeholder="Search categories…"
+                    value={catChipQuery}
+                    onChange={(e) => setCatChipQuery(e.target.value)}
+                    className="h-8 text-sm mb-2"
+                  />
+                )}
                 <div className="flex flex-wrap gap-2">
-                  {categories.map((cat) => (
+                  {categories.filter((cat) => cat.toLowerCase().includes(catChipQuery.toLowerCase())).map((cat) => (
                     <button
                       key={cat}
                       onClick={() => { setCategoryFilter((prev) => prev === cat ? "" : cat); resetPage(); }}
@@ -377,10 +394,18 @@ export function ArtistVerificationClient({
               </div>
               <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">City</p>
+                {allCities.length > 6 && (
+                  <Input
+                    placeholder="Search cities…"
+                    value={cityChipQuery}
+                    onChange={(e) => setCityChipQuery(e.target.value)}
+                    className="h-8 text-sm mb-2"
+                  />
+                )}
                 <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto pr-1">
                   {allCities.length === 0 ? (
                     <p className="text-xs text-muted-foreground">No cities on file yet</p>
-                  ) : allCities.map((c) => (
+                  ) : allCities.filter((c) => c.toLowerCase().includes(cityChipQuery.toLowerCase())).map((c) => (
                     <button
                       key={c}
                       onClick={() => { setCityFilter((prev) => prev === c ? "" : c); setAreaFilter(""); resetPage(); }}
@@ -397,10 +422,18 @@ export function ArtistVerificationClient({
               </div>
               <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Area / Locality</p>
+                {allAreas.length > 6 && (
+                  <Input
+                    placeholder="Search areas…"
+                    value={areaChipQuery}
+                    onChange={(e) => setAreaChipQuery(e.target.value)}
+                    className="h-8 text-sm mb-2"
+                  />
+                )}
                 <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto pr-1">
                   {allAreas.length === 0 ? (
                     <p className="text-xs text-muted-foreground">{cityFilter ? "No areas on file for this city" : "No areas on file yet"}</p>
-                  ) : allAreas.map((ar) => (
+                  ) : allAreas.filter((ar) => ar.toLowerCase().includes(areaChipQuery.toLowerCase())).map((ar) => (
                     <button
                       key={ar}
                       onClick={() => { setAreaFilter((prev) => prev === ar ? "" : ar); resetPage(); }}
@@ -519,12 +552,23 @@ export function ArtistVerificationClient({
                               {getInitials(artist.user.name)}
                             </div>
                             <div className="min-w-0">
-                              <p className="font-medium truncate max-w-[160px]">{artist.user.name}</p>
-                              <p className="text-xs text-muted-foreground truncate max-w-[160px]">{artist.user.email}</p>
+                              <div className="flex items-center gap-1 min-w-0">
+                                <p className="font-medium truncate max-w-[160px]">{artist.user.name}</p>
+                                <CopyIconButton value={artist.user.name} label="Name" />
+                              </div>
+                              <div className="flex items-center gap-1 min-w-0">
+                                <p className="text-xs text-muted-foreground truncate max-w-[160px]">{artist.user.email}</p>
+                                <CopyIconButton value={artist.user.email} label="Email" />
+                              </div>
                             </div>
                           </div>
                         </td>
-                        <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{artist.user.phone}</td>
+                        <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
+                          <div className="flex items-center gap-1">
+                            {artist.user.phone}
+                            <CopyIconButton value={artist.user.phone} label="Phone" />
+                          </div>
+                        </td>
                         <td className="px-3 py-2.5">
                           <div className="flex flex-wrap gap-1 max-w-[180px]">
                             {artist.categories.slice(0, 2).map((c) => (
@@ -627,7 +671,7 @@ export function ArtistVerificationClient({
                           )}
                         </td>
                         <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
-                          {artist.created_at ? formatDate(artist.created_at) : "—"}
+                          {artist.created_at ? formatDateTime(artist.created_at) : "—"}
                         </td>
                         <td className="px-3 py-2.5">
                           <div className="flex items-center justify-end gap-1">
