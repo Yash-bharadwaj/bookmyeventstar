@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import {
   Star, MapPin, CheckCircle2, Calendar, Mic2, Shield, TrendingUp,
   Play, Images, Video, Send,
@@ -64,7 +65,7 @@ export function ArtistProfilePageClient({ artist, cities }: { artist: Artist; ci
         ) : activeMedia?.type === "video" ? (
           <video key={activeMedia.url} src={activeMedia.url} className="absolute inset-0 w-full h-full object-cover bg-black" controls playsInline />
         ) : (
-          <img key={activeMedia?.url} src={activeMedia?.url} alt={artist.user.name} className="absolute inset-0 w-full h-full object-cover object-top" />
+          <Image key={activeMedia?.url} src={activeMedia?.url ?? ""} alt={artist.user.name} fill sizes="(max-width: 768px) 100vw, 768px" className="object-cover object-top" priority />
         )}
 
         <div className="absolute bottom-0 inset-x-0 h-32 bg-gradient-to-t from-black/80 via-black/40 to-transparent pointer-events-none" />
@@ -110,7 +111,7 @@ export function ArtistProfilePageClient({ artist, cities }: { artist: Artist; ci
                     <Play className="w-3.5 h-3.5 text-white fill-white" />
                   </div>
                 ) : (
-                  <img src={m.url} alt="" className="w-full h-full object-cover object-top" />
+                  <Image src={m.url} alt="" fill sizes="44px" className="object-cover object-top" />
                 )}
               </button>
             ))}
@@ -194,7 +195,7 @@ export function ArtistProfilePageClient({ artist, cities }: { artist: Artist; ci
                     </div>
                   </div>
                 ) : (
-                  <img src={m.url} alt="Portfolio" className="w-full h-full object-cover object-top" />
+                  <Image src={m.url} alt="Portfolio" fill sizes="(max-width: 640px) 25vw, 180px" className="object-cover object-top" />
                 )}
                 {m.type === "video" && (
                   <div className="absolute top-1.5 left-1.5">

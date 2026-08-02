@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { collection, getDocs, orderBy, query } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 
@@ -9,28 +9,18 @@ export interface CityOption {
   state: string;
 }
 
-/** Fetches the public `cities` collection once — used anywhere a visitor
+/** Fetches the public `cities` collection — used anywhere a visitor
  * (signed in or not) needs to pick a city, e.g. the enquiry form or artist
- * signup. Mirrors useCategories. */
+ * signup. Mirrors useCategories, including the react-query cache. */
 export function useCities() {
-  const [cities, setCities] = useState<CityOption[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading } = useQuery({
+    queryKey: ["cities"],
+    queryFn: async () => {
+      const snap = await getDocs(query(collection(db, "cities"), orderBy("name")));
+      return snap.docs.map((d) => ({ name: d.data().name as string, state: d.data().state as string }));
+    },
+    staleTime: 5 * 60 * 1000,
+  });
 
-  useEffect(() => {
-    let cancelled = false;
-    getDocs(query(collection(db, "cities"), orderBy("name")))
-      .then((snap) => {
-        if (cancelled) return;
-        setCities(snap.docs.map((d) => ({ name: d.data().name as string, state: d.data().state as string })));
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  return { cities, loading };
+  return { cities: data ?? [], loading: isLoading };
 }

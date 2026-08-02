@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useMemo } from "react";
+import Image from "next/image";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -364,7 +365,7 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
                 title="Upload profile photo"
               >
                 {avatarUrl ? (
-                  <img src={avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+                  <Image src={avatarUrl} alt={user.name} fill sizes="80px" className="object-cover" />
                 ) : (
                   <div className={`w-full h-full flex flex-col items-center justify-center gap-0.5 ${uploadingAvatar ? "gold-gradient" : "bg-amber-50 border-2 border-dashed border-amber-400"}`}>
                     {uploadingAvatar ? (
@@ -626,7 +627,7 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
                     <div className="grid grid-cols-3 gap-3">
                       {photos.map((photo) => (
                         <div key={photo.id} className="relative aspect-square rounded-xl overflow-hidden group border">
-                          <img src={photo.url} alt={photo.title ?? ""} className="w-full h-full object-cover" />
+                          <Image src={photo.url} alt={photo.title ?? ""} fill sizes="(max-width: 640px) 33vw, 200px" className="object-cover" />
                           <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                             {!photo.is_primary && (
                               <button

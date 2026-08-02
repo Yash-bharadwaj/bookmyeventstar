@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Star, MapPin, CheckCircle2,
@@ -109,11 +110,14 @@ function ArtistDrawer({ artist, onClose, cities }: { artist: Artist; onClose: ()
               playsInline
             />
           ) : (
-            <img
+            <Image
               key={activeMedia?.url}
-              src={activeMedia?.url}
+              src={activeMedia?.url ?? ""}
               alt={artist.user.name}
-              className="absolute inset-0 w-full h-full object-cover object-top"
+              fill
+              sizes="(max-width: 768px) 100vw, 640px"
+              className="object-cover object-top"
+              priority
             />
           )}
 
@@ -174,7 +178,7 @@ function ArtistDrawer({ artist, onClose, cities }: { artist: Artist; onClose: ()
                       <Play className="w-3 h-3 text-white fill-white" />
                     </div>
                   ) : (
-                    <img src={m.url} alt="" className="w-full h-full object-cover object-top" />
+                    <Image src={m.url} alt="" fill sizes="40px" className="object-cover object-top" />
                   )}
                 </button>
               ))}
@@ -266,7 +270,7 @@ function ArtistDrawer({ artist, onClose, cities }: { artist: Artist; onClose: ()
                       <span className="text-[9px] text-white/70 font-medium uppercase tracking-wide">Video</span>
                     </div>
                   ) : (
-                    <img src={m.url} alt="Portfolio" className="w-full h-full object-cover object-top" />
+                    <Image src={m.url} alt="Portfolio" fill sizes="(max-width: 640px) 33vw, 200px" className="object-cover object-top" />
                   )}
                   {m.type === "video" && (
                     <div className="absolute top-1.5 left-1.5">
@@ -577,7 +581,7 @@ export function ArtistsPageClient({ artists, initialCategory, initialCity, categ
                     {/* Card top banner */}
                     <div className={`relative h-44 ${artist.user.avatar_url ? "bg-gray-900" : `bg-gradient-to-br ${color}`}`}>
                       {artist.user.avatar_url ? (
-                        <img src={artist.user.avatar_url} alt={artist.user.name} className="w-full h-full object-cover" />
+                        <Image src={artist.user.avatar_url} alt={artist.user.name} fill sizes="(max-width: 640px) 50vw, 280px" className="object-cover" />
                       ) : (
                         <>
                           <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "18px 18px" }} />

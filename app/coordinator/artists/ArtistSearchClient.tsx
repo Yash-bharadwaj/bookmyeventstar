@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Star, MapPin, IndianRupee, CheckCircle2, Check, Plus, X,
@@ -480,9 +481,9 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
               {/* Shortlisted avatars */}
               <div className="flex -space-x-2 flex-shrink-0">
                 {shortlistedArtists.slice(0, 5).map((a) => (
-                  <div key={a.id} className="w-9 h-9 rounded-full border-2 border-navy-900 overflow-hidden flex-shrink-0 flex items-center justify-center gold-gradient">
+                  <div key={a.id} className="relative w-9 h-9 rounded-full border-2 border-navy-900 overflow-hidden flex-shrink-0 flex items-center justify-center gold-gradient">
                     {a.user?.avatar_url ? (
-                      <img src={a.user.avatar_url} alt={a.user?.name ?? ""} className="w-full h-full object-cover" />
+                      <Image src={a.user.avatar_url} alt={a.user?.name ?? ""} fill sizes="36px" className="object-cover" />
                     ) : (
                       <span className="text-white text-xs font-bold">{getInitials(a.user?.name ?? "A")}</span>
                     )}
@@ -564,9 +565,9 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                   {/* Photo / avatar */}
                   <div className="relative h-44 bg-gradient-to-br from-navy-900 to-navy-700 flex items-center justify-center">
                     {photo ? (
-                      <img src={photo} alt={artist.user?.name} className="w-full h-full object-cover" />
+                      <Image src={photo} alt={artist.user?.name ?? ""} fill sizes="(max-width: 640px) 50vw, 280px" className="object-cover" />
                     ) : artist.user?.avatar_url ? (
-                      <img src={artist.user.avatar_url} alt={artist.user?.name} className="w-full h-full object-cover" />
+                      <Image src={artist.user.avatar_url} alt={artist.user?.name ?? ""} fill sizes="(max-width: 640px) 50vw, 280px" className="object-cover" />
                     ) : (
                       <div className="w-20 h-20 rounded-full gold-gradient flex items-center justify-center text-white font-bold text-2xl">
                         {getInitials(artist.user?.name ?? "A")}
@@ -764,10 +765,12 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                   <div className="relative h-64 bg-gradient-to-br from-navy-900 to-navy-700 flex-shrink-0">
                     {photos.length > 0 ? (
                       <>
-                        <img
+                        <Image
                           src={photos[photoIdx]?.url}
-                          alt={a.user?.name}
-                          className="w-full h-full object-cover"
+                          alt={a.user?.name ?? ""}
+                          fill
+                          sizes="(max-width: 768px) 100vw, 600px"
+                          className="object-cover"
                         />
                         {photos.length > 1 && (
                           <>
@@ -799,7 +802,7 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                         </div>
                       </>
                     ) : a.user?.avatar_url ? (
-                      <img src={a.user.avatar_url} alt={a.user?.name} className="w-full h-full object-cover" />
+                      <Image src={a.user.avatar_url} alt={a.user?.name ?? ""} fill sizes="(max-width: 768px) 100vw, 600px" className="object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
                         <div className="w-24 h-24 rounded-full gold-gradient flex items-center justify-center text-white font-bold text-3xl">

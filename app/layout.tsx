@@ -3,8 +3,7 @@ import { Inter, Outfit } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import Providers from "./providers";
-import { InstallPrompt } from "@/components/pwa/InstallPrompt";
-import { ServiceWorkerRegistration } from "@/components/pwa/ServiceWorkerRegistration";
+import { ServiceWorkerCleanup } from "@/components/ServiceWorkerCleanup";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -47,14 +46,8 @@ export const metadata: Metadata = {
   creator: "BookMyEventStar",
   publisher: "BookMyEventStar",
   applicationName: SITE_NAME,
-  manifest: "/manifest.json",
   alternates: {
     canonical: "/",
-  },
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "black-translucent",
-    title: "BookMyEventStar",
   },
   robots: {
     index: true,
@@ -131,9 +124,6 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${outfit.variable}`} suppressHydrationWarning>
       <head>
-        <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
@@ -145,8 +135,7 @@ export default function RootLayout({
       </head>
       <body className="font-sans antialiased">
         <Providers>{children}</Providers>
-        <ServiceWorkerRegistration />
-        <InstallPrompt />
+        <ServiceWorkerCleanup />
         <Toaster
           position="top-right"
           toastOptions={{
