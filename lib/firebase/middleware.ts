@@ -2,17 +2,21 @@ import { NextResponse, type NextRequest } from "next/server";
 import { verifySessionToken, SESSION_COOKIE_NAME } from "./session";
 
 // Fully public content pages that never redirect based on auth state —
-// skip token verification entirely for these. `/artists` (roster + individual
-// profiles) is here on purpose: both are in sitemap.xml with daily-priority
-// indexing and have full OG/Twitter/JSON-LD metadata for sharing (an artist
-// sending a client their profile link, or a search engine crawler, has no
-// session cookie) — gating them behind login silently broke both, since
-// every unauthenticated visitor (including crawlers) was bounced to /login
-// instead of ever seeing the actual content.
-const PUBLIC_NO_AUTH_CHECK = ["/", "/enquiry", "/forgot-password", "/artists"];
+// skip token verification entirely for these.
+const PUBLIC_NO_AUTH_CHECK = ["/", "/enquiry", "/forgot-password"];
 
 function isPublicNoAuthCheck(pathname: string): boolean {
-  return pathname.startsWith("/api/") || pathname.startsWith("/artists/") || PUBLIC_NO_AUTH_CHECK.includes(pathname);
+  return pathname.startsWith("/api/") || PUBLIC_NO_AUTH_CHECK.includes(pathname);
+}
+
+// The artist roster and individual profiles are no longer public — anyone
+// could otherwise find a verified artist here and reach out directly,
+// bypassing the platform entirely. Coordinators/admins use their own
+// dedicated /coordinator/artists and /admin/artists tools instead, so
+// /artists* has no legitimate audience left; send everyone (including
+// crawlers and old shared profile links) to raise an enquiry instead.
+function isPublicArtistsRoute(pathname: string): boolean {
+  return pathname === "/artists" || pathname.startsWith("/artists/");
 }
 
 // Central role gate. Previously each dashboard page individually checked
@@ -38,6 +42,13 @@ function safeRedirectTarget(value: string | null): string | null {
 
 export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (isPublicArtistsRoute(pathname)) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/enquiry";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
 
   if (isPublicNoAuthCheck(pathname)) {
     return NextResponse.next();

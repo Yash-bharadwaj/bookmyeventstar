@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import {
   FileText, Calendar, ClipboardList, Sparkles, ArrowRight,
   CheckCircle2, Clock, Phone, MessageSquare, ChevronRight,
-  PartyPopper, UserCheck, Mic2, IndianRupee, Star,
+  PartyPopper, UserCheck, IndianRupee, Star,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BrandLogo } from "@/components/brand/BrandLogo";
@@ -110,11 +110,6 @@ export function ClientOverview({ enquiries, proposals, upcomingBookings, userNam
             <Link href="/enquiry" className="flex-1 sm:flex-none">
               <Button size="sm" variant="default" className="w-full sm:w-auto font-semibold h-11 sm:h-9">
                 <Sparkles className="w-4 h-4 mr-2" />Plan New Event
-              </Button>
-            </Link>
-            <Link href="/artists" className="flex-1 sm:flex-none">
-              <Button size="sm" variant="glass" className="w-full sm:w-auto h-11 sm:h-9">
-                <Mic2 className="w-4 h-4 mr-2" />Browse Artists
               </Button>
             </Link>
           </div>
@@ -343,7 +338,6 @@ export function ClientOverview({ enquiries, proposals, upcomingBookings, userNam
               { label: "My Events",       sub: `${upcomingBookings.length} upcoming`,  href: "/client/events",    icon: Calendar,      color: "bg-navy-100 text-navy-700",       urgent: false },
               { label: "Payments",        sub: "View payment status",                  href: "/client/payments",  icon: IndianRupee,   color: "bg-gold-100 text-gold-600",       urgent: false },
               { label: "Messages",        sub: "Chat with coordinator",                href: "/client/messages",  icon: MessageSquare, color: "bg-navy-100 text-navy-700",       urgent: false },
-              { label: "Browse Artists",  sub: "Explore 500+ artists",                 href: "/artists",          icon: Mic2,          color: "bg-navy-100 text-navy-700",       urgent: false },
             ].map((item) => {
               const Icon = item.icon;
               return (

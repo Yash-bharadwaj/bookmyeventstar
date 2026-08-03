@@ -98,6 +98,23 @@ export const EVENT_TYPES = [
   "Other",
 ];
 
+export const LANGUAGES = [
+  "Hindi",
+  "English",
+  "Tamil",
+  "Telugu",
+  "Kannada",
+  "Malayalam",
+  "Marathi",
+  "Bengali",
+  "Gujarati",
+  "Punjabi",
+  "Bhojpuri",
+  "Odia",
+  "Assamese",
+  "Urdu",
+];
+
 export const ARTIST_CATEGORIES = [
   "Bollywood Singer",
   "Classical Singer",

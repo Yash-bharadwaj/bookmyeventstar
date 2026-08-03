@@ -62,6 +62,7 @@ export interface ArtistProfile {
   cities: string[];
   /** Free-text locality within their primary city — no locality-level dataset exists to back a dropdown. */
   area?: string;
+  languages?: string[];
   base_price: number;
   /** Starting-price band picked at signup — base_price is seeded from budget_min, then refined exactly during profile completion. */
   budget_min?: number;

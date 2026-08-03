@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import {
@@ -38,8 +38,8 @@ const categories: { name: string; icon: LucideIcon; color: string; bg: string; i
 const eventTypes = ["Wedding", "Corporate", "Birthday", "Concert", "College Fest", "Private Party"];
 
 const howItWorks = [
-  { step: "01", title: "Browse & Choose", desc: "Explore verified artists by category, city, and budget. Check profiles and availability.", icon: Search, color: "from-gold-500 to-gold-700", shadow: "shadow-gold-200" },
-  { step: "02", title: "Raise Enquiry",   desc: "Fill in your event details in 2 minutes. Our coordinator will call you within 2 hours.", icon: Mic2,    color: "from-navy-600 to-navy-800",   shadow: "shadow-navy-200" },
+  { step: "01", title: "Raise Enquiry",   desc: "Share your event type, city, date, and budget. Takes just 2 minutes.", icon: Search, color: "from-gold-500 to-gold-700", shadow: "shadow-gold-200" },
+  { step: "02", title: "We Shortlist",    desc: "Your coordinator hand-picks verified artists that match your brief and calls you within 2 hours.", icon: Mic2, color: "from-navy-600 to-navy-800", shadow: "shadow-navy-200" },
   { step: "03", title: "Get Proposal",    desc: "Receive a curated proposal with handpicked artists, pricing, and availability.", icon: Sparkles, color: "from-gold-500 to-gold-700", shadow: "shadow-gold-200" },
   { step: "04", title: "Book & Relax",    desc: "Confirm your booking, pay advance, and we handle everything till showtime.", icon: CheckCircle2, color: "from-navy-600 to-navy-800", shadow: "shadow-navy-200" },
 ];
@@ -53,7 +53,7 @@ const promises = [
 const verifySteps = [
   { title: "Artist applies", desc: "Any performer can apply with their bio, pricing, categories, and portfolio.", icon: Users },
   { title: "Our team reviews", desc: "We check documents and portfolio quality before anyone gets approved.", icon: Shield },
-  { title: "Verified & listed", desc: "Approved artists get a Verified badge and appear in client and coordinator searches.", icon: Award },
+  { title: "Verified & listed", desc: "Approved artists get a Verified badge and become visible to our coordinators for matching against client enquiries.", icon: Award },
 ];
 
 const artistBenefits = [
@@ -67,7 +67,7 @@ const faqs = [
   { q: "Is it free to submit an enquiry?", a: "Yes. Submitting an enquiry costs nothing, and there's no obligation to book anything afterward." },
   { q: "How quickly will I hear back?", a: "A dedicated coordinator responds to every enquiry within 2 hours." },
   { q: "How is pricing decided?", a: "Your coordinator sends a proposal with the artist and price clearly listed, so you see everything before you commit." },
-  { q: "How are artists verified?", a: "Every artist's profile, pricing, and documents are reviewed by our team before they're listed publicly." },
+  { q: "How are artists verified?", a: "Every artist's profile, pricing, and documents are reviewed by our team before a coordinator can match them to your enquiry." },
   { q: "Can I change my event details after booking?", a: "Yes — your coordinator manages any changes directly with you and the artist." },
   { q: "I'm an artist — how do I get paid?", a: "Coordinators manage settlement directly with you after the event, based on the platform's booking terms." },
 ];
@@ -116,113 +116,8 @@ function Ticker() {
   );
 }
 
-/* ─── Featured Artists (from DB) ──────────────────────────── */
-function FeaturedArtists() {
-  const [artists, setArtists] = useState<any[]>([]);
-  useEffect(() => {
-    // Server-mediated (not a direct client-side Firestore read) — the
-    // artist's display name lives on `users/{uid}`, which requires a signed-
-    // in caller under firestore.rules, so an anonymous homepage visitor
-    // can't read it directly. This endpoint fetches it with the Admin SDK
-    // and returns only the already-public fields.
-    fetch("/api/featured-artists")
-      .then((res) => res.json())
-      .then((json) => setArtists(json.artists ?? []))
-      .catch(() => setArtists([]));
-  }, []);
-
-  if (artists.length === 0) return null;
-
-  const cardColors = [
-    "from-gold-400 to-gold-600",
-    "from-navy-600 to-navy-800",
-    "from-gold-400 to-gold-600",
-    "from-navy-600 to-navy-800",
-  ];
-
-  return (
-    <section className="py-20 bg-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="text-center mb-12">
-          <span className="inline-block px-4 py-1.5 rounded-full bg-gold-100 text-gold-700 text-xs font-bold uppercase tracking-widest mb-3">
-            Featured Artists
-          </span>
-          <h2 className="font-display text-3xl md:text-4xl font-bold text-navy-900">
-            Top Verified Performers
-          </h2>
-          <p className="mt-3 text-muted-foreground">Handpicked by our expert coordinators</p>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {artists.map((artist, i) => {
-            const user = Array.isArray(artist.user) ? artist.user[0] : artist.user;
-            const name = user?.name ?? "Artist";
-            const initials = name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
-            return (
-              <motion.div
-                key={artist.id}
-                initial={{ opacity: 0, y: 24 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
-                whileHover={{ y: -6 }}
-              >
-                <Link href="/artists">
-                  <div className="rounded-2xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 bg-white group">
-                    <div className={`h-36 bg-gradient-to-br ${cardColors[i % cardColors.length]} flex items-center justify-center relative overflow-hidden`}>
-                      <div className="absolute inset-0 opacity-20" style={{ backgroundImage: "radial-gradient(circle at 70% 70%, white 1px, transparent 1px)", backgroundSize: "20px 20px" }} />
-                      <div className="w-20 h-20 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center border-2 border-white/40 shadow-lg">
-                        <span className="text-2xl font-bold text-white">{initials}</span>
-                      </div>
-                      {artist.is_verified && (
-                        <div className="absolute top-3 right-3 bg-white/90 rounded-full px-2 py-0.5 flex items-center gap-1">
-                          <Shield className="w-3 h-3 text-emerald-500" />
-                          <span className="text-[10px] font-bold text-emerald-600">Verified</span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-4">
-                      <h3 className="font-bold text-navy-900 truncate">{name}</h3>
-                      <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                        {(artist.categories as string[])?.slice(0, 2).join(", ")}
-                      </p>
-                      <div className="flex items-center justify-between mt-3">
-                        <div className="flex items-center gap-1">
-                          <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                          <span className="text-xs font-semibold">{Number(artist.rating).toFixed(1)}</span>
-                          <span className="text-xs text-muted-foreground">({artist.total_bookings})</span>
-                        </div>
-                        <span className="text-xs font-bold text-gold-600">
-                          {formatCurrency(artist.base_price)}+
-                        </span>
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-1">
-                        {(artist.cities as string[])?.slice(0, 2).map((c: string) => (
-                          <span key={c} className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{c}</span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              </motion.div>
-            );
-          })}
-        </div>
-        <div className="text-center mt-10">
-          <Link href="/artists">
-            <Button size="lg" variant="outline" className="border-2 border-navy-900 text-navy-900 hover:bg-navy-900 hover:text-white transition-all px-10">
-              View All Artists
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </Button>
-          </Link>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 /* ─── Main Page ───────────────────────────────────────────── */
 export default function LandingPage() {
-  const [searchQuery, setSearchQuery] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
@@ -234,7 +129,7 @@ export default function LandingPage() {
           <BrandLogo href="/" size="md" priority className="shrink-0" />
 
           <div className="hidden md:flex items-center gap-8">
-            {[["Browse Artists", "/artists"], ["How It Works", "#how-it-works"], ["Categories", "#categories"]].map(([label, href]) => (
+            {[["How It Works", "#how-it-works"], ["Categories", "#categories"]].map(([label, href]) => (
               <Link key={label} href={href} className="text-sm font-medium text-gray-600 hover:text-gold-600 transition-colors">{label}</Link>
             ))}
           </div>
@@ -285,7 +180,7 @@ export default function LandingPage() {
               className="md:hidden overflow-hidden border-t border-gray-100 bg-white"
             >
               <div className="px-4 sm:px-6 py-4 flex flex-col gap-1">
-                {[["Browse Artists", "/artists"], ["How It Works", "#how-it-works"], ["Categories", "#categories"]].map(([label, href]) => (
+                {[["How It Works", "#how-it-works"], ["Categories", "#categories"]].map(([label, href]) => (
                   <Link
                     key={label}
                     href={href}
@@ -351,31 +246,12 @@ export default function LandingPage() {
               Singers, DJs, comedians, dancers, anchors — all in one place with expert coordination.
             </p>
 
-            {/* Search bar */}
+            {/* Quick event type pills */}
             <motion.div
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
               className="mt-10 max-w-2xl mx-auto"
             >
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-white rounded-2xl p-2 shadow-2xl shadow-navy-900/40 border border-white/20">
-                <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <Search className="w-5 h-5 text-gray-400 ml-2 flex-shrink-0" />
-                  <input
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search artists — singer, DJ, comedian..."
-                    className="min-w-0 flex-1 bg-transparent text-gray-800 placeholder-gray-400 text-sm outline-none py-2 px-2"
-                    onKeyDown={(e) => e.key === "Enter" && (window.location.href = `/artists?search=${encodeURIComponent(searchQuery)}`)}
-                  />
-                </div>
-                <Link href={`/artists${searchQuery ? `?search=${encodeURIComponent(searchQuery)}` : ""}`} className="shrink-0">
-                  <button className="w-full sm:w-auto gold-gradient text-navy-900 text-sm font-semibold px-6 py-2.5 rounded-xl hover:opacity-90 transition-all shadow-md whitespace-nowrap">
-                    Search Artists
-                  </button>
-                </Link>
-              </div>
-
-              {/* Quick event type pills */}
-              <div className="flex flex-wrap gap-2 justify-center mt-4">
+              <div className="flex flex-wrap gap-2 justify-center">
                 {eventTypes.map((t) => (
                   <Link key={t} href={`/enquiry?event_type=${t}`}>
                     <span className="px-3 py-1.5 rounded-full bg-white/10 text-white/80 text-xs font-medium hover:bg-white/20 transition-all border border-white/10 cursor-pointer backdrop-blur-sm">
@@ -391,18 +267,17 @@ export default function LandingPage() {
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
               className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4"
             >
-              <Link href="/artists">
-                <Button variant="white" size="lg" className="w-full sm:w-auto px-8 text-base font-bold shadow-xl">
-                  <Users className="w-5 h-5 mr-2" />
-                  Browse All Artists
-                </Button>
-              </Link>
               <Link href="/enquiry">
                 <Button size="lg" className="w-full sm:w-auto px-8 text-base font-bold hover:opacity-90 shadow-xl shadow-gold-500/30 border-0">
                   <Sparkles className="w-5 h-5 mr-2" />
                   Raise Free Enquiry
                 </Button>
               </Link>
+              <a href="#how-it-works">
+                <Button variant="white" size="lg" className="w-full sm:w-auto px-8 text-base font-bold shadow-xl">
+                  How It Works
+                </Button>
+              </a>
             </motion.div>
 
             <p className="mt-4 text-white/50 text-xs flex items-center justify-center gap-4">
@@ -476,7 +351,7 @@ export default function LandingPage() {
             <h2 className="font-display text-3xl md:text-4xl font-bold text-navy-900 text-balance">
               Browse by Category
             </h2>
-            <p className="mt-3 text-muted-foreground">Click any category to instantly see available artists</p>
+            <p className="mt-3 text-muted-foreground">Click any category to start your enquiry</p>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -489,7 +364,7 @@ export default function LandingPage() {
                 transition={{ delay: i * 0.07 }}
                 whileHover={{ scale: 1.04, y: -4 }}
               >
-                <Link href={`/artists?category=${encodeURIComponent(cat.name)}`}>
+                <Link href="/enquiry">
                   <div className={`relative overflow-hidden rounded-2xl p-5 cursor-pointer border-2 border-transparent transition-all duration-300 group ${cat.bg}`}>
                     <div className={`absolute inset-0 bg-gradient-to-br ${cat.color} opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
                     <div className="relative z-10 text-center">
@@ -506,17 +381,14 @@ export default function LandingPage() {
           </div>
 
           <div className="text-center mt-10">
-            <Link href="/artists">
+            <Link href="/enquiry">
               <Button variant="outline" size="lg" className="border-2 border-gold-300 text-gold-700 hover:bg-gold-50 px-10">
-                See All Categories <ArrowRight className="w-4 h-4 ml-2" />
+                Raise an Enquiry <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </Link>
           </div>
         </div>
       </section>
-
-      {/* ── Featured Artists from DB ── */}
-      <FeaturedArtists />
 
       {/* ── How It Works ── */}
       <section id="how-it-works" className="py-20 bg-gradient-to-br from-navy-50 via-white to-gold-50">
@@ -724,12 +596,6 @@ export default function LandingPage() {
             </p>
 
             <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center items-stretch sm:items-center">
-              <Link href="/artists" className="w-full sm:w-auto">
-                <Button variant="white" size="lg" className="w-full sm:w-auto px-10 font-bold shadow-xl text-base">
-                  <Users className="w-5 h-5 mr-2" />
-                  Browse Artists
-                </Button>
-              </Link>
               <Link href="/enquiry" className="w-full sm:w-auto">
                 <Button size="lg" className="w-full sm:w-auto px-10 font-bold border-0 hover:opacity-90 shadow-xl shadow-gold-500/30 text-base">
                   <Sparkles className="w-5 h-5 mr-2" />
@@ -769,7 +635,7 @@ export default function LandingPage() {
             </a>
           </div>
             <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm">
-              {[["Browse Artists", "/artists"], ["Raise Enquiry", "/enquiry"], ["Login", "/login"], ["Register", "/register"]].map(([label, href]) => (
+              {[["Raise Enquiry", "/enquiry"], ["Login", "/login"], ["Register", "/register"]].map(([label, href]) => (
                 <Link key={label} href={href} className="whitespace-nowrap hover:text-white transition-colors">{label}</Link>
               ))}
             </div>

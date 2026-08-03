@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Star, CheckCircle2, XCircle, Phone, MapPin,
   Filter, X, Shield, ShieldOff, Eye, EyeOff, AlertCircle, Ban, FileText,
-  LayoutGrid, Table2, ChevronLeft, ChevronRight, ExternalLink,
+  LayoutGrid, Table2, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -675,18 +675,6 @@ export function ArtistVerificationClient({
                         </td>
                         <td className="px-3 py-2.5">
                           <div className="flex items-center justify-end gap-1">
-                            {artist.slug && (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <a href={`/artists/${artist.slug}`} target="_blank" rel="noopener noreferrer">
-                                    <Button size="sm" variant="ghost" aria-label={`View ${artist.user.name}'s full profile`}>
-                                      <ExternalLink className="w-4 h-4 text-muted-foreground" />
-                                    </Button>
-                                  </a>
-                                </TooltipTrigger>
-                                <TooltipContent side="top">View full profile</TooltipContent>
-                              </Tooltip>
-                            )}
                             {(!artist.is_profile_complete || !artist.is_verified) && (
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -890,6 +878,15 @@ export function ArtistVerificationClient({
                 )}
               </div>
 
+              {/* Languages */}
+              {artist.languages && artist.languages.length > 0 && (
+                <div className="flex flex-wrap gap-1 mb-3">
+                  {artist.languages.map((l) => (
+                    <span key={l} className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{l}</span>
+                  ))}
+                </div>
+              )}
+
               {/* Stats row */}
               <div className="flex items-center justify-between text-xs border-t pt-3">
                 <div className="flex items-center gap-3">
@@ -904,13 +901,6 @@ export function ArtistVerificationClient({
 
               {/* Actions */}
               <div className="space-y-2 mt-3">
-                {artist.slug && (
-                  <a href={`/artists/${artist.slug}`} target="_blank" rel="noopener noreferrer">
-                    <Button size="sm" variant="outline" className="w-full">
-                      <Eye className="w-3.5 h-3.5 mr-1.5" />View Full Profile
-                    </Button>
-                  </a>
-                )}
                 {(!artist.is_profile_complete || !artist.is_verified) && (
                   <Button
                     size="sm"

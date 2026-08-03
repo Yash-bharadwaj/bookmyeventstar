@@ -23,7 +23,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip
 interface Artist {
   id: string; categories: string[]; cities: string[]; base_price: number;
   rating: number; total_bookings: number; bio?: string; area?: string | null;
-  is_verified: boolean; experience_years?: number;
+  is_verified: boolean; experience_years?: number; languages?: string[];
   user: { name: string; email: string; phone: string; avatar_url?: string } | null;
   media: { url: string; is_primary: boolean; type: string }[];
 }
@@ -1142,6 +1142,20 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                         ))}
                       </div>
                     </div>
+
+                    {/* Languages */}
+                    {a.languages && a.languages.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Languages</p>
+                        <div className="flex flex-wrap gap-2">
+                          {a.languages.map((l) => (
+                            <span key={l} className="px-3 py-1.5 rounded-full bg-muted/40 border text-xs font-medium text-muted-foreground">
+                              {l}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Stats row */}
                     <div className="grid grid-cols-3 gap-3">

@@ -20,7 +20,7 @@ import { uploadAvatar as uploadAvatarToStorage, uploadMedia as uploadMediaToStor
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import { ArtistProfile, ArtistMedia, ArtistDocument, User } from "@/types";
-import { formatCurrency, getInitials } from "@/lib/utils";
+import { formatCurrency, getInitials, LANGUAGES } from "@/lib/utils";
 import { evaluateArtistProfile, type ArtistProfileCompletionInput } from "@/lib/artist-profile-completion";
 import { ProfileCompletionGauge } from "@/components/artist/ProfileCompletionGauge";
 import { ArtistDocumentsClient } from "@/app/artist/documents/ArtistDocumentsClient";
@@ -69,6 +69,9 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
   );
   const [selectedCities, setSelectedCities] = useState<string[]>(
     artistProfile?.cities ?? []
+  );
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(
+    artistProfile?.languages ?? []
   );
   const [citySearch, setCitySearch] = useState("");
   const [catSearch, setCatSearch] = useState("");
@@ -185,6 +188,12 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
     );
   };
 
+  const toggleLanguage = (lang: string) => {
+    setSelectedLanguages((prev) =>
+      prev.includes(lang) ? prev.filter((l) => l !== lang) : [...prev, lang]
+    );
+  };
+
   const onSubmit = async (data: ProfileFormData) => {
     setSaving(true);
     try {
@@ -205,6 +214,7 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
         bio: data.bio,
         categories: selectedCategories,
         cities: selectedCities,
+        languages: selectedLanguages,
         base_price: data.base_price,
         rider_notes: data.rider_notes,
         social_links: {
@@ -334,8 +344,8 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 flex items-start gap-2">
           <EyeOff className="w-5 h-5 flex-shrink-0 mt-0.5 text-amber-700" />
           <p>
-            <span className="font-semibold">Hidden from browse.</span> Complete the checklist above; an admin must list your
-            profile for you to appear. Until checklist + verified + listed, clients won&apos;t see you on explore — existing bookings
+            <span className="font-semibold">Hidden from coordinators.</span> Complete the checklist above; an admin must list your
+            profile for you to appear. Until checklist + verified + listed, coordinators won&apos;t see you in search — existing bookings
             stay as they are.
           </p>
         </div>
@@ -558,6 +568,32 @@ export function ArtistProfileClient({ user, artistProfile, media: initialMedia =
                     {name}
                   </button>
                 ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Languages */}
+        <Card>
+          <CardHeader><CardTitle>Languages You Perform In</CardTitle></CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {LANGUAGES.map((lang) => {
+                const selected = selectedLanguages.includes(lang);
+                return (
+                  <button
+                    key={lang}
+                    type="button"
+                    onClick={() => toggleLanguage(lang)}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                      selected
+                        ? "gold-gradient text-white shadow-sm"
+                        : "border border-border hover:border-gold-400 text-muted-foreground"
+                    }`}
+                  >
+                    {lang}
+                  </button>
+                );
+              })}
             </div>
           </CardContent>
         </Card>
