@@ -77,6 +77,9 @@ export interface ArtistProfile {
   is_profile_complete?: boolean;
   /** Set when an admin/coordinator rejects the profile (with a reason) instead of verifying it — cleared automatically the next time the artist saves their profile. */
   rejection_reason?: string | null;
+  /** How many times an admin has sent a "complete your profile" reminder email — shown as a small count next to the reminder button. */
+  reminder_count?: number;
+  last_reminder_at?: string;
   social_links: Record<string, string>;
   rider_notes?: string;
   /** Human-readable id for the artist's public shareable profile link (/artists/{slug}). */

@@ -7,10 +7,10 @@ import { aggregateCompletionFromStoredProfile } from "@/lib/artist-profile-compl
  * profile_completion_percent per artist — computed the same way the
  * artist's own profile editor does (lib/artist-profile-completion.ts) —
  * so reviewers see the real number, not just the pass/fail
- * is_profile_complete badge. Also attaches each artist's uploaded
- * verification documents (Aadhaar, PAN, etc.) — private, not part of the
- * public /artists/[slug] page, but admin/coordinator need to see them to
- * actually review before verifying (storage.rules + firestore.rules both
+ * is_profile_complete badge. Also attaches each artist's uploaded photos/
+ * videos and verification documents (Aadhaar, PAN, etc.) — private, no
+ * longer shown on any public page, but admin/coordinator need to see them
+ * to actually review before verifying (storage.rules + firestore.rules both
  * already permit admin/coordinator read access to these).
  */
 export async function getArtistsForVerification() {
@@ -36,13 +36,15 @@ export async function getArtistsForVerification() {
 
   const artists = rawArtists.map((a: any, i) => {
     const u = userDocs[i]?.exists ? userDocs[i].data()! : {};
-    const photoCount = mediaSnaps[i]?.docs.filter((m) => m.data().type === "photo").length ?? 0;
+    const media = (mediaSnaps[i]?.docs ?? []).map((m) => ({ id: m.id, artist_id: a.id, ...m.data() }));
+    const photoCount = media.filter((m: any) => m.type === "photo").length;
     const documents = (documentSnaps[i]?.docs ?? []).map((d) => ({ id: d.id, artist_id: a.id, ...d.data() }));
     const hasAadhaar = documents.some((d: any) => d.type === "Aadhaar Card");
     const { percent } = aggregateCompletionFromStoredProfile(a, photoCount, !!u.avatar_url, hasAadhaar);
     return {
       ...a,
       profile_completion_percent: percent,
+      media,
       documents,
       user: {
         name: u.name ?? "",
