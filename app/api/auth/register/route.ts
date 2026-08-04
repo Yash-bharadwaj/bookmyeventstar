@@ -9,18 +9,6 @@ import { sendEmail, artistWelcomeEmailHtml } from "@/lib/email/resend";
 
 const PRIVILEGED_ROLES = ["coordinator", "admin"];
 
-// A Google sign-in that never finished (closed before submitting the
-// "just need a couple more things" step) leaves a Firebase Auth identity
-// behind with no Firestore users/{uid} doc — /api/auth/google only writes
-// that doc on successful submit. Without this, that email is permanently
-// stuck: Auth refuses to create a second account for it, but there's no
-// password on the first one either, so /login can't work. Below, that
-// state is adopted as a fresh signup once it's old enough to safely rule
-// out "still actively mid-signup right now" (tab open, form mid-fill) —
-// adopting one that young would let a second person set a password into
-// someone else's in-progress account.
-const ADOPT_ORPHANED_IDENTITY_AFTER_MS = 30 * 60 * 1000;
-
 export async function POST(req: NextRequest) {
   try {
     const {
@@ -104,10 +92,6 @@ export async function POST(req: NextRequest) {
     }
 
     let userId: string;
-    // Tracks whether this request minted the Auth user vs. adopted a
-    // pre-existing orphaned one — only a freshly-created one should ever be
-    // rolled back below if the Firestore write fails.
-    let freshAuthUser = true;
     try {
       const authUser = await adminAuth.createUser({ email, password, displayName: name });
       userId = authUser.uid;
@@ -121,17 +105,25 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Could not create account — please try again." }, { status: 400 });
       }
 
+      // A Google sign-in that never finished (closed before submitting
+      // phone/city/budget) leaves exactly this signature behind: a Firebase
+      // Auth identity with no Firestore users/{uid} doc, since
+      // /api/auth/google only writes that doc on successful submit. It
+      // never became a real account, so wipe it and let this request create
+      // a genuinely fresh one instead of permanently blocking the email.
+      // Note: this doesn't distinguish "abandoned five minutes ago" from
+      // "abandoned just now, tab still open" — a second registration for the
+      // same email always wins over an in-progress-but-unsaved one.
       const existing = await adminAuth.getUserByEmail(email).catch(() => null);
       const existingDoc = existing ? await adminDb.collection("users").doc(existing.uid).get() : null;
-      const ageMs = existing ? Date.now() - new Date(existing.metadata.creationTime).getTime() : 0;
 
-      if (!existing || !existingDoc || existingDoc.exists || ageMs < ADOPT_ORPHANED_IDENTITY_AFTER_MS) {
+      if (!existing || !existingDoc || existingDoc.exists) {
         return NextResponse.json({ error: "An account with this email already exists — please sign in instead." }, { status: 409 });
       }
 
-      await adminAuth.updateUser(existing.uid, { password, displayName: name });
-      userId = existing.uid;
-      freshAuthUser = false;
+      await adminAuth.deleteUser(existing.uid);
+      const authUser = await adminAuth.createUser({ email, password, displayName: name });
+      userId = authUser.uid;
     }
 
     await adminAuth.setCustomUserClaims(userId, { role });
@@ -174,11 +166,8 @@ export async function POST(req: NextRequest) {
         });
       }
     } catch (err) {
-      // Roll back the auth user if profile creation fails — but only one
-      // this request created. An adopted identity existed before this
-      // request (a real prior sign-in); deleting it here would destroy
-      // that, not just this attempt.
-      if (freshAuthUser) await adminAuth.deleteUser(userId).catch(() => {});
+      // Roll back the auth user if profile creation fails.
+      await adminAuth.deleteUser(userId).catch(() => {});
       console.error("[register] profile write failed:", err);
       return NextResponse.json({ error: "Failed to create profile. Please try again." }, { status: 500 });
     }

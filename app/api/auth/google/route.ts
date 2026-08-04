@@ -1,10 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomBytes } from "crypto";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { notifyAllAdminsServer } from "@/lib/notifications/server";
-import { sendEmail, artistWelcomeEmailHtml } from "@/lib/email/resend";
+import { sendEmail, artistWelcomeEmailHtml, clientWelcomeEmailHtml } from "@/lib/email/resend";
 
 const PHONE_REGEX = /^[6-9]\d{9}$/;
+
+// Google sign-in never sets a password — this account otherwise only has
+// one way in. Minting one here (and emailing it, below) means the person
+// isn't stuck if they forget they used Google and later try a plain
+// email/password login — either path works from day one.
+function generatePassword(): string {
+  return randomBytes(9).toString("base64url");
+}
 
 /**
  * Finishes account setup for a brand-new Google sign-in. The Firebase Auth
@@ -114,6 +123,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Could not finish setting up your account. Please try again." }, { status: 500 });
     }
 
+    const generatedPassword = generatePassword();
+    await adminAuth.updateUser(decoded.uid, { password: generatedPassword }).catch((err) => {
+      console.error("[auth/google] failed to set fallback password:", err);
+    });
+
     const categoryLabel = categoryList.join(", ");
     const roleLabel = role === "artist" && categoryLabel ? categoryLabel : role;
     notifyAllAdminsServer({
@@ -123,13 +137,14 @@ export async function POST(req: NextRequest) {
       link: "/admin/users",
     }).catch((err) => console.error("[auth/google] admin notify failed:", err));
 
-    if (role === "artist") {
-      sendEmail({
-        to: decoded.email,
-        subject: "Welcome to the Star Community! 🌟",
-        html: artistWelcomeEmailHtml({ name, category: categoryLabel || undefined }),
-      }).catch((err) => console.error("[auth/google] artist welcome email failed:", err));
-    }
+    const credentials = { email: decoded.email, password: generatedPassword };
+    sendEmail({
+      to: decoded.email,
+      subject: role === "artist" ? "Welcome to the Star Community! 🌟" : "Welcome to BookMy EventStar! 🌟",
+      html: role === "artist"
+        ? artistWelcomeEmailHtml({ name, category: categoryLabel || undefined, credentials })
+        : clientWelcomeEmailHtml({ name, credentials }),
+    }).catch((err) => console.error("[auth/google] welcome email failed:", err));
 
     return NextResponse.json({ success: true });
   } catch (err) {
