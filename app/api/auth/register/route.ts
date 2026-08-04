@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   try {
     const {
       name, email, phone, password, role, emailVerificationToken, emailVerificationExpires,
-      isEventManager, companyName, instagramHandle, websiteUrl, category,
+      isEventManager, companyName, instagramHandle, websiteUrl, categories,
       city, area, budgetMin, budgetMax,
     } = await req.json();
 
@@ -24,8 +24,10 @@ export async function POST(req: NextRequest) {
     if (!["client", "artist", "coordinator", "admin"].includes(role)) {
       return NextResponse.json({ error: "Invalid role" }, { status: 400 });
     }
-    const categoryStr = String(category ?? "").trim() || null;
-    if (role === "artist" && !categoryStr) {
+    const categoryList: string[] = Array.isArray(categories)
+      ? categories.map((c) => String(c).trim()).filter(Boolean)
+      : [];
+    if (role === "artist" && categoryList.length === 0) {
       return NextResponse.json({ error: "Select what kind of artist you are." }, { status: 400 });
     }
     const cityStr = String(city ?? "").trim() || null;
@@ -127,7 +129,7 @@ export async function POST(req: NextRequest) {
       if (role === "artist") {
         await adminDb.collection("artistProfiles").doc(userId).set({
           bio: "",
-          categories: categoryStr ? [categoryStr] : [],
+          categories: categoryList,
           cities: cityStr ? [cityStr] : [],
           area: areaStr,
           base_price: budgetMinNum,
@@ -154,10 +156,11 @@ export async function POST(req: NextRequest) {
     // Only for genuine self-registration — an admin adding a user from
     // Admin > Users already knows about it, no need to notify themselves.
     if ((role === "client" || role === "artist") && callerRole !== "admin") {
-      const roleLabel = role === "artist" && categoryStr ? categoryStr : role;
+      const categoryLabel = categoryList.join(", ");
+      const roleLabel = role === "artist" && categoryLabel ? categoryLabel : role;
       notifyAllAdminsServer({
         title: `New ${roleLabel} registered — ${name}`,
-        message: `${name} (${email}, ${phone_e164}) just created a ${role} account${role === "artist" && categoryStr ? ` (${categoryStr})` : ""}.`,
+        message: `${name} (${email}, ${phone_e164}) just created a ${role} account${role === "artist" && categoryLabel ? ` (${categoryLabel})` : ""}.`,
         type: "info",
         link: "/admin/users",
       }).catch((err) => console.error("[register] admin notify failed:", err));
@@ -167,7 +170,7 @@ export async function POST(req: NextRequest) {
       sendEmail({
         to: email,
         subject: "Welcome to the Star Community! 🌟",
-        html: artistWelcomeEmailHtml({ name, category: categoryStr ?? undefined }),
+        html: artistWelcomeEmailHtml({ name, category: categoryList.join(", ") || undefined }),
       }).catch((err) => console.error("[register] artist welcome email failed:", err));
     }
 

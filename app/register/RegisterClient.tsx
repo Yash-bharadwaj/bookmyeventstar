@@ -186,7 +186,7 @@ function ArtistRegisterForm() {
 
   const {
     googleBusy, googleUser, phoneDigits: googlePhone, setPhoneDigits: setGooglePhone,
-    category: googleCategory, setCategory: setGoogleCategory,
+    categories: googleCategories, setCategories: setGoogleCategories,
     city: googleCity, setCity: setGoogleCity,
     area: googleArea, setArea: setGoogleArea,
     budgetRange: googleBudgetRange, setBudgetRange: setGoogleBudgetRange,
@@ -210,7 +210,7 @@ function ArtistRegisterForm() {
     defaultValues: { role: "artist" },
   });
   const email = watch("email");
-  const category = watch("category");
+  const selectedCategories = watch("categories");
   const locationState = watch("state");
   const locationCity = watch("city");
   const locationArea = watch("area");
@@ -290,7 +290,7 @@ function ArtistRegisterForm() {
           phone: data.phone,
           password: data.password,
           role: "artist",
-          category: data.category,
+          categories: data.categories,
           city: data.city,
           area: data.area,
           budgetMin: band?.min,
@@ -346,7 +346,7 @@ function ArtistRegisterForm() {
         </div>
         <div className="space-y-1">
           <Label>What kind of artist are you?</Label>
-          <ArtistCategorySelect categories={categories} value={googleCategory} onChange={setGoogleCategory} />
+          <ArtistCategorySelect categories={categories} value={googleCategories} onChange={setGoogleCategories} />
         </div>
         <div className="space-y-1">
           <Label>Where do you perform?</Label>
@@ -402,10 +402,10 @@ function ArtistRegisterForm() {
         <Label>What kind of artist are you?</Label>
         <ArtistCategorySelect
           categories={categories}
-          value={category ?? ""}
-          onChange={(v) => setValue("category", v, { shouldValidate: true })}
+          value={selectedCategories ?? []}
+          onChange={(v) => setValue("categories", v, { shouldValidate: true })}
         />
-        {errors.category?.message && <p className="text-xs text-destructive">{errors.category.message}</p>}
+        {errors.categories?.message && <p className="text-xs text-destructive">{errors.categories.message}</p>}
       </div>
 
       <div className="space-y-1">

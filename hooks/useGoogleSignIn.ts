@@ -42,7 +42,7 @@ export function useGoogleSignIn(fixedRole?: Role, redirectTo?: string | null) {
   const [googleUser, setGoogleUser] = useState<PendingGoogleUser | null>(null);
   const [pendingRole, setPendingRole] = useState<Role | undefined>(fixedRole);
   const [phoneDigits, setPhoneDigits] = useState("");
-  const [category, setCategory] = useState("");
+  const [categories, setCategories] = useState<string[]>([]);
   const [city, setCity] = useState("");
   const [area, setArea] = useState("");
   const [budgetRange, setBudgetRange] = useState("");
@@ -97,7 +97,7 @@ export function useGoogleSignIn(fixedRole?: Role, redirectTo?: string | null) {
     if (!/^[6-9]\d{9}$/.test(digits)) { toast.error("Enter a valid 10-digit mobile number"); return; }
     if (!pendingRole) { toast.error("Please choose an account type"); return; }
     if (pendingRole === "artist") {
-      if (!category) { toast.error("Select what kind of artist you are"); return; }
+      if (categories.length === 0) { toast.error("Select what kind of artist you are"); return; }
       if (!city) { toast.error("Select your city"); return; }
       if (!area.trim()) { toast.error("Enter your area / locality"); return; }
       if (!budgetRange) { toast.error("Select your starting price range"); return; }
@@ -113,7 +113,7 @@ export function useGoogleSignIn(fixedRole?: Role, redirectTo?: string | null) {
           idToken: googleUser.idToken,
           phone: digits,
           role: pendingRole,
-          category,
+          categories,
           city,
           area: area.trim(),
           budgetMin: band?.min,
@@ -158,8 +158,8 @@ export function useGoogleSignIn(fixedRole?: Role, redirectTo?: string | null) {
     setPendingRole,
     phoneDigits,
     setPhoneDigits,
-    category,
-    setCategory,
+    categories,
+    setCategories,
     city,
     setCity,
     area,

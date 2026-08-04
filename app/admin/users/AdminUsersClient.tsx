@@ -85,7 +85,7 @@ export function AdminUsersClient({ users, currentAdminId, categoryOptions }: { u
 
   const [showAdd, setShowAdd] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [addForm, setAddForm] = useState({ role: "client" as "client" | "artist", name: "", email: "", phone: "", password: "", category: "" });
+  const [addForm, setAddForm] = useState({ role: "client" as "client" | "artist", name: "", email: "", phone: "", password: "", categories: [] as string[] });
 
   const [editUser, setEditUser] = useState<RegisteredUser | null>(null);
   const [editForm, setEditForm] = useState({ name: "", email: "", phone: "" });
@@ -275,7 +275,7 @@ export function AdminUsersClient({ users, currentAdminId, categoryOptions }: { u
       return;
     }
     if (addForm.password.length < 8) { toast.error("Password must be at least 8 characters"); return; }
-    if (addForm.role === "artist" && !addForm.category) { toast.error("Select the artist's category"); return; }
+    if (addForm.role === "artist" && addForm.categories.length === 0) { toast.error("Select the artist's category"); return; }
     setCreating(true);
     try {
       const res = await fetch("/api/auth/register", {
@@ -287,14 +287,14 @@ export function AdminUsersClient({ users, currentAdminId, categoryOptions }: { u
           phone: addForm.phone.trim(),
           password: addForm.password,
           role: addForm.role,
-          category: addForm.category,
+          categories: addForm.categories,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to create account");
       toast.success(`${addForm.name} added as ${addForm.role}`);
       setShowAdd(false);
-      setAddForm({ role: "client", name: "", email: "", phone: "", password: "", category: "" });
+      setAddForm({ role: "client", name: "", email: "", phone: "", password: "", categories: [] });
       router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create account");
@@ -625,8 +625,8 @@ export function AdminUsersClient({ users, currentAdminId, categoryOptions }: { u
                 <Label>Category</Label>
                 <ArtistCategorySelect
                   categories={categoryOptions}
-                  value={addForm.category}
-                  onChange={(v) => setAddForm((f) => ({ ...f, category: v }))}
+                  value={addForm.categories}
+                  onChange={(v) => setAddForm((f) => ({ ...f, categories: v }))}
                 />
               </div>
             )}

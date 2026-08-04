@@ -43,7 +43,7 @@ function LoginForm() {
   const {
     googleBusy, googleUser, pendingRole, setPendingRole,
     phoneDigits: googlePhone, setPhoneDigits: setGooglePhone,
-    category: googleCategory, setCategory: setGoogleCategory,
+    categories: googleCategories, setCategories: setGoogleCategories,
     city: googleCity, setCity: setGoogleCity,
     area: googleArea, setArea: setGoogleArea,
     budgetRange: googleBudgetRange, setBudgetRange: setGoogleBudgetRange,
@@ -219,7 +219,7 @@ function LoginForm() {
                     <>
                       <div className="space-y-2">
                         <Label>What kind of artist are you?</Label>
-                        <ArtistCategorySelect categories={categories} value={googleCategory} onChange={setGoogleCategory} />
+                        <ArtistCategorySelect categories={categories} value={googleCategories} onChange={setGoogleCategories} />
                       </div>
                       <div className="space-y-2">
                         <Label>Where do you perform?</Label>

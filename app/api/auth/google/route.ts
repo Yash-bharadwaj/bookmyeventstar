@@ -16,7 +16,7 @@ const PHONE_REGEX = /^[6-9]\d{9}$/;
  */
 export async function POST(req: NextRequest) {
   try {
-    const { idToken, phone, role, category, city, area, budgetMin, budgetMax } = await req.json();
+    const { idToken, phone, role, categories, city, area, budgetMin, budgetMax } = await req.json();
 
     if (typeof idToken !== "string" || !idToken) {
       return NextResponse.json({ error: "Missing sign-in token." }, { status: 400 });
@@ -28,8 +28,10 @@ export async function POST(req: NextRequest) {
     if (!PHONE_REGEX.test(digits)) {
       return NextResponse.json({ error: "Enter a valid 10-digit mobile number." }, { status: 400 });
     }
-    const categoryStr = String(category ?? "").trim() || null;
-    if (role === "artist" && !categoryStr) {
+    const categoryList: string[] = Array.isArray(categories)
+      ? categories.map((c) => String(c).trim()).filter(Boolean)
+      : [];
+    if (role === "artist" && categoryList.length === 0) {
       return NextResponse.json({ error: "Select what kind of artist you are." }, { status: 400 });
     }
     const cityStr = String(city ?? "").trim() || null;
@@ -90,7 +92,7 @@ export async function POST(req: NextRequest) {
       if (role === "artist") {
         await adminDb.collection("artistProfiles").doc(decoded.uid).set({
           bio: "",
-          categories: categoryStr ? [categoryStr] : [],
+          categories: categoryList,
           cities: cityStr ? [cityStr] : [],
           area: areaStr,
           base_price: budgetMinNum,
@@ -112,10 +114,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Could not finish setting up your account. Please try again." }, { status: 500 });
     }
 
-    const roleLabel = role === "artist" && categoryStr ? categoryStr : role;
+    const categoryLabel = categoryList.join(", ");
+    const roleLabel = role === "artist" && categoryLabel ? categoryLabel : role;
     notifyAllAdminsServer({
       title: `New ${roleLabel} registered — ${name}`,
-      message: `${name} (${decoded.email}, ${phone_e164}) just created a ${role} account via Google${role === "artist" && categoryStr ? ` (${categoryStr})` : ""}.`,
+      message: `${name} (${decoded.email}, ${phone_e164}) just created a ${role} account via Google${role === "artist" && categoryLabel ? ` (${categoryLabel})` : ""}.`,
       type: "info",
       link: "/admin/users",
     }).catch((err) => console.error("[auth/google] admin notify failed:", err));
@@ -124,7 +127,7 @@ export async function POST(req: NextRequest) {
       sendEmail({
         to: decoded.email,
         subject: "Welcome to the Star Community! 🌟",
-        html: artistWelcomeEmailHtml({ name, category: categoryStr ?? undefined }),
+        html: artistWelcomeEmailHtml({ name, category: categoryLabel || undefined }),
       }).catch((err) => console.error("[auth/google] artist welcome email failed:", err));
     }
 

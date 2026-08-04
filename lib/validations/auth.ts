@@ -21,7 +21,7 @@ export const registerSchema = z
     password: z.string().min(8, "Password must be at least 8 characters"),
     confirmPassword: z.string(),
     role: z.enum(["client", "artist"]),
-    category: z.string().optional(),
+    categories: z.array(z.string()).optional(),
     state: z.string().optional(),
     city: z.string().optional(),
     area: z.string().optional(),
@@ -33,8 +33,8 @@ export const registerSchema = z
   })
   .superRefine((data, ctx) => {
     if (data.role !== "artist") return;
-    if (!data.category?.trim()) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Select what kind of artist you are", path: ["category"] });
+    if (!data.categories || data.categories.length === 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Select what kind of artist you are", path: ["categories"] });
     }
     if (!data.state?.trim()) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Select your state", path: ["state"] });
