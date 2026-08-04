@@ -34,7 +34,7 @@ function safeRedirectTarget(value: string | null): string | null {
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const prefillPhone = searchParams.get("phone") ?? "";
+  const prefillIdentifier = searchParams.get("phone") ?? searchParams.get("email") ?? "";
   const redirectTo = safeRedirectTarget(searchParams.get("redirect"));
 
   const [showPassword, setShowPassword] = useState(false);
@@ -59,7 +59,7 @@ function LoginForm() {
     formState: { errors },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { identifier: prefillPhone },
+    defaultValues: { identifier: prefillIdentifier },
   });
 
   const onSubmit = async (data: LoginFormData) => {

@@ -303,7 +303,7 @@ function EnquiryFormLegacy() {
         if (!res.ok) {
           if (res.status === 409) {
             await signOutEverywhere();
-            toast("You already have an account. Redirecting to login…", { icon: "ℹ️" });
+            toast(json.error ?? "You already have an account — redirecting to login.", { icon: "ℹ️" });
             window.location.href = `/login?email=${encodeURIComponent(data.email)}`;
             return;
           }

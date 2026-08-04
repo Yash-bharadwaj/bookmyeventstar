@@ -302,8 +302,8 @@ function ArtistRegisterForm() {
       const result = await res.json();
       if (!res.ok) {
         if (res.status === 409) {
-          toast("You already have an account. Redirecting to login…", { icon: "ℹ️" });
-          router.push("/login");
+          toast(result.error ?? "You already have an account — redirecting to login.", { icon: "ℹ️" });
+          router.push(`/login?email=${encodeURIComponent(data.email)}`);
           return;
         }
         throw new Error(result.error ?? "Registration failed");
@@ -658,7 +658,7 @@ function ClientRegisterForm() {
       const json = await res.json();
       if (!res.ok) {
         if (res.status === 409) {
-          toast("You already have an account. Redirecting to login…", { icon: "ℹ️" });
+          toast(json.error ?? "You already have an account — redirecting to login.", { icon: "ℹ️" });
           window.location.href = `/login?email=${encodeURIComponent(email.trim())}`;
           return;
         }
