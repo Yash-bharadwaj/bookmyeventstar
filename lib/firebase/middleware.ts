@@ -2,8 +2,13 @@ import { NextResponse, type NextRequest } from "next/server";
 import { verifySessionToken, SESSION_COOKIE_NAME } from "./session";
 
 // Fully public content pages that never redirect based on auth state —
-// skip token verification entirely for these.
-const PUBLIC_NO_AUTH_CHECK = ["/", "/enquiry", "/forgot-password"];
+// skip token verification entirely for these. The three metadata routes
+// (robots.ts, sitemap.ts, opengraph-image.tsx) have no file extension, so
+// they don't match the middleware matcher's static-asset regex exclusion
+// below the way favicon.ico/icon.png/apple-icon.png do — without listing
+// them here explicitly, crawlers and social-share link previews fetching
+// them got silently redirected to /login instead of the actual content.
+const PUBLIC_NO_AUTH_CHECK = ["/", "/enquiry", "/forgot-password", "/robots.txt", "/sitemap.xml", "/opengraph-image"];
 
 function isPublicNoAuthCheck(pathname: string): boolean {
   return pathname.startsWith("/api/") || PUBLIC_NO_AUTH_CHECK.includes(pathname);
