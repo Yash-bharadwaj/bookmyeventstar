@@ -124,9 +124,12 @@ export async function POST(req: NextRequest) {
     }
 
     const generatedPassword = generatePassword();
-    await adminAuth.updateUser(decoded.uid, { password: generatedPassword }).catch((err) => {
-      console.error("[auth/google] failed to set fallback password:", err);
-    });
+    const passwordSet = await adminAuth.updateUser(decoded.uid, { password: generatedPassword })
+      .then(() => true)
+      .catch((err) => {
+        console.error("[auth/google] failed to set fallback password:", err);
+        return false;
+      });
 
     const categoryLabel = categoryList.join(", ");
     const roleLabel = role === "artist" && categoryLabel ? categoryLabel : role;
@@ -137,7 +140,10 @@ export async function POST(req: NextRequest) {
       link: "/admin/users",
     }).catch((err) => console.error("[auth/google] admin notify failed:", err));
 
-    const credentials = { email: decoded.email, password: generatedPassword };
+    // Only worth showing if the password above actually got attached to the
+    // account — otherwise this would email a password that silently doesn't
+    // work, which is worse than not mentioning one at all.
+    const credentials = passwordSet ? { email: decoded.email, password: generatedPassword } : undefined;
     sendEmail({
       to: decoded.email,
       subject: role === "artist" ? "Welcome to the Star Community! 🌟" : "Welcome to BookMy EventStar! 🌟",
