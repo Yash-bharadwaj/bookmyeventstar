@@ -32,7 +32,12 @@ export async function clearSessionCookie() {
 export async function signInWithEmail(email: string, password: string): Promise<UserCredential> {
   const cred = await signInWithEmailAndPassword(auth, email, password);
   try {
-    await syncSessionCookie(await cred.user.getIdToken());
+    // Force a refresh — see the matching comment in useGoogleSignIn.ts.
+    // A browser that already had a live session for this uid before its
+    // role claim was set/changed can otherwise sync a stale token, which
+    // desyncs middleware's claim-based role check from the Firestore-based
+    // one server components use, producing an infinite /login redirect loop.
+    await syncSessionCookie(await cred.user.getIdToken(true));
   } catch (err) {
     // The server refused the session (e.g. account deactivated) — don't
     // leave the client half-signed-in via Firebase Auth's own persistence.

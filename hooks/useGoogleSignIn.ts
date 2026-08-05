@@ -52,11 +52,20 @@ export function useGoogleSignIn(fixedRole?: Role, redirectTo?: string | null) {
     setGoogleBusy(true);
     try {
       const cred = await signInWithGoogle();
-      const idToken = await cred.user.getIdToken();
       const snap = await getDoc(doc(db, "users", cred.user.uid));
 
       if (snap.exists()) {
         const role = (snap.data().role as string) ?? "client";
+        // Force a refresh, not the token signInWithPopup just handed back —
+        // if this browser already had a live session for this uid from
+        // BEFORE the role custom claim was set server-side (e.g. an earlier
+        // incomplete signup attempt), the SDK can still be holding that
+        // older token. The session cookie's role comes from this token's
+        // claims (middleware verifies it at the Edge, can't hit Firestore),
+        // while server components read the role straight from Firestore —
+        // a stale claim here desyncs the two and produces an infinite
+        // /login redirect loop (ERR_TOO_MANY_REDIRECTS).
+        const idToken = await cred.user.getIdToken(true);
         await syncSessionCookie(idToken);
         toast.success("Welcome back!");
         router.push(redirectTo ?? `/${role}`);
@@ -64,6 +73,7 @@ export function useGoogleSignIn(fixedRole?: Role, redirectTo?: string | null) {
         return;
       }
 
+      const idToken = await cred.user.getIdToken();
       setGoogleUser({ idToken, name: cred.user.displayName ?? "", email: cred.user.email ?? "" });
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code ?? "";
