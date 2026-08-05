@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
@@ -595,19 +594,12 @@ export function ArtistVerificationClient({
                           </div>
                         </td>
                         <td className="px-3 py-2.5">
-                          <div className="flex flex-wrap gap-1 max-w-[180px]">
-                            {artist.categories.slice(0, 2).map((c) => (
-                              <Badge key={c} variant="secondary" className="text-[10px] py-0">{c}</Badge>
-                            ))}
-                            {artist.categories.length > 2 && (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Badge variant="outline" className="text-[10px] py-0 cursor-default">+{artist.categories.length - 2}</Badge>
-                                </TooltipTrigger>
-                                <TooltipContent>{artist.categories.slice(2).join(", ")}</TooltipContent>
-                              </Tooltip>
-                            )}
-                          </div>
+                          <p
+                            className="text-xs text-navy-700 truncate max-w-[180px]"
+                            title={artist.categories.join(", ")}
+                          >
+                            {artist.categories.join(", ") || "—"}
+                          </p>
                         </td>
                         <td className="px-3 py-2.5 text-xs text-muted-foreground">
                           {(artist.cities ?? []).length > 0 ? (
@@ -930,19 +922,9 @@ export function ArtistVerificationClient({
               </div>
 
               {/* Categories */}
-              <div className="flex flex-wrap gap-1 mb-3">
-                {artist.categories.slice(0, 3).map((c) => (
-                  <Badge key={c} variant="secondary" className="text-[10px] py-0">{c}</Badge>
-                ))}
-                {artist.categories.length > 3 && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Badge variant="outline" className="text-[10px] py-0 cursor-default">+{artist.categories.length - 3}</Badge>
-                    </TooltipTrigger>
-                    <TooltipContent>{artist.categories.slice(3).join(", ")}</TooltipContent>
-                  </Tooltip>
-                )}
-              </div>
+              <p className="text-sm text-navy-700 truncate mb-3" title={artist.categories.join(", ")}>
+                {artist.categories.join(", ") || "—"}
+              </p>
 
               {/* Languages */}
               {artist.languages && artist.languages.length > 0 && (
@@ -1303,12 +1285,8 @@ export function ArtistVerificationClient({
 
                   {/* Categories */}
                   <div>
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Categories</p>
-                    <div className="flex flex-wrap gap-2">
-                      {a.categories.map((c) => (
-                        <Badge key={c} variant="secondary" className="text-xs">{c}</Badge>
-                      ))}
-                    </div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Categories</p>
+                    <p className="text-sm text-navy-800">{a.categories.join(", ") || "—"}</p>
                   </div>
 
                   {/* Cities */}

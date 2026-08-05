@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatCurrency, getInitials, formatDate } from "@/lib/utils";
 import { checkArtistsAvailability, AvailabilityStatus } from "@/lib/availability";
@@ -656,19 +655,12 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                           </div>
                         </td>
                         <td className="px-3 py-2.5">
-                          <div className="flex flex-wrap gap-1 max-w-[180px]">
-                            {artist.categories.slice(0, 2).map((c) => (
-                              <Badge key={c} variant="secondary" className="text-[10px] py-0">{c}</Badge>
-                            ))}
-                            {artist.categories.length > 2 && (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Badge variant="outline" className="text-[10px] py-0 cursor-default">+{artist.categories.length - 2}</Badge>
-                                </TooltipTrigger>
-                                <TooltipContent>{artist.categories.slice(2).join(", ")}</TooltipContent>
-                              </Tooltip>
-                            )}
-                          </div>
+                          <p
+                            className="text-xs text-navy-700 truncate max-w-[180px]"
+                            title={artist.categories.join(", ")}
+                          >
+                            {artist.categories.join(", ") || "—"}
+                          </p>
                         </td>
                         <td className="px-3 py-2.5 text-xs text-muted-foreground">
                           <div className="flex items-center gap-1 max-w-[180px]">
@@ -892,19 +884,9 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                     <p className="text-xs text-muted-foreground mt-0.5">{artist.total_bookings} bookings completed</p>
 
                     {/* Categories */}
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {artist.categories.slice(0, 2).map((c) => (
-                        <Badge key={c} variant="secondary" className={`text-[10px] ${categories.includes(c) ? "bg-navy-100 text-navy-700" : ""}`}>{c}</Badge>
-                      ))}
-                      {artist.categories.length > 2 && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Badge variant="outline" className="text-[10px] cursor-default">+{artist.categories.length - 2}</Badge>
-                          </TooltipTrigger>
-                          <TooltipContent>{artist.categories.slice(2).join(", ")}</TooltipContent>
-                        </Tooltip>
-                      )}
-                    </div>
+                    <p className="text-xs text-navy-700 truncate mt-2" title={artist.categories.join(", ")}>
+                      {artist.categories.join(", ") || "—"}
+                    </p>
 
                     {/* Cities */}
                     <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground min-w-0">
@@ -1152,14 +1134,8 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
 
                     {/* Categories */}
                     <div>
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Specialities</p>
-                      <div className="flex flex-wrap gap-2">
-                        {a.categories.map((c) => (
-                          <span key={c} className="px-3 py-1.5 rounded-full bg-navy-50 border border-navy-100 text-xs font-medium text-navy-700">
-                            {c}
-                          </span>
-                        ))}
-                      </div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Specialities</p>
+                      <p className="text-sm text-navy-800">{a.categories.join(", ") || "—"}</p>
                     </div>
 
                     {/* Cities */}

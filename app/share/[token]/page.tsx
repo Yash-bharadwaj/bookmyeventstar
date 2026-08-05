@@ -48,14 +48,22 @@ function ArtistCard({ artist }: { artist: PublicArtistProfile }) {
           <p className="text-sm text-gold-700 font-medium mt-1">{artist.categories.join(" · ")}</p>
         )}
 
-        <div className="flex items-center gap-3 mt-2 text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-sm text-muted-foreground">
           {artist.cities.length > 0 && (
-            <span className="inline-flex items-center gap-1">
-              <MapPin className="w-3.5 h-3.5" /> {artist.area ? `${artist.area}, ` : ""}{artist.cities.join(", ")}
+            <span
+              className="inline-flex items-start gap-1 min-w-0"
+              title={[artist.area, ...artist.cities].filter(Boolean).join(", ")}
+            >
+              <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <span>
+                {artist.area ? `${artist.area}, ` : ""}
+                {artist.cities.slice(0, 4).join(", ")}
+                {artist.cities.length > 4 && ` +${artist.cities.length - 4} more`}
+              </span>
             </span>
           )}
           {artist.rating > 0 && (
-            <span className="inline-flex items-center gap-1">
+            <span className="inline-flex items-center gap-1 shrink-0">
               <Star className="w-3.5 h-3.5 fill-gold-500 text-gold-500" /> {artist.rating.toFixed(1)}
             </span>
           )}

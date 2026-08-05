@@ -129,7 +129,7 @@ export function ShareArtistDialog({
           </>
         ) : (
           <>
-            <div className="rounded-xl border border-gold-200 bg-gold-50/50 px-3 py-2 flex items-center gap-2">
+            <div className="min-w-0 w-full rounded-xl border border-gold-200 bg-gold-50/50 px-3 py-2 flex items-center gap-2">
               <span className="text-sm text-navy-900 truncate flex-1 min-w-0">
                 {link.replace(/^https?:\/\//, "")}
               </span>
