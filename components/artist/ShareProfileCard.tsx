@@ -22,9 +22,9 @@ export function ShareProfileCard({ slug, isLive }: { slug: string; isLive: boole
 
   const copyLink = async () => {
     try {
-      await navigator.clipboard.writeText(link);
+      await navigator.clipboard.writeText(`${shareMessage} ${link}`);
       setCopied(true);
-      toast.success("Link copied!");
+      toast.success("Message copied!");
       setTimeout(() => setCopied(false), 2000);
     } catch {
       toast.error("Could not copy the link — please copy it manually.");

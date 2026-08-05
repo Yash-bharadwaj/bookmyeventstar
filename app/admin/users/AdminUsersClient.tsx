@@ -472,11 +472,21 @@ export function AdminUsersClient({ users, currentAdminId, categoryOptions }: { u
                       ) : "—"}
                     </td>
                     <td className="px-4 py-3">
-                      <Badge variant={ROLE_BADGE_VARIANT[u.role]}>
-                        {u.role === "artist" && u.categories && u.categories.length > 0
-                          ? u.categories.join(", ")
-                          : ROLE_LABELS[u.role]}
-                      </Badge>
+                      <div className="space-y-1">
+                        <Badge variant={ROLE_BADGE_VARIANT[u.role]} className="whitespace-nowrap">
+                          {ROLE_LABELS[u.role]}
+                        </Badge>
+                        {u.role === "artist" && u.categories && u.categories.length > 0 && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <p className="text-xs text-muted-foreground truncate max-w-[150px] cursor-default">
+                                {u.categories.join(", ")}
+                              </p>
+                            </TooltipTrigger>
+                            <TooltipContent side="top">{u.categories.join(", ")}</TooltipContent>
+                          </Tooltip>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap items-center gap-2">
