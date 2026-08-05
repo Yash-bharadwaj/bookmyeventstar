@@ -82,14 +82,24 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (decoded && isLoginOrRegister) {
+  // decoded.role can be null right after signup, in the narrow window before
+  // the ID token's custom claim has propagated (see the DecodedSession
+  // comment in session.ts) — neither branch below can pick a redirect
+  // target from it without guessing, and a wrong guess is exactly what
+  // produces an infinite loop (redirect to a dashboard the Firestore-backed
+  // layout immediately bounces back out of, landing right back here with
+  // the same still-null-or-wrong role). So when it's null, skip both
+  // redirects and just render the page normally — /login and /register both
+  // work fine for an authenticated-but-unresolved-role user, and the next
+  // request (once the client's retried token sync lands) resolves it.
+  if (decoded && decoded.role && isLoginOrRegister) {
     const target = safeRedirectTarget(request.nextUrl.searchParams.get("redirect"));
     const url = new URL(target ?? `/${decoded.role}`, request.url);
     return NextResponse.redirect(url);
   }
 
   const requiredRole = roleForPath(pathname);
-  if (decoded && requiredRole && decoded.role !== requiredRole) {
+  if (decoded && decoded.role && requiredRole && decoded.role !== requiredRole) {
     const url = request.nextUrl.clone();
     url.pathname = `/${decoded.role}`;
     return NextResponse.redirect(url);

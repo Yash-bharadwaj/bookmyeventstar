@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase/client";
-import { signInWithGoogle, syncSessionCookie, signOutEverywhere } from "@/lib/firebase/auth-client";
+import { signInWithGoogle, syncSessionCookie, signOutEverywhere, waitForRoleClaim } from "@/lib/firebase/auth-client";
 import { getBudgetBand } from "@/components/artist/BudgetRangeSelect";
 
 type Role = "client" | "artist";
@@ -144,11 +144,17 @@ export function useGoogleSignIn(fixedRole?: Role, redirectTo?: string | null) {
       }
 
       // The ID token we've been holding was minted before the server just
-      // set the role custom claim — force a refresh so the token (and the
-      // session cookie built from it) actually carries the new role,
-      // otherwise role-gated redirects would treat a new artist as a client.
-      const freshToken = await auth.currentUser?.getIdToken(true);
-      if (freshToken) await syncSessionCookie(freshToken);
+      // set the role custom claim. A single forced refresh narrows that gap
+      // but doesn't close it — Identity Platform's custom-claims propagation
+      // to the token-minting backend isn't guaranteed to have landed by the
+      // very next refresh, so retry until the claim actually shows up (see
+      // waitForRoleClaim in auth-client.ts). Otherwise role-gated redirects
+      // could sync a stale/wrong-role session cookie and desync middleware's
+      // claim-based role check from Firestore's, producing a redirect loop.
+      if (auth.currentUser) {
+        const freshToken = await waitForRoleClaim(auth.currentUser, pendingRole);
+        await syncSessionCookie(freshToken);
+      }
 
       toast.success("Account created! Welcome to BookMyEventStar.");
       router.push(redirectTo ?? `/${pendingRole}`);

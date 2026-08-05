@@ -309,7 +309,7 @@ function ArtistRegisterForm() {
         throw new Error(result.error ?? "Registration failed");
       }
 
-      await signInWithEmail(data.email, data.password);
+      await signInWithEmail(data.email, data.password, "artist");
       toast.success("Account created! Complete your profile to get listed.");
       router.push("/artist");
       router.refresh();
@@ -666,7 +666,7 @@ function ClientRegisterForm() {
         return;
       }
 
-      await signInWithEmail(email.trim(), password);
+      await signInWithEmail(email.trim(), password, "client");
       toast.success("Account created! Welcome to BookMyEventStar.");
       router.push("/client");
       router.refresh();

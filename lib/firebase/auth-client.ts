@@ -13,6 +13,39 @@ import {
 } from "firebase/auth";
 import { auth } from "./client";
 
+/**
+ * Waits for `user`'s ID token to actually carry `expectedRole` before
+ * returning it. `setCustomUserClaims` on the server and this client-side
+ * token fetch are two independent round-trips to Firebase/GCP's backend —
+ * even a forced refresh immediately after the claim-setting call can, in
+ * practice, still land on a token minted from a backend replica that hasn't
+ * ingested the new claim yet (a real, documented eventual-consistency gap in
+ * Identity Platform's custom-claims propagation, not just local SDK
+ * caching). A single `getIdToken(true)` therefore only reduces the odds of
+ * that race, not eliminates it — which is what previously made "sign up as
+ * artist" intermittently sync a claim-less/wrong-role session cookie,
+ * causing middleware's claim-based role check to disagree with the
+ * Firestore-based one server components use and produce an infinite
+ * /login<->/{role} redirect loop. Retrying a bounded number of times closes
+ * the gap instead of merely narrowing it.
+ */
+export async function waitForRoleClaim(
+  user: { getIdTokenResult: (forceRefresh?: boolean) => Promise<{ token: string; claims: Record<string, unknown> }> },
+  expectedRole: string,
+  maxAttempts = 6,
+  delayMs = 350
+): Promise<string> {
+  let lastToken = "";
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const result = await user.getIdTokenResult(true);
+    lastToken = result.token;
+    if (result.claims.role === expectedRole) return lastToken;
+    if (attempt < maxAttempts - 1) await new Promise((r) => setTimeout(r, delayMs));
+  }
+  console.error(`[auth] role claim never became "${expectedRole}" after ${maxAttempts} attempts — session cookie may sync with a stale role.`);
+  return lastToken;
+}
+
 export async function syncSessionCookie(idToken: string) {
   const res = await fetch("/api/auth/session", {
     method: "POST",
@@ -29,15 +62,20 @@ export async function clearSessionCookie() {
   await fetch("/api/auth/session", { method: "DELETE" });
 }
 
-export async function signInWithEmail(email: string, password: string): Promise<UserCredential> {
+/**
+ * `expectedRole` should be passed right after registration (this account's
+ * role claim was just set moments ago server-side) — see waitForRoleClaim
+ * above for why a single forced refresh isn't reliable enough there. Omit it
+ * for a plain login, where the role isn't changing and any valid token is
+ * already correct.
+ */
+export async function signInWithEmail(email: string, password: string, expectedRole?: string): Promise<UserCredential> {
   const cred = await signInWithEmailAndPassword(auth, email, password);
   try {
-    // Force a refresh — see the matching comment in useGoogleSignIn.ts.
-    // A browser that already had a live session for this uid before its
-    // role claim was set/changed can otherwise sync a stale token, which
-    // desyncs middleware's claim-based role check from the Firestore-based
-    // one server components use, producing an infinite /login redirect loop.
-    await syncSessionCookie(await cred.user.getIdToken(true));
+    const idToken = expectedRole
+      ? await waitForRoleClaim(cred.user, expectedRole)
+      : await cred.user.getIdToken(true);
+    await syncSessionCookie(idToken);
   } catch (err) {
     // The server refused the session (e.g. account deactivated) — don't
     // leave the client half-signed-in via Firebase Auth's own persistence.

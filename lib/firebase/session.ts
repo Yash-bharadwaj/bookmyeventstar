@@ -30,7 +30,17 @@ export const SESSION_COOKIE_NAME = "session";
 
 export interface DecodedSession {
   uid: string;
-  role: string;
+  // `null` means the ID token doesn't carry a role claim yet — e.g. a
+  // session cookie synced in the narrow window right after signup, before
+  // Identity Platform's custom-claims propagation catches up with the
+  // client's token refresh (see waitForRoleClaim in lib/firebase/auth-client.ts,
+  // which retries specifically to avoid this). Previously this silently
+  // defaulted to "client", which turned "role not known yet" into a
+  // confident wrong answer — middleware would redirect a mismatched path to
+  // `/client`, the Firestore-authoritative client layout would bounce them
+  // back out, and middleware would send them right back to `/client`: an
+  // infinite loop. Callers must treat `null` as "unresolved", not "client".
+  role: string | null;
   email?: string;
 }
 
@@ -43,7 +53,7 @@ export async function verifySessionToken(token: string): Promise<DecodedSession 
     if (typeof payload.sub !== "string") return null;
     return {
       uid: payload.sub,
-      role: typeof payload.role === "string" ? payload.role : "client",
+      role: typeof payload.role === "string" ? payload.role : null,
       email: typeof payload.email === "string" ? payload.email : undefined,
     };
   } catch {
