@@ -182,7 +182,17 @@ function LoginForm() {
                 </div>
               </div>
 
-              {pendingRole === "client" ? (
+              {!pendingRole ? (
+                // Nothing to fill in yet — the phone/artist fields and the
+                // submit button used to render here regardless of whether a
+                // role had been picked (this branch was the `else` of a
+                // `pendingRole === "client"` check, so "undefined" fell into
+                // it same as "artist"). That let people hit "Finish Sign Up"
+                // with no role selected, which finishGoogleSignup() silently
+                // no-ops on (just a toast, no request sent) — from the
+                // outside it looked like the form was broken.
+                <p className="text-sm text-muted-foreground text-center">Pick one above to continue.</p>
+              ) : pendingRole === "client" ? (
                 // Client bookings are paused for now, same as the /register
                 // page's ClientRegisterForm — this is the Google-sign-in
                 // equivalent of that pause, closing the gap where a new
@@ -215,26 +225,22 @@ function LoginForm() {
                     </div>
                   </div>
 
-                  {pendingRole === "artist" && (
-                    <>
-                      <div className="space-y-2">
-                        <Label>What kind of artist are you?</Label>
-                        <ArtistCategorySelect categories={categories} value={googleCategories} onChange={setGoogleCategories} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Where do you perform?</Label>
-                        <ArtistLocationSelect
-                          cities={cities}
-                          value={{ state: googleLocationState, city: googleCity, area: googleArea }}
-                          onChange={(v) => { setGoogleLocationState(v.state); setGoogleCity(v.city); setGoogleArea(v.area); }}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Starting price range</Label>
-                        <BudgetRangeSelect value={googleBudgetRange} onChange={setGoogleBudgetRange} />
-                      </div>
-                    </>
-                  )}
+                  <div className="space-y-2">
+                    <Label>What kind of artist are you?</Label>
+                    <ArtistCategorySelect categories={categories} value={googleCategories} onChange={setGoogleCategories} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Where do you perform?</Label>
+                    <ArtistLocationSelect
+                      cities={cities}
+                      value={{ state: googleLocationState, city: googleCity, area: googleArea }}
+                      onChange={(v) => { setGoogleLocationState(v.state); setGoogleCity(v.city); setGoogleArea(v.area); }}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Starting price range</Label>
+                    <BudgetRangeSelect value={googleBudgetRange} onChange={setGoogleBudgetRange} />
+                  </div>
 
                   <Button type="button" onClick={finishGoogleSignup} loading={googleFinishing} className="w-full" size="lg">
                     Finish Sign Up
