@@ -8,7 +8,7 @@ import {
   Users, Globe, Phone, Mail, Search,
   Mic2, Award, Zap, Shield, Clock,
   Mic, Headphones, Laugh, Music2, Guitar, Wand2,
-  Megaphone, PersonStanding, Menu, X, Heart,
+  Megaphone, PersonStanding, Menu, X, Heart, Crown,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -82,6 +82,7 @@ const features = [
 /* ─── Ticker ──────────────────────────────────────────────── */
 const tickerItems: { label: string; icon: LucideIcon }[] = [
   { label: "Bollywood Singers", icon: Mic2 },
+  { label: "Celebrities",       icon: Crown },
   { label: "DJs",               icon: Headphones },
   { label: "Comedians",         icon: Laugh },
   { label: "Dance Troupes",     icon: PersonStanding },
@@ -206,15 +207,13 @@ export default function LandingPage() {
       </nav>
 
       {/* ── Hero ── */}
-      <section className="relative pt-24 pb-0 overflow-hidden">
-        {/* Brand navy gradient background */}
-        <div className="absolute inset-0 navy-gradient" />
+      <section className="relative pt-24 pb-0 overflow-hidden bg-white">
         {/* Decorative blobs */}
-        <div className="absolute top-0 right-0 w-[500px] h-[500px] rounded-full bg-gold-500/20 blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] rounded-full bg-gold-400/10 blur-3xl" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-gold-500/10 blur-3xl" />
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] rounded-full bg-gold-400/20 blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] rounded-full bg-gold-300/15 blur-3xl" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-navy-100/40 blur-3xl" />
         {/* Dot pattern */}
-        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "30px 30px" }} />
+        <div className="absolute inset-0 opacity-[0.07]" style={{ backgroundImage: "radial-gradient(circle, #1e2a4a 1px, transparent 1px)", backgroundSize: "30px 30px" }} />
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 pt-12 pb-24 text-center">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
@@ -222,27 +221,27 @@ export default function LandingPage() {
               {["Verified Artists", "Expert Coordination", "Pan-India"].map((t) => (
                 <span
                   key={t}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/20 bg-white/10 text-white/90 text-xs sm:text-sm backdrop-blur-sm whitespace-nowrap"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-navy-100 bg-white text-navy-700 text-xs sm:text-sm shadow-sm whitespace-nowrap"
                 >
-                  <Award className="w-3.5 h-3.5 text-gold-400 flex-shrink-0" />
+                  <Award className="w-3.5 h-3.5 text-gold-500 flex-shrink-0" />
                   {t}
                 </span>
               ))}
             </div>
 
-            <h1 className="font-display text-[2.25rem] leading-[1.15] sm:text-4xl md:text-6xl lg:text-7xl font-bold text-white sm:leading-tight">
+            <h1 className="font-display text-[2.25rem] leading-[1.15] sm:text-4xl md:text-6xl lg:text-7xl font-bold text-navy-900 sm:leading-tight">
               <span className="block text-balance">
                 Book the{" "}
-                <span className="whitespace-nowrap bg-gradient-to-r from-gold-300 via-gold-400 to-gold-300 bg-clip-text text-transparent">
+                <span className="whitespace-nowrap bg-gradient-to-r from-gold-500 via-gold-600 to-gold-500 bg-clip-text text-transparent">
                   Perfect Artist
                 </span>
               </span>
-              <span className="block mt-1 sm:mt-2 text-2xl sm:text-3xl md:text-5xl lg:text-6xl text-white/90 text-balance">
+              <span className="block mt-1 sm:mt-2 text-2xl sm:text-3xl md:text-5xl lg:text-6xl text-navy-700 text-balance">
                 for Your Event in India
               </span>
             </h1>
 
-            <p className="mt-5 text-base sm:text-lg md:text-xl text-white/70 max-w-2xl mx-auto leading-relaxed text-pretty">
+            <p className="mt-5 text-base sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed text-pretty">
               Singers, DJs, comedians, dancers, anchors — all in one place with expert coordination.
             </p>
 
@@ -254,7 +253,7 @@ export default function LandingPage() {
               <div className="flex flex-wrap gap-2 justify-center">
                 {eventTypes.map((t) => (
                   <Link key={t} href={`/enquiry?event_type=${t}`}>
-                    <span className="px-3 py-1.5 rounded-full bg-white/10 text-white/80 text-xs font-medium hover:bg-white/20 transition-all border border-white/10 cursor-pointer backdrop-blur-sm">
+                    <span className="px-3 py-1.5 rounded-full bg-navy-50 text-navy-700 text-xs font-medium hover:bg-navy-100 transition-all border border-navy-100 cursor-pointer">
                       {t}
                     </span>
                   </Link>
@@ -274,16 +273,16 @@ export default function LandingPage() {
                 </Button>
               </Link>
               <a href="#how-it-works">
-                <Button variant="white" size="lg" className="w-full sm:w-auto px-8 text-base font-bold shadow-xl">
+                <Button variant="secondary" size="lg" className="w-full sm:w-auto px-8 text-base font-bold shadow-xl">
                   How It Works
                 </Button>
               </a>
             </motion.div>
 
-            <p className="mt-4 text-white/50 text-xs flex items-center justify-center gap-4">
-              <span className="flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Free enquiry</span>
-              <span className="flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> No upfront fee</span>
-              <span className="flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> 2-hour response</span>
+            <p className="mt-4 text-muted-foreground text-xs flex items-center justify-center gap-4">
+              <span className="flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Free enquiry</span>
+              <span className="flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> No upfront fee</span>
+              <span className="flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> 2-hour response</span>
             </p>
           </motion.div>
 
@@ -298,13 +297,13 @@ export default function LandingPage() {
                 <motion.div
                   key={stat.label}
                   initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.8 + i * 0.1 }}
-                  className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 border border-white/10 text-center"
+                  className="bg-white rounded-2xl p-4 border border-navy-100 shadow-sm text-center"
                 >
                   <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${stat.color} mx-auto mb-2 flex items-center justify-center shadow-lg`}>
                     <Icon className="w-5 h-5 text-white" />
                   </div>
-                  <p className="font-display text-2xl font-bold text-white">{stat.value}</p>
-                  <p className="text-xs text-white/60 mt-0.5">{stat.label}</p>
+                  <p className="font-display text-2xl font-bold text-navy-900">{stat.value}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{stat.label}</p>
                 </motion.div>
               );
             })}
