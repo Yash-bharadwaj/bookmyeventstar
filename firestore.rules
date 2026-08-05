@@ -44,7 +44,12 @@ service cloud.firestore {
 
     // ─── artistProfiles (doc id == the artist's uid) ───────────────────────
     match /artistProfiles/{artistUid} {
-      allow read: if true; // public artist directory
+      // No longer publicly readable — the public artist directory was
+      // removed from the app (see lib/firebase/middleware.ts), and the new
+      // admin/coordinator "share externally" feature (/share/{token}) reads
+      // via the Admin SDK server-side, which bypasses these rules entirely.
+      // Only the artist's own doc or a coordinator/admin may read it now.
+      allow read: if signedIn() && (request.auth.uid == artistUid || isCoordinatorOrAdmin());
       allow create: if signedIn() && (request.auth.uid == artistUid || isAdmin());
       // A coordinator may verify/reject an artist (Coordinator > Verify
       // Artists, mirrors Admin > Artists) but nothing else on this doc —
@@ -56,7 +61,7 @@ service cloud.firestore {
       );
 
       match /media/{mediaId} {
-        allow read: if true;
+        allow read: if signedIn() && (request.auth.uid == artistUid || isCoordinatorOrAdmin());
         allow write: if signedIn() && request.auth.uid == artistUid;
       }
       match /documents/{docId} {
@@ -64,7 +69,7 @@ service cloud.firestore {
         allow write: if signedIn() && request.auth.uid == artistUid;
       }
       match /availability/{dateId} {
-        allow read: if true;
+        allow read: if signedIn() && (request.auth.uid == artistUid || isCoordinatorOrAdmin());
         allow write: if signedIn() && request.auth.uid == artistUid;
       }
     }

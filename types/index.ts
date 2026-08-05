@@ -87,6 +87,35 @@ export interface ArtistProfile {
   user?: User;
 }
 
+export interface ShareLink {
+  id: string;
+  artist_ids: string[];
+  created_by: string;
+  created_by_role: "admin" | "coordinator";
+  label?: string;
+  created_at: string;
+  expires_at: string | null;
+  revoked: boolean;
+  view_count: number;
+}
+
+/** Sanitized view of an ArtistProfile for external, unauthenticated sharing —
+ * deliberately excludes base_price/budget_min/budget_max/pricing_details and
+ * any contact info (email/phone/social_links/rider_notes). */
+export interface PublicArtistProfile {
+  id: string;
+  name: string;
+  bio: string;
+  categories: string[];
+  cities: string[];
+  area?: string;
+  languages?: string[];
+  rating: number;
+  is_verified: boolean;
+  photos: string[];
+  videos: string[];
+}
+
 export interface ArtistMedia {
   id: string;
   artist_id: string;

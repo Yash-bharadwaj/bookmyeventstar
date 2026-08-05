@@ -10,8 +10,17 @@ import { verifySessionToken, SESSION_COOKIE_NAME } from "./session";
 // them got silently redirected to /login instead of the actual content.
 const PUBLIC_NO_AUTH_CHECK = ["/", "/enquiry", "/forgot-password", "/robots.txt", "/sitemap.xml", "/opengraph-image"];
 
+// Admin/coordinator-generated share links (/share/{token}) — meant to be
+// opened by an external enquirer who isn't logged in at all, so they must
+// bypass the auth gate below same as the other public pages. Distinct from
+// the old public artist directory: the token is opaque and revocable, not a
+// browsable listing (see isPublicArtistsRoute below).
+function isPublicShareRoute(pathname: string): boolean {
+  return pathname === "/share" || pathname.startsWith("/share/");
+}
+
 function isPublicNoAuthCheck(pathname: string): boolean {
-  return pathname.startsWith("/api/") || PUBLIC_NO_AUTH_CHECK.includes(pathname);
+  return pathname.startsWith("/api/") || PUBLIC_NO_AUTH_CHECK.includes(pathname) || isPublicShareRoute(pathname);
 }
 
 // The artist roster and individual profiles are no longer public — anyone

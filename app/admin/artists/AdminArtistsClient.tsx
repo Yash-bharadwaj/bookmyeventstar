@@ -7,7 +7,7 @@ import {
   Search, Star, CheckCircle2, XCircle, Phone, MapPin,
   Filter, X, Shield, ShieldOff, Eye, EyeOff, AlertCircle, Ban, FileText,
   LayoutGrid, Table2, ChevronLeft, ChevronRight, UserSearch, Video,
-  Image as ImageIcon, Mail, Send, Globe,
+  Image as ImageIcon, Mail, Send, Globe, Share2,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import { FramedPhoto } from "@/components/ui/framed-photo";
 import { db } from "@/lib/firebase/client";
 import { doc, updateDoc, writeBatch, increment, serverTimestamp } from "firebase/firestore";
 import { notifyUser, notifyUserInBatch, emailUser } from "@/lib/notifications/client";
+import { ShareArtistDialog } from "@/components/shared/ShareArtistDialog";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 
@@ -101,14 +102,23 @@ export function ArtistVerificationClient({
   const unverifiedCount = artists.filter((a) => !a.is_verified).length;
   const hiddenCount = artists.filter((a) => a.is_listed === false).length;
   const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
-  const [bulkAction, setBulkAction] = useState<"verify" | "list" | "">("");
+  const [bulkAction, setBulkAction] = useState<"verify" | "list" | "share" | "">("");
   const [bulkProcessing, setBulkProcessing] = useState(false);
+  const [shareTarget, setShareTarget] = useState<ArtistWithUser[] | null>(null);
 
   const toggleBulkSelect = (id: string) =>
     setBulkSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
+  const applyBulkAction = () => {
+    if (bulkAction === "share") {
+      setShareTarget(artists.filter((a) => bulkSelected.has(a.user_id)));
+      return;
+    }
+    confirmBulkAction();
+  };
+
   const confirmBulkAction = async () => {
-    if (!bulkAction || bulkSelected.size === 0) return;
+    if (!bulkAction || bulkAction === "share" || bulkSelected.size === 0) return;
     setBulkProcessing(true);
     const ids = Array.from(bulkSelected);
     const batch = writeBatch(db);
@@ -506,14 +516,15 @@ export function ArtistVerificationClient({
               <span className="text-sm font-medium text-navy-800">{bulkSelected.size} artist{bulkSelected.size > 1 ? "s" : ""} selected</span>
               <select
                 value={bulkAction}
-                onChange={(e) => setBulkAction(e.target.value as "verify" | "list" | "")}
+                onChange={(e) => setBulkAction(e.target.value as "verify" | "list" | "share" | "")}
                 className="flex-1 max-w-[180px] h-8 rounded-lg border border-navy-200 text-sm px-2 bg-white text-navy-900"
               >
                 <option value="">Choose action…</option>
                 <option value="verify">Verify all</option>
                 {canManageListing && <option value="list">List all (show on browse)</option>}
+                <option value="share">Share (no price)</option>
               </select>
-              <Button size="sm" variant="secondary" disabled={!bulkAction || bulkProcessing} onClick={confirmBulkAction}>
+              <Button size="sm" variant="secondary" disabled={!bulkAction || bulkProcessing} onClick={applyBulkAction}>
                 {bulkProcessing ? "Processing…" : "Apply"}
               </Button>
               <button onClick={() => setBulkSelected(new Set())} className="text-xs text-navy-500 underline hover:text-navy-700">Clear</button>
@@ -701,6 +712,19 @@ export function ArtistVerificationClient({
                                 </Button>
                               </TooltipTrigger>
                               <TooltipContent side="top">View full profile</TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  aria-label={`Share ${artist.user.name}'s profile`}
+                                  onClick={() => setShareTarget([artist])}
+                                >
+                                  <Share2 className="w-4 h-4 text-navy-700" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top">Share externally (no price)</TooltipContent>
                             </Tooltip>
                             {(!artist.is_profile_complete || !artist.is_verified) && (
                               <div className="relative">
@@ -1004,6 +1028,14 @@ export function ArtistVerificationClient({
                   )}
                 </Button>
                 )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setShareTarget([artist])}
+                >
+                  <Share2 className="w-3.5 h-3.5 mr-1.5" />Share profile (no price)
+                </Button>
                 {artist.is_verified ? (
                   <Button
                     size="sm"
@@ -1053,6 +1085,13 @@ export function ArtistVerificationClient({
           )}
         </>
       )}
+
+      <ShareArtistDialog
+        open={!!shareTarget}
+        onOpenChange={(open) => !open && setShareTarget(null)}
+        artistIds={(shareTarget ?? []).map((a) => a.id)}
+        artistNames={(shareTarget ?? []).map((a) => a.user.name)}
+      />
 
       {/* Reject dialog */}
       <Dialog open={!!rejectTarget} onOpenChange={(open) => !open && setRejectTarget(null)}>

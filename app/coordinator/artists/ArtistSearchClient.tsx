@@ -8,7 +8,7 @@ import {
   SlidersHorizontal, ArrowUpDown, Phone, Mail,
   Calendar, Sparkles, ArrowRight, Mic2, Send, Ban, CalendarClock,
   User, Award, BookOpen, ImageIcon, ChevronLeft, ChevronRight,
-  LayoutGrid, Table2,
+  LayoutGrid, Table2, Share2,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import { checkArtistsAvailability, AvailabilityStatus } from "@/lib/availability
 import { useRouter } from "next/navigation";
 import { FramedPhoto } from "@/components/ui/framed-photo";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { ShareArtistDialog } from "@/components/shared/ShareArtistDialog";
 
 interface Artist {
   id: string; categories: string[]; cities: string[]; base_price: number;
@@ -90,6 +91,7 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
   const [cityChipQuery, setCityChipQuery] = useState("");
   const [areaChipQuery, setAreaChipQuery] = useState("");
   const [viewMode, setViewMode]           = useState<"table" | "grid">("table");
+  const [shareTarget, setShareTarget]     = useState<Artist[] | null>(null);
   const [page, setPage]                   = useState(1);
   const [pageSize, setPageSize]           = useState(25);
 
@@ -587,6 +589,14 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                 </Button>
                 <Button
                   size="sm"
+                  variant="ghost"
+                  className="text-white/80 hover:text-white hover:bg-white/10 font-semibold"
+                  onClick={() => setShareTarget(shortlistedArtists)}
+                >
+                  <Share2 className="w-3.5 h-3.5 mr-1.5" />Share (no price)
+                </Button>
+                <Button
+                  size="sm"
                   variant="default"
                   className="font-semibold"
                   onClick={goToCreateProposal}
@@ -721,6 +731,19 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                                 </Button>
                               </TooltipTrigger>
                               <TooltipContent side="top">View profile</TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  aria-label={`Share ${artist.user?.name}'s profile`}
+                                  onClick={() => setShareTarget([artist])}
+                                >
+                                  <Share2 className="w-4 h-4 text-muted-foreground" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top">Share externally (no price)</TooltipContent>
                             </Tooltip>
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -947,6 +970,19 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                           ? <><X className="w-3 h-3 mr-1" />Remove</>
                           : <><Plus className="w-3 h-3 mr-1" />Shortlist</>}
                       </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            aria-label={`Share ${artist.user?.name}'s profile`}
+                            onClick={() => setShareTarget([artist])}
+                          >
+                            <Share2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">Share externally (no price)</TooltipContent>
+                      </Tooltip>
                     </div>
                   </div>
                 </div>
@@ -1251,6 +1287,13 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
                     Close
                   </Button>
                   <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => setShareTarget([a])}
+                  >
+                    <Share2 className="w-4 h-4 mr-2" />Share (no price)
+                  </Button>
+                  <Button
                     variant={isShortlisted ? "ghost" : "secondary"}
                     className={`flex-1 ${isShortlisted ? "bg-red-50 text-red-600 border border-red-200 hover:bg-red-100" : ""}`}
                     onClick={() => { toggleShortlist(a.id); if (!isShortlisted) setProfileArtist(null); }}
@@ -1265,6 +1308,13 @@ export function ArtistSearchClient({ artists, enquiries, allCategories }: Props)
           );
         })()}
       </AnimatePresence>
+
+      <ShareArtistDialog
+        open={!!shareTarget}
+        onOpenChange={(open) => !open && setShareTarget(null)}
+        artistIds={(shareTarget ?? []).map((a) => a.id)}
+        artistNames={(shareTarget ?? []).map((a) => a.user?.name ?? "Artist")}
+      />
     </div>
   );
 }
