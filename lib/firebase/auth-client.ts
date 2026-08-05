@@ -30,17 +30,38 @@ import { auth } from "./client";
  * the gap instead of merely narrowing it.
  */
 export async function waitForRoleClaim(
-  user: { getIdTokenResult: (forceRefresh?: boolean) => Promise<{ token: string; claims: Record<string, unknown> }> },
+  user: {
+    getIdTokenResult: (forceRefresh?: boolean) => Promise<{ token: string; claims: Record<string, unknown> }>;
+    getIdToken: (forceRefresh?: boolean) => Promise<string>;
+  },
   expectedRole: string,
   maxAttempts = 6,
   delayMs = 350
 ): Promise<string> {
   let lastToken = "";
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const result = await user.getIdTokenResult(true);
-    lastToken = result.token;
-    if (result.claims.role === expectedRole) return lastToken;
+    try {
+      const result = await user.getIdTokenResult(true);
+      lastToken = result.token;
+      if (result.claims.role === expectedRole) return lastToken;
+    } catch (err) {
+      // A single flaky network round-trip here must not fail the whole
+      // sign-in — by the time this runs, the account has already been
+      // created server-side. Treat it the same as "claim not confirmed
+      // yet" and keep retrying instead of letting it reject the caller's
+      // promise (which previously forced a sign-out and showed "Something
+      // went wrong" on an account that had, in fact, been created fine).
+      console.warn(`[auth] getIdTokenResult attempt ${attempt + 1}/${maxAttempts} failed:`, err);
+    }
     if (attempt < maxAttempts - 1) await new Promise((r) => setTimeout(r, delayMs));
+  }
+  if (!lastToken) {
+    // Every attempt errored outright (not just failed to carry the claim
+    // yet) — fall back to whatever token the SDK already has cached rather
+    // than propagating an error for an account that was already created.
+    // If even this fails, let it throw — at that point there's genuinely no
+    // usable token and the caller's existing error handling is correct.
+    lastToken = await user.getIdToken();
   }
   console.error(`[auth] role claim never became "${expectedRole}" after ${maxAttempts} attempts — session cookie may sync with a stale role.`);
   return lastToken;
