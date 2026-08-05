@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { BadgeCheck, MapPin, Star, Languages } from "lucide-react";
 import { getShareLink, getPublicArtistProfiles, incrementShareLinkViewCount } from "@/lib/firebase/share-links";
 import { ArtistPhotoGallery } from "@/components/shared/ArtistPhotoGallery";
@@ -6,6 +7,35 @@ import { BrandLogo } from "@/components/brand/BrandLogo";
 import type { PublicArtistProfile } from "@/types";
 
 export const dynamic = "force-dynamic";
+
+// Without this, every share link showed the same generic site-wide title
+// and description in link previews (WhatsApp, iMessage, etc.) regardless of
+// which artist was actually shared — not wrong, just not useful for
+// whoever's deciding whether to tap the link.
+export async function generateMetadata({ params }: { params: { token: string } }): Promise<Metadata> {
+  const shareLink = await getShareLink(params.token);
+  if (!shareLink) return { title: "Artist profile", robots: { index: false, follow: false } };
+
+  const artists = await getPublicArtistProfiles(shareLink.artist_ids);
+  if (artists.length === 0) return { title: "Artist profile", robots: { index: false, follow: false } };
+
+  const isSingle = artists.length === 1;
+  const title = isSingle
+    ? `${artists[0].name} — Artist Profile`
+    : `${artists.length} Artist Profiles — ${artists.map((a) => a.name).join(", ")}`;
+  const description = isSingle
+    ? [artists[0].categories.join(", "), artists[0].cities[0]].filter(Boolean).join(" · ") ||
+      "View this artist's profile on BookMyEventStar."
+    : `Shared artist profiles: ${artists.map((a) => a.name).join(", ")}.`;
+
+  return {
+    title,
+    description,
+    robots: { index: false, follow: false },
+    openGraph: { title, description },
+    twitter: { title, description },
+  };
+}
 
 function PageHeader() {
   return (
