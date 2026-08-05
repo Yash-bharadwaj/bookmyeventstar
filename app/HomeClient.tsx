@@ -124,6 +124,20 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-white overflow-x-hidden">
 
+      {/* ── WhatsApp help button ── */}
+      <a
+        href="https://wa.me/919963082319"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Need help? Chat with us on WhatsApp"
+        title="Need help? Chat with us on WhatsApp"
+        className="fixed bottom-5 right-5 z-50 w-14 h-14 rounded-full bg-[#25D366] shadow-lg shadow-black/25 flex items-center justify-center transition-transform hover:scale-110"
+      >
+        <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12.011 2c-5.522 0-10 4.475-10 9.999a9.964 9.964 0 001.85 5.8L2 22l4.34-1.831a9.99 9.99 0 005.671 1.762c5.522 0 10-4.475 10-9.999S17.533 2 12.011 2zm5.461 12.382c-.297.868-1.837 1.7-2.53 1.775-.69.073-.69.63-4.54-1.037-3.85-1.666-6.352-5.54-6.55-5.812-.203-.273-1.66-2.233-1.66-4.253 0-2.024 1.054-3.22 1.427-3.418.372-.206.862-.31 1.164-.31.303 0 .603.002.87.013.273.015.63-.135.99.735.364.867 1.244 3.042 1.354 3.24.11.19.165.384.055.607-.11.222-.165.356-.331.556-.166.196-.351.44-.5.59-.148.148-.303.309-.13.606.173.298.77 1.271 1.653 2.059 1.135 1.012 2.093 1.325 2.39 1.475.297.148.471.124.644-.075.173-.198.743-.867.94-1.164.199-.298.397-.249.67-.15.272.1 1.733.818 2.03.967.297.15.495.223.567.35.075.124.075.72-.223 1.586z" />
+        </svg>
+      </a>
+
       {/* ── Navbar ── */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-xl border-b border-gray-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
